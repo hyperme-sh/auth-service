@@ -48,6 +48,8 @@ def tenant_uuid_from_claims(claims: dict[str, Any]) -> uuid.UUID | None:
 
 
 def mfa_satisfied(claims: dict[str, Any]) -> bool:
+    if claims.get("panopticon_auth") == "api_key":
+        return True
     if not settings.oidc_require_mfa:
         return True
     amr = claims.get("amr")
