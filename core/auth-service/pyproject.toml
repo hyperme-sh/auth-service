@@ -10,6 +10,15 @@ dependencies = [
     "controlplane-core",
 ]
 
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1.0",
+    "httpx>=0.28.0",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.2.0",
+    "respx>=0.22.0",
+]
+
 [tool.uv.sources]
 controlplane-core = { workspace = true }
 
@@ -18,3 +27,15 @@ only-include = ["src/auth_service"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/auth_service"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Workspace packages: pytest resolves paths relative to this pyproject.toml.
+pythonpath = [
+    "src",
+    "../lib/controlplane-core/src",
+    "../lib/controlplane-db/src",
+    "../events/src",
+]
+testpaths = ["tests"]
