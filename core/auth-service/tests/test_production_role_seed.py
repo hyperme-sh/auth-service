@@ -97,6 +97,27 @@ async def test_production_role_only_seed_creates_guest_and_admin() -> None:
 
 
 @pytest.mark.asyncio
+async def test_development_seeder_still_runs_in_development(monkeypatch) -> None:
+    roles = FakeRoleRepo()
+    users = FakeUserRepo()
+    called = {"dev": False}
+
+    async def _mark(*_args, **_kwargs):
+        called["dev"] = True
+
+    monkeypatch.setattr(
+        "api.infrastructure.persistence.seeder.seed_development_users",
+        _mark,
+    )
+
+    await apply_seed(roles, users, fastapi_env="development")
+
+    assert called["dev"] is True
+    assert "guest" in roles.roles
+    assert "admin" in roles.roles
+
+
+@pytest.mark.asyncio
 async def test_development_seeder_does_not_run_in_production(monkeypatch) -> None:
     roles = FakeRoleRepo()
     users = FakeUserRepo()
