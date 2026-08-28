@@ -64,7 +64,7 @@ def test_mfa_is_optional_but_configured() -> None:
         assert actions[alias]["defaultAction"] is False
 
 
-def test_existing_clients_and_password_user_remain() -> None:
+def test_existing_clients_and_bootstrap_user_remain() -> None:
     realm = _realm()
     client_ids = {c["clientId"] for c in realm["clients"]}
     assert client_ids == {
@@ -76,3 +76,21 @@ def test_existing_clients_and_password_user_remain() -> None:
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
+
+
+def test_imported_user_has_configure_totp() -> None:
+    realm = _realm()
+    chris = next(u for u in realm["users"] if u["username"] == "chris@fyberlabs.com")
+    assert "CONFIGURE_TOTP" in chris["requiredActions"]
+    assert "UPDATE_PASSWORD" in chris["requiredActions"]
+    assert "webauthn-register" not in chris["requiredActions"]
+    assert "webauthn-register-passwordless" not in chris["requiredActions"]
+    actions = {a["alias"]: a for a in realm["requiredActions"]}
+    assert actions["CONFIGURE_TOTP"]["defaultAction"] is False
+    assert actions["UPDATE_PASSWORD"]["defaultAction"] is False
+    assert actions["webauthn-register"]["defaultAction"] is False
+    assert not chris.get("credentials")
+    raw = REALM_PATH.read_text(encoding="utf-8")
+    assert "Test@123!" not in raw
+    for cred in chris.get("credentials") or []:
+        assert not cred.get("value")
