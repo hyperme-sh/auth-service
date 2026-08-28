@@ -76,3 +76,14 @@ def test_existing_clients_and_password_user_remain() -> None:
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
+
+
+def test_imported_user_has_configure_totp() -> None:
+    realm = _realm()
+    chris = next(u for u in realm["users"] if u["username"] == "chris@fyberlabs.com")
+    assert "CONFIGURE_TOTP" in chris["requiredActions"]
+    assert "webauthn-register" not in chris["requiredActions"]
+    assert "webauthn-register-passwordless" not in chris["requiredActions"]
+    actions = {a["alias"]: a for a in realm["requiredActions"]}
+    assert actions["CONFIGURE_TOTP"]["defaultAction"] is False
+    assert actions["webauthn-register"]["defaultAction"] is False
