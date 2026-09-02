@@ -15,6 +15,18 @@ def roles_from_claims(claims: dict[str, Any]) -> list[str]:
     return []
 
 
+def groups_from_claims(claims: dict[str, Any]) -> list[str]:
+    """Keycloak group paths or names on the access token. Not a second tree."""
+    raw = claims.get("groups")
+    if raw is None:
+        raw = claims.get("group")
+    if isinstance(raw, str) and raw.strip():
+        return [raw.strip()]
+    if isinstance(raw, list):
+        return [str(g).strip() for g in raw if str(g).strip()]
+    return []
+
+
 def scopes_from_claims(claims: dict[str, Any]) -> list[str]:
     s = claims.get("scope")
     if isinstance(s, str) and s.strip():
