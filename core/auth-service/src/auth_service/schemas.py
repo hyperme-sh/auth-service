@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from auth_service.claims import (
+    groups_from_claims,
     identity_provider_from_claims,
     roles_from_claims,
     scopes_from_claims,
@@ -42,6 +43,10 @@ class AuthMeResponse(BaseModel):
     preferred_username: str | None = None
     tenant_id: uuid.UUID | None = None
     roles: list[str] = Field(default_factory=list)
+    groups: list[str] = Field(
+        default_factory=list,
+        description="Keycloak / token groups. Same membership tree as Panopticon groups.",
+    )
     scopes: list[str] = Field(default_factory=list)
 
     @classmethod
@@ -59,5 +64,6 @@ class AuthMeResponse(BaseModel):
             else None,
             tenant_id=tenant_uuid_from_claims(claims),
             roles=roles_from_claims(claims),
+            groups=groups_from_claims(claims),
             scopes=scopes_from_claims(claims),
         )
