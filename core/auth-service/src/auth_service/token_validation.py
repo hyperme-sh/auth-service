@@ -9,6 +9,7 @@ from api.common.exceptions import UnauthorizedException
 from api.core.config import settings
 from api.infrastructure.security.api_key_exchange_jwt import try_decode_api_key_session_jwt
 from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
+from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_session_jwt
 
 from auth_service.claims import introspection_to_claims
 from auth_service.keycloak_oidc import introspect_access_token
@@ -18,6 +19,9 @@ async def validate_access_token(access_token: str) -> dict[str, Any]:
     ex = try_decode_api_key_session_jwt(access_token)
     if ex is not None:
         return ex
+    switched = try_decode_tenant_session_jwt(access_token)
+    if switched is not None:
+        return switched
 
     if settings.auth_token_validation_mode == "introspection":
         body = await introspect_access_token(access_token)

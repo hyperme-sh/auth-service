@@ -30,6 +30,12 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class SwitchTenantRequest(BaseModel):
+    tenant_id: uuid.UUID = Field(
+        description="Tenant to put on the access token after membership (or host manage) is verified.",
+    )
+
+
 class TokenBundleResponse(BaseModel):
     access_token: str
     refresh_token: str | None = None
