@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -9,7 +10,13 @@ from api.infrastructure.security.tenant_session_jwt import (
     mint_tenant_session_jwt,
     try_decode_tenant_session_jwt,
 )
-from auth_service.tenant_switch import TenantSwitchGrant
+from auth_service.schemas import AuthMeResponse
+from auth_service.tenant_switch import (
+    TenantSwitchGrant,
+    _email_norm,
+    _role_has_host_manage,
+    authorize_tenant_switch,
+)
 
 
 @pytest.mark.asyncio
@@ -132,6 +139,86 @@ async def test_switched_token_satisfies_get_current_tenant(http_client, tenant_u
     )
     assert r.status_code == 200, r.text
     assert r.json()["tenant_id"] == str(tenant_uuid)
+
+
+class _Exec:
+    def __init__(self, value):
+        self._value = value
+
+    def scalar_one_or_none(self):
+        return self._value
+
+
+class _FakeSession:
+    def __init__(self, values: list):
+        self._values = list(values)
+
+    async def execute(self, _stmt, _params=None):
+        if not self._values:
+            raise AssertionError("unexpected extra SQL")
+        return _Exec(self._values.pop(0))
+
+
+def test_email_norm_and_host_perm_helpers():
+    assert _email_norm(AuthMeResponse(sub="s", email="Chris@FyberLabs.com")) == (
+        "chris@fyberlabs.com"
+    )
+    assert _email_norm(AuthMeResponse(sub="s", email=None)) is None
+    host_role = type("R", (), {"permissions": ["host:manage_tenants"]})()
+    guest_role = type("R", (), {"permissions": ["user:view_only"]})()
+    assert _role_has_host_manage(host_role) is True
+    assert _role_has_host_manage(guest_role) is False
+    assert _role_has_host_manage(None) is False
+
+
+@pytest.mark.asyncio
+async def test_authorize_member_and_host_and_unknown(tenant_uuid):
+    me = AuthMeResponse(sub="kc-sub", email="chris@fyberlabs.com")
+    member = type(
+        "U",
+        (),
+        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid},
+    )()
+    tenant_admin = type("R", (), {"name": "admin", "permissions": []})()
+    platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None})()
+    host_role = type(
+        "R",
+        (),
+        {"name": "admin", "permissions": ["host:manage_tenants"]},
+    )()
+    guest_role = type(
+        "R",
+        (),
+        {"name": "guest", "permissions": ["user:view_only"]},
+    )()
+
+    with patch(
+        "auth_service.tenant_switch.set_current_tenant_id_guc",
+        new=AsyncMock(),
+    ):
+        granted = await authorize_tenant_switch(
+            me, tenant_uuid, session=_FakeSession([tenant_uuid, member, tenant_admin])
+        )
+        assert granted == TenantSwitchGrant(role_name="admin")
+
+        host = await authorize_tenant_switch(
+            me,
+            tenant_uuid,
+            session=_FakeSession([tenant_uuid, None, None, platform, host_role]),
+        )
+        assert host == TenantSwitchGrant(role_name="admin")
+
+        denied = await authorize_tenant_switch(
+            me,
+            tenant_uuid,
+            session=_FakeSession([tenant_uuid, None, None, platform, guest_role]),
+        )
+        assert denied is None
+
+        missing = await authorize_tenant_switch(
+            me, tenant_uuid, session=_FakeSession([None])
+        )
+        assert missing is None
 
 
 @pytest.mark.asyncio
