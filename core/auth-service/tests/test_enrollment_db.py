@@ -77,8 +77,12 @@ def seed(migrated_sync_url: str) -> Seed:
     tenant_id = MARKETPLACE_TENANT_ID
     eng = create_engine(migrated_sync_url)
     with eng.begin() as cx:
+        # Alembic 0012 already INSERTs this marketplace tenant.
         cx.execute(
-            text("INSERT INTO tenants (id, name, is_active) VALUES (:id, :n, true)"),
+            text(
+                "INSERT INTO tenants (id, name, is_active) "
+                "VALUES (:id, :n, true) ON CONFLICT (id) DO NOTHING"
+            ),
             {"id": tenant_id, "n": "marketplace"},
         )
     return Seed(tenant_id)
