@@ -304,7 +304,12 @@ def test_role_nav_and_realm_locks_untouched():
     role = (
         REPO_ROOT / "frontend" / "src" / "app" / "dashboard" / "hypermesh" / "role.ts"
     ).read_text()
-    assert 'if (Boolean(controls?.org_admin) || names.includes("admin"))' in role
+    assert "export function portalGrantsFromControls(" in role
+    assert "sessionRoleFromControls" not in role
+    assert 'admin: Boolean(controls?.org_admin) || names.includes("admin")' in role
+    assert "if (portalGrantsFromControls(controls).admin) return false;" in role
+    assert "if (grants.admin) return false;" in role
+    assert "return !grants.admin && grants.host;" in role
     realm = (
         REPO_ROOT / "infra" / "keycloak" / "import" / "controlplane-realm.json"
     ).read_text()
