@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
+import pytest
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from api.common.portal_controls import evaluate_portal_controls
+from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
+from api.infrastructure.security.tenant_session_jwt import (
+    mint_tenant_session_jwt,
+    try_decode_tenant_session_jwt,
+)
 from auth_service.enrollment import (
     FORBIDDEN_GRANT_ALIASES,
     GRANTABLE,
@@ -25,6 +32,7 @@ from auth_service.enrollment import (
 )
 from auth_service.schemas import AuthMeResponse
 from auth_service.siwe import (
+    SIWE_STATEMENT,
     SiweError,
     build_siwe_message,
     parse_siwe_message,
@@ -118,6 +126,9 @@ def test_raw_oidc_renter_has_no_tenant_claim_and_cannot_self_invite():
     assert "Not a public self-join" in membership.__doc__
     assert "POST /api/v1/users" in membership.__doc__
     assert "raw OIDC renter cannot call" in membership.__doc__
+    assert membership.MARKETPLACE_TENANT_ID == uuid.UUID(
+        "8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d"
+    )
 
 
 def test_role_grant_is_only_roles_held():
@@ -269,3 +280,69 @@ def test_role_nav_and_realm_locks_untouched():
     ).read_text()
     assert realm.count('"directAccessGrantsEnabled": false') >= 1
     assert '"directAccessGrantsEnabled": true' not in realm
+
+
+@pytest.mark.asyncio
+async def test_checkout_contract_raw_oidc_403s_tenant_session_does_not(
+    app, http_client
+):
+    """payment-service checkout uses the same get_current_tenant.
+
+    Tenant-session JWT already satisfies it. Raw Keycloak OIDC does not.
+    This test does not POST checkout or call live pan-test.
+    """
+    from auth_service import deps
+
+    tenant_id = MARKETPLACE_TENANT_ID
+    session = mint_tenant_session_jwt(
+        claims={
+            "sub": "kc-renter",
+            "email": "enroll-renter@example.com",
+            "realm_access": {"roles": ["renter"]},
+            "groups": ["renter"],
+            "scope": "openid",
+        },
+        tenant_id=tenant_id,
+        extra_roles=["renter"],
+    )
+    decoded = try_decode_tenant_session_jwt(session)
+    assert decoded is not None
+    assert decoded["panopticon_auth"] == "tenant_session"
+    assert decoded["tenant_id"] == str(tenant_id)
+    assert decoded["https://panopticon.dev/tenant_id"] == str(tenant_id)
+    assert decoded.get("purpose") is None
+
+    switched = await http_client.get(
+        "/auth/tenant",
+        headers={"Authorization": f"Bearer {session}"},
+    )
+    assert switched.status_code == 200, switched.text
+    assert switched.json()["tenant_id"] == str(tenant_id)
+
+    async def raw_oidc_claims() -> dict:
+        return {
+            "sub": "kc-renter",
+            "email": "enroll-renter@example.com",
+            "realm_access": {"roles": ["renter"]},
+            "groups": ["renter"],
+            "scope": "openid",
+        }
+
+    app.dependency_overrides[deps.get_access_token_claims] = raw_oidc_claims
+    try:
+        raw = await http_client.get(
+            "/auth/tenant",
+            headers={
+                "Authorization": "Bearer oidc-without-tenant-claim",
+                "X-Tenant-ID": str(tenant_id),
+            },
+        )
+        assert raw.status_code == 403
+        assert "tenant context" in raw.json()["error"].lower()
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+def test_siwe_is_eip4361_bind_not_a_second_idp():
+    assert "not a login" in SIWE_STATEMENT.lower()
+    assert MARKETPLACE_TENANT_ID == uuid.UUID("8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d")

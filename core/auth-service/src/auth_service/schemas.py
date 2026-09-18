@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
+
 from auth_service.claims import (
     groups_from_claims,
     identity_provider_from_claims,
@@ -66,11 +68,13 @@ class WalletBindingResponse(BaseModel):
 
 class EnrollmentGrantRequest(BaseModel):
     tenant_id: uuid.UUID = Field(
+        default=MARKETPLACE_TENANT_ID,
         description=(
-            "Existing marketplace tenant. The grant job writes membership "
-            "as the service (internal users-row create). Not POST /api/v1/users "
-            "as the renter, and not POST /api/v1/tenants/."
-        )
+            "Existing marketplace tenant "
+            "(8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d). The grant job INSERTs a "
+            "users row as the service. Not POST /api/v1/users as the renter, "
+            "and not POST /api/v1/tenants/."
+        ),
     )
     held_roles: list[str] | None = Field(
         default=None,

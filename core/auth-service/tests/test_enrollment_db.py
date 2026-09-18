@@ -23,6 +23,7 @@ from api.infrastructure.persistence.db_session import (
     set_db_session,
 )
 from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
+from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
 from auth_service.enrollment import (
     HELD_HOST,
     HELD_ORG_ADMIN,
@@ -73,12 +74,12 @@ def migrated_sync_url(postgres_container) -> str:
 
 @pytest.fixture(scope="session")
 def seed(migrated_sync_url: str) -> Seed:
-    tenant_id = uuid.uuid4()
+    tenant_id = MARKETPLACE_TENANT_ID
     eng = create_engine(migrated_sync_url)
     with eng.begin() as cx:
         cx.execute(
             text("INSERT INTO tenants (id, name, is_active) VALUES (:id, :n, true)"),
-            {"id": tenant_id, "n": f"enroll-{tenant_id.hex[:8]}"},
+            {"id": tenant_id, "n": "marketplace"},
         )
     return Seed(tenant_id)
 
@@ -146,10 +147,19 @@ async def test_renter_grant_membership_is_visible_to_switch_tenant(db_session, s
         groups=["renter"],
         roles=["renter"],
     )
+    existing = (
+        await db_session.execute(
+            select(User).where(
+                User.tenant_id == MARKETPLACE_TENANT_ID,
+                User.email == "enroll-renter@example.com",
+            )
+        )
+    ).scalars().all()
+    assert existing == []
+
     result = await grant_held_roles(
         db_session,
         person,
-        tenant_id=seed.tenant_id,
         requested=[HELD_RENTER, HELD_HOST],
     )
     public = result.as_public_dict()
@@ -174,12 +184,15 @@ async def test_renter_grant_membership_is_visible_to_switch_tenant(db_session, s
     users = (
         await db_session.execute(
             select(User).where(
-                User.tenant_id == seed.tenant_id,
+                User.tenant_id == MARKETPLACE_TENANT_ID,
                 User.email == "enroll-renter@example.com",
             )
         )
     ).scalars().all()
+    assert seed.tenant_id == MARKETPLACE_TENANT_ID
     assert len(users) == 1
+    assert users[0].tenant_id == MARKETPLACE_TENANT_ID
+    assert users[0].email == "enroll-renter@example.com"
     keys = (
         await db_session.execute(
             select(ApiKey).where(ApiKey.tenant_id == seed.tenant_id)

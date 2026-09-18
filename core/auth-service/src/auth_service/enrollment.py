@@ -27,6 +27,7 @@ from api.common.portal_controls import (
 )
 from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
 from api.infrastructure.persistence.tenant_membership import (
+    MARKETPLACE_TENANT_ID,
     create_tenant_membership_row,
     get_tenant_membership_row,
 )
@@ -390,12 +391,18 @@ async def grant_held_roles(
     session: AsyncSession,
     user: AuthMeResponse,
     *,
-    tenant_id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
     requested: list[str] | None = None,
 ) -> EnrollmentGrantResult:
-    """Job: grant only the roles this identified person holds."""
+    """Job: grant only the roles this identified person holds.
+
+    Inserts a ``users`` row for the identified Keycloak person when none
+    exists. Default tenant is the marketplace tenant
+    ``8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d``.
+    """
     if not user.sub or not str(user.sub).strip():
         raise EnrollmentError("Keycloak subject is required")
+    tenant_id = tenant_id or MARKETPLACE_TENANT_ID
     await _require_tenant(session, tenant_id)
     await set_current_tenant_id_guc(session, tenant_id)
 
