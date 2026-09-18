@@ -76,6 +76,10 @@ def test_existing_clients_and_bootstrap_user_remain() -> None:
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
+    frontend = next(c for c in realm["clients"] if c["clientId"] == "controlplane-frontend")
+    assert frontend["publicClient"] is True
+    assert frontend["directAccessGrantsEnabled"] is False
+    assert frontend["attributes"]["pkce.code.challenge.method"] == "S256"
 
 
 def test_imported_user_has_configure_totp() -> None:
@@ -94,3 +98,66 @@ def test_imported_user_has_configure_totp() -> None:
     assert "Test@123!" not in raw
     for cred in chris.get("credentials") or []:
         assert not cred.get("value")
+
+
+def _users_by_username() -> dict:
+    return {u["username"]: u for u in _realm()["users"]}
+
+
+def test_pan_test_identities_are_split_and_have_no_secrets() -> None:
+    realm = _realm()
+    roles = {r["name"] for r in realm["roles"]["realm"]}
+    groups = {g["name"] for g in realm["groups"]}
+    assert roles == {"renter", "host", "admin"}
+    assert groups == {"renter", "host"}
+    assert "leaser" not in roles
+    assert "leaser" not in groups
+
+    users = _users_by_username()
+    assert set(users) == {
+        "chris@fyberlabs.com",
+        "renter@test.hyperme.sh",
+        "leaser@test.hyperme.sh",
+        "admin@test.hyperme.sh",
+    }
+
+    renter = users["renter@test.hyperme.sh"]
+    assert renter["email"] == "renter@test.hyperme.sh"
+    assert renter["groups"] == ["/renter"]
+    assert renter["realmRoles"] == ["renter"]
+    assert renter.get("requiredActions") == []
+
+    leaser = users["leaser@test.hyperme.sh"]
+    assert leaser["email"] == "leaser@test.hyperme.sh"
+    assert leaser["groups"] == ["/host"]
+    assert leaser["realmRoles"] == ["host"]
+    assert "renter" not in leaser["realmRoles"]
+    assert leaser.get("requiredActions") == []
+
+    admin = users["admin@test.hyperme.sh"]
+    assert admin["email"] == "admin@test.hyperme.sh"
+    assert admin.get("groups") in ([], None)
+    assert admin["realmRoles"] == ["admin"]
+    assert "renter" not in admin["realmRoles"]
+    assert "host" not in admin["realmRoles"]
+    assert admin.get("requiredActions") == []
+
+    raw = REALM_PATH.read_text(encoding="utf-8")
+    for user in (renter, leaser, admin):
+        assert not user.get("credentials")
+        assert "UPDATE_PASSWORD" not in (user.get("requiredActions") or [])
+        assert "CONFIGURE_TOTP" not in (user.get("requiredActions") or [])
+    assert "PANOPTICON_TEST_" not in raw
+    assert "panopticon-test-renter-password" not in raw
+
+
+def test_frontend_groups_claim_mapper_stays_on_public_pkce_client() -> None:
+    frontend = next(
+        c for c in _realm()["clients"] if c["clientId"] == "controlplane-frontend"
+    )
+    mappers = frontend["protocolMappers"]
+    groups = next(m for m in mappers if m["protocolMapper"] == "oidc-group-membership-mapper")
+    assert groups["config"]["claim.name"] == "groups"
+    assert groups["config"]["access.token.claim"] == "true"
+    assert frontend["publicClient"] is True
+    assert frontend["directAccessGrantsEnabled"] is False
