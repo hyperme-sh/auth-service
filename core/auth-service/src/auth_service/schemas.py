@@ -80,7 +80,8 @@ class EnrollmentGrantRequest(BaseModel):
         default=None,
         description=(
             "Renter and host may be added for the identified person. "
-            "Org admin is granted only when the Keycloak token already has it."
+            "Org admin is not added unless the Keycloak token already has it, "
+            "and is not granted together with renter/host."
         ),
     )
 

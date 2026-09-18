@@ -1,8 +1,11 @@
 """Enrollment role-grant job after Keycloak identify + SIWE bind.
 
-Grants only the roles the identified person holds. Reuses the existing
-renter group, host organization + host group, and portal admin role.
-Membership is an internal users-row write for an existing tenant
+May add renter or host for the identified person, then INSERT the
+marketplace users row and those groups. Org admin is not added unless
+the Keycloak token already has it, and is not granted together with
+renter/host — that invite stays POST /api/v1/users.
+Reuses the existing renter group, host organization + host group, and
+portal admin role. Membership is an internal users-row write
 (service/repository, not the renter JWT and not POST /api/v1/users).
 Does not enroll a device, mint an enroll token, invent a renter role,
 or add a payment role.
@@ -171,12 +174,13 @@ def held_roles_from_identity(
     user: AuthMeResponse,
     requested: list[str] | None = None,
 ) -> tuple[frozenset[str], tuple[str, ...]]:
-    """Choose renter/host for the identified person; org admin stays token-gated.
+    """Choose renter/host for the identified person; org admin stays invite-only.
 
     A new Keycloak user is not in the renter group. Enrollment may add
     renter or host, then INSERT the marketplace users row and those
-    groups. Org admin is not added unless the token already has it.
-    Org admin stays an invite through POST /api/v1/users.
+    groups. Org admin is not added unless the token already has it, and
+    is never granted in the same job as renter/host. Invite stays
+    POST /api/v1/users (can_invite_members).
     """
     token_held = _token_held_roles(user)
     asked: list[str] = []
@@ -186,22 +190,23 @@ def held_roles_from_identity(
             asked.append(name)
 
     if not asked:
-        granted = set(token_held)
+        granted = {name for name in token_held if name != HELD_ORG_ADMIN}
         if HELD_RENTER not in granted and HELD_HOST not in granted:
             granted.add(HELD_RENTER)
         return frozenset(granted), ()
 
     refused: list[str] = []
     granted: set[str] = set()
+    asked_renter_or_host = any(name in {HELD_RENTER, HELD_HOST} for name in asked)
     for name in asked:
         if name in FORBIDDEN_GRANT_ALIASES or name not in GRANTABLE:
             refused.append(name)
             continue
         if name == HELD_ORG_ADMIN:
-            if HELD_ORG_ADMIN in token_held:
-                granted.add(HELD_ORG_ADMIN)
-            else:
+            if asked_renter_or_host or HELD_ORG_ADMIN not in token_held:
                 refused.append(name)
+            else:
+                granted.add(HELD_ORG_ADMIN)
             continue
         granted.add(name)
     return frozenset(granted), tuple(refused)
@@ -415,9 +420,9 @@ async def grant_held_roles(
 ) -> EnrollmentGrantResult:
     """Job: add renter/host as requested, then INSERT marketplace membership.
 
-    Org admin is granted only when the Keycloak token already has it.
-    Default tenant is the marketplace tenant
-    ``8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d``.
+    Org admin is not added unless the Keycloak token already has it, and
+    is not granted together with renter/host. Default tenant is the
+    marketplace tenant ``8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d``.
     """
     if not user.sub or not str(user.sub).strip():
         raise EnrollmentError("Keycloak subject is required")

@@ -157,7 +157,7 @@ def test_new_keycloak_user_may_add_renter_or_host_not_org_admin():
     assert HELD_ORG_ADMIN in refused
 
 
-def test_role_grant_is_only_roles_held():
+def test_enrollment_adds_renter_or_host_and_refuses_org_admin_combo():
     renter = AuthMeResponse(
         sub="s1",
         email="held-renter@example.com",
@@ -171,17 +171,21 @@ def test_role_grant_is_only_roles_held():
     assert HELD_ORG_ADMIN in refused
     assert HELD_HOST not in refused
 
-    combined = AuthMeResponse(
+    token_has_admin = AuthMeResponse(
         sub="s2",
-        email="held-all@example.com",
+        email="held-admin@example.com",
         groups=["renter", "host"],
         roles=["renter", "host", "admin"],
     )
-    all_held, none_refused = held_roles_from_identity(
-        combined, [HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN]
+    marketplace, refused_admin = held_roles_from_identity(
+        token_has_admin, [HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN]
     )
-    assert all_held == frozenset({HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN})
-    assert none_refused == ()
+    assert marketplace == frozenset({HELD_RENTER, HELD_HOST})
+    assert HELD_ORG_ADMIN in refused_admin
+
+    defaulted, _ = held_roles_from_identity(token_has_admin, None)
+    assert defaulted == frozenset({HELD_RENTER, HELD_HOST})
+    assert HELD_ORG_ADMIN not in defaulted
 
 
 def test_role_grant_refuses_payment_and_invented_renter_aliases():

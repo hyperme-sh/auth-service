@@ -319,14 +319,15 @@ async def auth_siwe_me(
 @router.post(
     "/enrollment/grant",
     response_model=EnrollmentGrantResponse,
-    summary="Grant only the roles the identified person holds",
+    summary="Add renter or host, then INSERT marketplace membership",
     description=(
         "Workflow/job after Keycloak identify + SIWE bind. Membership is an "
         "internal users-row write for the existing tenant (service, not the "
         "renter JWT). Not POST /api/v1/users self-join. Not POST /api/v1/tenants/. "
         "May add renter or host for the identified person, then INSERT the "
         "marketplace users row and those groups. Org admin is not added unless "
-        "the Keycloak token already has it (invite stays POST /api/v1/users). "
+        "the Keycloak token already has it, and is not granted together with "
+        "renter/host (invite stays POST /api/v1/users). "
         "No new events. No printed tokens."
     ),
     openapi_extra={"security": [{"BearerAuth": []}]},

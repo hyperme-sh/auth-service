@@ -292,10 +292,10 @@ async def test_org_admin_grant_is_not_network_admin_seed(db_session, seed):
 
 
 @pytest.mark.asyncio
-async def test_combined_held_roles_grant_all_without_merging_fixtures(db_session, seed):
+async def test_renter_and_host_grant_does_not_grant_org_admin(db_session, seed):
     person = AuthMeResponse(
-        sub="kc-combined-1",
-        email="combined@example.com",
+        sub="kc-marketplace-1",
+        email="marketplace-enroll@example.com",
         groups=["renter", "host"],
         roles=["renter", "host", "admin"],
     )
@@ -305,11 +305,11 @@ async def test_combined_held_roles_grant_all_without_merging_fixtures(db_session
         tenant_id=seed.tenant_id,
         requested=[HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN],
     )
-    assert set(result.granted) == {HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN}
+    assert set(result.granted) == {HELD_RENTER, HELD_HOST}
+    assert HELD_ORG_ADMIN in result.refused
     assert result.renter is not None
     assert result.host is not None
-    assert result.org_admin is not None
-    assert result.org_admin.email != NETWORK_ADMIN_SEED_EMAIL
+    assert result.org_admin is None
     assert result.device_enrolled is False
     grant = await authorize_tenant_switch(person, seed.tenant_id, session=db_session)
     assert grant is not None
