@@ -161,3 +161,25 @@ def test_frontend_groups_claim_mapper_stays_on_public_pkce_client() -> None:
     assert groups["config"]["access.token.claim"] == "true"
     assert frontend["publicClient"] is True
     assert frontend["directAccessGrantsEnabled"] is False
+
+
+def test_frontend_client_includes_portal_test_redirects() -> None:
+    """portal.test uses the existing public client. Import is first-start only."""
+    clients = [
+        c for c in _realm()["clients"] if c["clientId"] == "controlplane-frontend"
+    ]
+    assert len(clients) == 1
+    frontend = clients[0]
+    redirects = frontend["redirectUris"]
+    origins = frontend["webOrigins"]
+    assert "http://localhost:3000/*" in redirects
+    assert "http://127.0.0.1:3000/*" in redirects
+    assert "https://portal.test.hyperme.sh/*" in redirects
+    assert "https://portal.test.hyperme.sh/api/auth/callback" in redirects
+    assert "https://portal.test.hyperme.sh/api/auth/callback/keycloak" in redirects
+    assert "http://localhost:3000" in origins
+    assert "http://127.0.0.1:3000" in origins
+    assert "https://portal.test.hyperme.sh" in origins
+    assert not any(
+        c.get("clientId") == "controlplane-portal" for c in _realm()["clients"]
+    )
