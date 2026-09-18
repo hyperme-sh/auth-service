@@ -131,6 +131,32 @@ def test_raw_oidc_renter_has_no_tenant_claim_and_cannot_self_invite():
     )
 
 
+def test_new_keycloak_user_may_add_renter_or_host_not_org_admin():
+    newbie = AuthMeResponse(
+        sub="kc-new",
+        email="new@example.com",
+        groups=[],
+        roles=[],
+        tenant_id=None,
+    )
+    defaulted, _ = held_roles_from_identity(newbie, None)
+    assert defaulted == frozenset({HELD_RENTER})
+
+    renter_only, refused_admin = held_roles_from_identity(
+        newbie, [HELD_RENTER, HELD_ORG_ADMIN]
+    )
+    assert renter_only == frozenset({HELD_RENTER})
+    assert HELD_ORG_ADMIN in refused_admin
+
+    both, still_refused = held_roles_from_identity(newbie, [HELD_RENTER, HELD_HOST])
+    assert both == frozenset({HELD_RENTER, HELD_HOST})
+    assert still_refused == ()
+
+    escalated, refused = held_roles_from_identity(newbie, [HELD_ORG_ADMIN])
+    assert escalated == frozenset()
+    assert HELD_ORG_ADMIN in refused
+
+
 def test_role_grant_is_only_roles_held():
     renter = AuthMeResponse(
         sub="s1",
@@ -141,9 +167,9 @@ def test_role_grant_is_only_roles_held():
     granted, refused = held_roles_from_identity(
         renter, [HELD_RENTER, HELD_HOST, HELD_ORG_ADMIN]
     )
-    assert granted == frozenset({HELD_RENTER})
-    assert HELD_HOST in refused
+    assert granted == frozenset({HELD_RENTER, HELD_HOST})
     assert HELD_ORG_ADMIN in refused
+    assert HELD_HOST not in refused
 
     combined = AuthMeResponse(
         sub="s2",

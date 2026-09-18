@@ -160,12 +160,12 @@ async def test_renter_grant_membership_is_visible_to_switch_tenant(db_session, s
     result = await grant_held_roles(
         db_session,
         person,
-        requested=[HELD_RENTER, HELD_HOST],
+        requested=[HELD_RENTER],
     )
     public = result.as_public_dict()
     _assert_no_printed_secrets(public)
     assert result.granted == (HELD_RENTER,)
-    assert HELD_HOST in result.refused
+    assert HELD_HOST not in result.granted
     assert result.renter is not None
     assert result.renter.tenant_membership is True
     assert result.renter.group == "renter"
@@ -201,6 +201,29 @@ async def test_renter_grant_membership_is_visible_to_switch_tenant(db_session, s
     assert len(keys) == 1
     assert keys[0].purpose == "renter"
     assert keys[0].key_prefix == result.renter.api_key_prefix
+
+
+@pytest.mark.asyncio
+async def test_new_keycloak_user_without_token_groups_gets_renter_not_org_admin(
+    db_session, seed
+):
+    person = AuthMeResponse(
+        sub="kc-fresh-1",
+        email="fresh-renter@example.com",
+        groups=[],
+        roles=[],
+    )
+    result = await grant_held_roles(
+        db_session,
+        person,
+        requested=[HELD_RENTER, HELD_ORG_ADMIN],
+    )
+    assert result.granted == (HELD_RENTER,)
+    assert HELD_ORG_ADMIN in result.refused
+    assert result.renter is not None
+    assert result.org_admin is None
+    grant = await authorize_tenant_switch(person, seed.tenant_id, session=db_session)
+    assert grant is not None
 
 
 @pytest.mark.asyncio

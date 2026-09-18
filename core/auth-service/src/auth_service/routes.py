@@ -324,9 +324,10 @@ async def auth_siwe_me(
         "Workflow/job after Keycloak identify + SIWE bind. Membership is an "
         "internal users-row write for the existing tenant (service, not the "
         "renter JWT). Not POST /api/v1/users self-join. Not POST /api/v1/tenants/. "
-        "Renter is the existing renter group plus an API key prefix. Host is "
-        "host-org membership, not device enroll. Org admin is portal admin, not "
-        "the network-admin seed. No new events. No printed tokens."
+        "May add renter or host for the identified person, then INSERT the "
+        "marketplace users row and those groups. Org admin is not added unless "
+        "the Keycloak token already has it (invite stays POST /api/v1/users). "
+        "No new events. No printed tokens."
     ),
     openapi_extra={"security": [{"BearerAuth": []}]},
 )

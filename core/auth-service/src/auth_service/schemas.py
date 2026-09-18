@@ -78,7 +78,10 @@ class EnrollmentGrantRequest(BaseModel):
     )
     held_roles: list[str] | None = Field(
         default=None,
-        description="Roles this person holds. Grant is the intersection with the Keycloak token.",
+        description=(
+            "Renter and host may be added for the identified person. "
+            "Org admin is granted only when the Keycloak token already has it."
+        ),
     )
 
 
