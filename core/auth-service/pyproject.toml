@@ -7,20 +7,26 @@ name = "auth-service"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "bcrypt>=4.2.0",
     "controlplane-core",
+    "eth-account>=0.13.0",
+    "eth-utils>=5.0.0",
 ]
 
 [dependency-groups]
 dev = [
     "asgi-lifespan>=2.1.0",
     "httpx>=0.28.0",
+    "panopticon-tests",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.2.0",
     "respx>=0.22.0",
+    "testcontainers>=4.9.0",
 ]
 
 [tool.uv.sources]
 controlplane-core = { workspace = true }
+panopticon-tests = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src/auth_service"]
@@ -37,5 +43,6 @@ pythonpath = [
     "../lib/controlplane-core/src",
     "../lib/controlplane-db/src",
     "../events/src",
+    "../tests/src",
 ]
 testpaths = ["tests"]

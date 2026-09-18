@@ -7,6 +7,7 @@ from typing import Annotated
 import jwt
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.common.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
 from api.common.exceptions import ForbiddenException
@@ -25,16 +26,27 @@ from auth_service.keycloak_oidc import (
     exchange_authorization_code,
     refresh_tokens,
 )
+from api.infrastructure.persistence.db_session import get_db_session
+
+from auth_service.enrollment import EnrollmentError, grant_held_roles
 from auth_service.schemas import (
     AuthMeResponse,
+    EnrollmentGrantRequest,
+    EnrollmentGrantResponse,
     LoginStartRequest,
     LoginStartResponse,
     RefreshTokenRequest,
+    SiweBindRequest,
+    SiweNonceRequest,
+    SiweNonceResponse,
     SwitchTenantRequest,
     TokenBundleResponse,
+    WalletBindingResponse,
 )
+from auth_service.siwe import SiweError
 from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.token_validation import unsafe_subject_from_token
+from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
 
 router = APIRouter(tags=["auth"])
 
@@ -222,6 +234,132 @@ async def auth_switch_tenant(
         expires_in=TENANT_SESSION_TTL_SECONDS,
         token_type="Bearer",
     )
+
+
+@router.post(
+    "/siwe/nonce",
+    response_model=SiweNonceResponse,
+    summary="Issue an EIP-4361 nonce for the identified Keycloak person",
+    description=(
+        "Keycloak OIDC remains the login. This nonce is only for binding one "
+        "wallet to that same person. Password grant stays off."
+    ),
+    openapi_extra={"security": [{"BearerAuth": []}]},
+)
+async def auth_siwe_nonce(
+    body: SiweNonceRequest,
+    user: CurrentAuthUser,
+) -> SiweNonceResponse:
+    try:
+        issued = issue_siwe_nonce(user, address=body.address, chain_id=body.chain_id)
+    except SiweError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return SiweNonceResponse(
+        nonce=issued.nonce,
+        issued_at=issued.issued_at,
+        domain=issued.domain,
+        uri=issued.uri,
+        statement=issued.statement,
+        version=issued.version,
+        chain_id=issued.chain_id,
+        message=issued.message,
+    )
+
+
+@router.post(
+    "/siwe/bind",
+    response_model=WalletBindingResponse,
+    summary="Bind one SIWE wallet onto the identified Keycloak person",
+    description=(
+        "Verifies EIP-4361 and stores the recovered address only. "
+        "Not a second login. Signature is not stored or returned."
+    ),
+    openapi_extra={"security": [{"BearerAuth": []}]},
+)
+async def auth_siwe_bind(
+    body: SiweBindRequest,
+    user: CurrentAuthUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> WalletBindingResponse:
+    try:
+        bound = await bind_wallet(
+            session, user, message=body.message, signature=body.signature
+        )
+    except SiweError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return WalletBindingResponse(
+        keycloak_sub=bound.keycloak_sub,
+        email=bound.email,
+        wallet_address=bound.wallet_address,
+        bound=True,
+    )
+
+
+@router.get(
+    "/siwe/me",
+    response_model=WalletBindingResponse,
+    summary="Wallet bound to the identified Keycloak person",
+    openapi_extra={"security": [{"BearerAuth": []}]},
+)
+async def auth_siwe_me(
+    user: CurrentAuthUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> WalletBindingResponse:
+    bound = await get_wallet_binding(session, user.sub)
+    if bound is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No wallet bound")
+    return WalletBindingResponse(
+        keycloak_sub=bound.keycloak_sub,
+        email=bound.email,
+        wallet_address=bound.wallet_address,
+        bound=True,
+    )
+
+
+@router.post(
+    "/enrollment/grant",
+    response_model=EnrollmentGrantResponse,
+    summary="Grant only the roles the identified person holds",
+    description=(
+        "Workflow/job after Keycloak identify + SIWE bind. Membership is an "
+        "internal users-row write for the existing tenant (service, not the "
+        "renter JWT). Not POST /api/v1/users self-join. Not POST /api/v1/tenants/. "
+        "Renter is the existing renter group plus an API key prefix. Host is "
+        "host-org membership, not device enroll. Org admin is portal admin, not "
+        "the network-admin seed. No new events. No printed tokens."
+    ),
+    openapi_extra={"security": [{"BearerAuth": []}]},
+)
+async def auth_enrollment_grant(
+    body: EnrollmentGrantRequest,
+    request: Request,
+    user: CurrentAuthUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> EnrollmentGrantResponse:
+    raw = request.headers.get("X-Tenant-ID")
+    if raw:
+        try:
+            hdr = uuid.UUID(str(raw))
+        except ValueError as e:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, detail="Invalid X-Tenant-ID"
+            ) from e
+        if hdr != body.tenant_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="X-Tenant-ID must match tenant in request body",
+            )
+    try:
+        result = await grant_held_roles(
+            session,
+            user,
+            tenant_id=body.tenant_id,
+            requested=body.held_roles,
+        )
+    except EnrollmentError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    public = result.as_public_dict()
+    return EnrollmentGrantResponse.model_validate(public)
 
 
 @router.get(

@@ -36,6 +36,58 @@ class SwitchTenantRequest(BaseModel):
     )
 
 
+class SiweNonceRequest(BaseModel):
+    address: str = Field(description="EIP-55 or hex wallet the identified person will sign.")
+    chain_id: int = Field(default=1, ge=1)
+
+
+class SiweNonceResponse(BaseModel):
+    nonce: str
+    issued_at: str
+    domain: str
+    uri: str
+    statement: str
+    version: str
+    chain_id: int
+    message: str
+
+
+class SiweBindRequest(BaseModel):
+    message: str = Field(description="EIP-4361 SIWE message. Signature is verified, not stored.")
+    signature: str = Field(description="personal_sign of message. Never persisted.")
+
+
+class WalletBindingResponse(BaseModel):
+    keycloak_sub: str
+    email: str | None = None
+    wallet_address: str
+    bound: bool = True
+
+
+class EnrollmentGrantRequest(BaseModel):
+    tenant_id: uuid.UUID = Field(
+        description=(
+            "Existing marketplace tenant. The grant job writes membership "
+            "as the service (internal users-row create). Not POST /api/v1/users "
+            "as the renter, and not POST /api/v1/tenants/."
+        )
+    )
+    held_roles: list[str] | None = Field(
+        default=None,
+        description="Roles this person holds. Grant is the intersection with the Keycloak token.",
+    )
+
+
+class EnrollmentGrantResponse(BaseModel):
+    granted: list[str]
+    refused: list[str]
+    wallet_address: str | None = None
+    device_enrolled: bool = False
+    renter: dict | None = None
+    host: dict | None = None
+    org_admin: dict | None = None
+
+
 class TokenBundleResponse(BaseModel):
     access_token: str
     refresh_token: str | None = None
