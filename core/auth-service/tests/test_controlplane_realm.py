@@ -116,25 +116,25 @@ def test_pan_test_identities_are_split_and_have_no_secrets() -> None:
     users = _users_by_username()
     assert set(users) == {
         "chris@fyberlabs.com",
-        "renter@test.hyperme.sh",
-        "leaser@test.hyperme.sh",
-        "admin@test.hyperme.sh",
+        "renter",
+        "leaser",
+        "admin",
     }
 
-    renter = users["renter@test.hyperme.sh"]
+    renter = users["renter"]
     assert renter["email"] == "renter@test.hyperme.sh"
     assert renter["groups"] == ["/renter"]
     assert renter["realmRoles"] == ["renter"]
     assert renter.get("requiredActions") == []
 
-    leaser = users["leaser@test.hyperme.sh"]
+    leaser = users["leaser"]
     assert leaser["email"] == "leaser@test.hyperme.sh"
     assert leaser["groups"] == ["/host"]
     assert leaser["realmRoles"] == ["host"]
     assert "renter" not in leaser["realmRoles"]
     assert leaser.get("requiredActions") == []
 
-    admin = users["admin@test.hyperme.sh"]
+    admin = users["admin"]
     assert admin["email"] == "admin@test.hyperme.sh"
     assert admin.get("groups") in ([], None)
     assert admin["realmRoles"] == ["admin"]

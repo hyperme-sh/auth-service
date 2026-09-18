@@ -27,25 +27,28 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
     seed.catalog_invariants()
     by_user = {ident.username: ident for ident in seed.IDENTITIES}
     assert set(by_user) == {
-        "renter@test.hyperme.sh",
-        "leaser@test.hyperme.sh",
-        "admin@test.hyperme.sh",
+        "renter",
+        "leaser",
+        "admin",
     }
 
-    renter = by_user["renter@test.hyperme.sh"]
+    renter = by_user["renter"]
+    assert renter.email == "renter@test.hyperme.sh"
     assert renter.groups == ("renter",)
     assert renter.realm_roles == ("renter",)
     assert renter.kv_secret == "panopticon-test-renter-password"
     assert renter.password_env == "PANOPTICON_TEST_RENTER_PASSWORD"
 
-    leaser = by_user["leaser@test.hyperme.sh"]
+    leaser = by_user["leaser"]
+    assert leaser.email == "leaser@test.hyperme.sh"
     assert leaser.groups == ("host",)
     assert leaser.realm_roles == ("host",)
     assert "leaser" not in leaser.groups
     assert "leaser" not in leaser.realm_roles
     assert leaser.kv_secret == "panopticon-test-leaser-password"
 
-    admin = by_user["admin@test.hyperme.sh"]
+    admin = by_user["admin"]
+    assert admin.email == "admin@test.hyperme.sh"
     assert admin.groups == ()
     assert admin.realm_roles == ("admin",)
     assert "renter" not in admin.realm_roles
@@ -224,9 +227,9 @@ def test_seed_is_idempotent_and_does_not_rotate_passwords(monkeypatch):
     assert set(fake.users) == first_ids
     assert len(fake.passwords_set) == 3
 
-    renter_id = "user-renter@test.hyperme.sh"
-    leaser_id = "user-leaser@test.hyperme.sh"
-    admin_id = "user-admin@test.hyperme.sh"
+    renter_id = "user-renter"
+    leaser_id = "user-leaser"
+    admin_id = "user-admin"
     assert fake.user_roles[renter_id] == {"renter"}
     assert fake.user_groups[renter_id] == {"renter"}
     assert fake.user_roles[leaser_id] == {"host"}
@@ -269,7 +272,7 @@ def test_reconcile_strips_cross_role_mappings(monkeypatch):
         bootstrap_password="bootstrap-secret",
         passwords=passwords,
     )
-    admin_id = "user-admin@test.hyperme.sh"
+    admin_id = "user-admin"
     fake.user_roles[admin_id].add("renter")
     fake.user_roles[admin_id].add("host")
     fake.user_groups[admin_id].add("renter")
