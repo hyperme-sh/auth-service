@@ -64,6 +64,30 @@ def test_mfa_is_optional_but_configured() -> None:
         assert actions[alias]["defaultAction"] is False
 
 
+def test_import_keeps_self_registration_closed() -> None:
+    realm = _realm()
+    assert realm["registrationAllowed"] is False
+    assert '"directAccessGrantsEnabled": true' not in REALM_PATH.read_text(encoding="utf-8")
+
+
+def test_test_plane_registration_does_not_touch_the_password_grant() -> None:
+    import importlib.util
+
+    path = REPO_ROOT / "infra" / "keycloak" / "test_registration.py"
+    spec = importlib.util.spec_from_file_location("test_registration", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    updated = module.apply_test_registration(
+        {"registrationAllowed": False, "smtpServer": {}}
+    )
+    assert updated["registrationAllowed"] is True
+    assert updated["registrationEmailAsUsername"] is True
+    assert updated["verifyEmail"] is False
+    assert "directAccessGrantsEnabled" not in updated
+    assert updated["smtpServer"] == {}
+
+
 def test_existing_clients_and_bootstrap_user_remain() -> None:
     realm = _realm()
     client_ids = {c["clientId"] for c in realm["clients"]}
