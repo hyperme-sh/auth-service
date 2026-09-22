@@ -53,26 +53,40 @@ def _claim_list(value: Any) -> list[str]:
 
 
 def idp_facts_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
-    """Broker facts already on the access token. No operator map."""
+    """Broker facts already on the access token. No operator map.
+
+    Keycloak copies the broker alias to ``idp_provider``, the Entra tenant or
+    Google hosted domain to ``idp_org``, and directory role ids to ``idp_wids``.
+    Raw ``tid``, ``hd``, ``wids``, and ``orgs`` claims are accepted too.
+    """
     tid = _claim_text(claims.get("tid"))
     hosted = _claim_text(claims.get("hd"))
+    copied_org = _claim_text(claims.get("idp_org"))
     orgs = _claim_list(claims.get("orgs"))
-    if not orgs:
-        single = _claim_text(claims.get("idp_org"))
-        hinted = _claim_text(claims.get("identity_provider") or claims.get("idp_alias"))
-        if single and hinted == "github":
-            orgs = [single]
-    wids = [item.lower() for item in _claim_list(claims.get("wids"))]
-    provider = _claim_text(claims.get("identity_provider") or claims.get("idp_alias")).lower()
+    wids = [
+        item.lower()
+        for item in _claim_list(claims.get("wids") or claims.get("idp_wids"))
+    ]
+    provider = _claim_text(
+        claims.get("idp_provider")
+        or claims.get("identity_provider")
+        or claims.get("idp_alias")
+    ).lower()
     org = ""
-    if provider == "microsoft" or (tid and not provider):
-        provider = "microsoft"
-        org = tid
-    elif provider == "google" or (hosted and not provider):
-        provider = "google"
-        org = hosted
-    elif provider == "github" or orgs:
-        provider = "github" if orgs or provider == "github" else provider
+    if not provider:
+        if tid or wids:
+            provider = "microsoft"
+        elif hosted:
+            provider = "google"
+        elif orgs:
+            provider = "github"
+    if provider == "microsoft":
+        org = tid or copied_org
+    elif provider == "google":
+        org = hosted or copied_org
+    elif provider == "github":
+        if not orgs and copied_org:
+            orgs = [copied_org]
         org = orgs[0] if orgs else ""
     if provider not in {"microsoft", "google", "github"}:
         provider = ""
