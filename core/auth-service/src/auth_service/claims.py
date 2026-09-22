@@ -34,6 +34,66 @@ def scopes_from_claims(claims: dict[str, Any]) -> list[str]:
     return []
 
 
+# Microsoft personal accounts. Not an organization tenant.
+MSA_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad"
+# Entra directory role template: Global Administrator.
+ENTRA_GLOBAL_ADMIN_WID = "62e90394-69f5-4237-9190-012177145e10"
+
+
+def _claim_text(value: Any) -> str:
+    return str(value).strip() if isinstance(value, str) else ""
+
+
+def _claim_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def idp_facts_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
+    """Broker facts already on the access token. No operator map."""
+    tid = _claim_text(claims.get("tid"))
+    hosted = _claim_text(claims.get("hd"))
+    orgs = _claim_list(claims.get("orgs"))
+    if not orgs:
+        single = _claim_text(claims.get("idp_org"))
+        hinted = _claim_text(claims.get("identity_provider") or claims.get("idp_alias"))
+        if single and hinted == "github":
+            orgs = [single]
+    wids = [item.lower() for item in _claim_list(claims.get("wids"))]
+    provider = _claim_text(claims.get("identity_provider") or claims.get("idp_alias")).lower()
+    org = ""
+    if provider == "microsoft" or (tid and not provider):
+        provider = "microsoft"
+        org = tid
+    elif provider == "google" or (hosted and not provider):
+        provider = "google"
+        org = hosted
+    elif provider == "github" or orgs:
+        provider = "github" if orgs or provider == "github" else provider
+        org = orgs[0] if orgs else ""
+    if provider not in {"microsoft", "google", "github"}:
+        provider = ""
+    account = "individual"
+    if provider == "microsoft" and org and org.lower() != MSA_TENANT_ID:
+        account = "organization"
+    elif provider == "google" and org:
+        account = "organization"
+    elif provider == "github" and org:
+        account = "organization"
+    else:
+        org = ""
+    return {
+        "idp_provider": provider or None,
+        "idp_org": org or None,
+        "idp_orgs": orgs,
+        "idp_wids": wids,
+        "idp_account": account if provider else None,
+    }
+
+
 def identity_provider_from_claims(claims: dict[str, Any]) -> str | None:
     for key in (
         "idp_alias",
