@@ -10,6 +10,7 @@ from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_
 from auth_service.claims import (
     groups_from_claims,
     identity_provider_from_claims,
+    idp_facts_from_claims,
     roles_from_claims,
     scopes_from_claims,
     tenant_uuid_from_claims,
@@ -114,6 +115,11 @@ class AuthMeResponse(BaseModel):
         description="Keycloak / token groups. Same membership tree as Panopticon groups.",
     )
     scopes: list[str] = Field(default_factory=list)
+    idp_provider: str | None = None
+    idp_org: str | None = None
+    idp_orgs: list[str] = Field(default_factory=list)
+    idp_wids: list[str] = Field(default_factory=list)
+    idp_account: str | None = None
 
     @classmethod
     def from_claims(cls, claims: dict[str, Any]) -> AuthMeResponse:
@@ -122,6 +128,7 @@ class AuthMeResponse(BaseModel):
             email = claims.get("preferred_username")
         if email is None:
             email = claims.get("username")
+        facts = idp_facts_from_claims(claims)
         return cls(
             sub=str(claims.get("sub") or ""),
             email=str(email) if email else None,
@@ -132,4 +139,9 @@ class AuthMeResponse(BaseModel):
             roles=roles_from_claims(claims),
             groups=groups_from_claims(claims),
             scopes=scopes_from_claims(claims),
+            idp_provider=facts["idp_provider"],
+            idp_org=facts["idp_org"],
+            idp_orgs=facts["idp_orgs"],
+            idp_wids=facts["idp_wids"],
+            idp_account=facts["idp_account"],
         )

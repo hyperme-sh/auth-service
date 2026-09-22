@@ -34,6 +34,80 @@ def scopes_from_claims(claims: dict[str, Any]) -> list[str]:
     return []
 
 
+# Microsoft personal accounts. Not an organization tenant.
+MSA_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad"
+# Entra directory role template: Global Administrator.
+ENTRA_GLOBAL_ADMIN_WID = "62e90394-69f5-4237-9190-012177145e10"
+
+
+def _claim_text(value: Any) -> str:
+    return str(value).strip() if isinstance(value, str) else ""
+
+
+def _claim_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def idp_facts_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
+    """Broker facts already on the access token. No operator map.
+
+    Keycloak copies the broker alias to ``idp_provider``, the Entra tenant or
+    Google hosted domain to ``idp_org``, and directory role ids to ``idp_wids``.
+    Raw ``tid``, ``hd``, ``wids``, and ``orgs`` claims are accepted too.
+    """
+    tid = _claim_text(claims.get("tid"))
+    hosted = _claim_text(claims.get("hd"))
+    copied_org = _claim_text(claims.get("idp_org"))
+    orgs = _claim_list(claims.get("orgs"))
+    wids = [
+        item.lower()
+        for item in _claim_list(claims.get("wids") or claims.get("idp_wids"))
+    ]
+    provider = _claim_text(
+        claims.get("idp_provider")
+        or claims.get("identity_provider")
+        or claims.get("idp_alias")
+    ).lower()
+    org = ""
+    if not provider:
+        if tid or wids:
+            provider = "microsoft"
+        elif hosted:
+            provider = "google"
+        elif orgs:
+            provider = "github"
+    if provider == "microsoft":
+        org = tid or copied_org
+    elif provider == "google":
+        org = hosted or copied_org
+    elif provider == "github":
+        if not orgs and copied_org:
+            orgs = [copied_org]
+        org = orgs[0] if orgs else ""
+    if provider not in {"microsoft", "google", "github"}:
+        provider = ""
+    account = "individual"
+    if provider == "microsoft" and org and org.lower() != MSA_TENANT_ID:
+        account = "organization"
+    elif provider == "google" and org:
+        account = "organization"
+    elif provider == "github" and org:
+        account = "organization"
+    else:
+        org = ""
+    return {
+        "idp_provider": provider or None,
+        "idp_org": org or None,
+        "idp_orgs": orgs,
+        "idp_wids": wids,
+        "idp_account": account if provider else None,
+    }
+
+
 def identity_provider_from_claims(claims: dict[str, Any]) -> str | None:
     for key in (
         "idp_alias",
