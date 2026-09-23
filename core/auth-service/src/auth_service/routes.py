@@ -211,11 +211,17 @@ async def auth_switch_tenant(
     grant = await authorize_tenant_switch(user, body.tenant_id)
     if grant is None:
         raise ForbiddenException("Not a member of this tenant")
+    if grant.user_id is not None:
+        from api.domain.operator.bans import ban_book
+
+        if not ban_book().user_may_enter(body.tenant_id, grant.user_id):
+            raise ForbiddenException("This user is banned from the tenant")
 
     access = mint_tenant_session_jwt(
         claims=claims,
         tenant_id=body.tenant_id,
         extra_roles=[grant.role_name],
+        extra_permissions=list(grant.permissions),
     )
     payload = _unsafe_payload(access)
     sub = unsafe_subject_from_token(access) or user.sub or "unknown"

@@ -199,14 +199,17 @@ async def test_authorize_member_and_host_and_unknown(tenant_uuid):
         granted = await authorize_tenant_switch(
             me, tenant_uuid, session=_FakeSession([tenant_uuid, member, tenant_admin])
         )
-        assert granted == TenantSwitchGrant(role_name="admin")
+        assert granted == TenantSwitchGrant(role_name="admin", permissions=())
 
         host = await authorize_tenant_switch(
             me,
             tenant_uuid,
             session=_FakeSession([tenant_uuid, None, None, platform, host_role]),
         )
-        assert host == TenantSwitchGrant(role_name="admin")
+        assert host == TenantSwitchGrant(
+            role_name="admin",
+            permissions=("host:manage_tenants",),
+        )
 
         denied = await authorize_tenant_switch(
             me,

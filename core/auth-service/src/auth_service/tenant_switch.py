@@ -26,6 +26,14 @@ _HOST_PERMS = frozenset(
 @dataclass(frozen=True, slots=True)
 class TenantSwitchGrant:
     role_name: str
+    permissions: tuple[str, ...] = ()
+    user_id: uuid.UUID | None = None
+
+
+def _role_permissions(role: Role | None) -> tuple[str, ...]:
+    if role is None:
+        return ()
+    return tuple(str(p) for p in (role.permissions or []) if str(p).strip())
 
 
 def _email_norm(user: AuthMeResponse) -> str | None:
@@ -110,7 +118,11 @@ async def authorize_tenant_switch(
     )
     if member is not None:
         role = await _role_for(db, member)
-        return TenantSwitchGrant(role_name=(role.name if role else "admin"))
+        return TenantSwitchGrant(
+            role_name=(role.name if role else "admin"),
+            permissions=_role_permissions(role),
+            user_id=getattr(member, "id", None),
+        )
 
     await set_current_tenant_id_guc(db, None)
     platform_user = await _user_by_email_or_sub(
@@ -120,5 +132,9 @@ async def authorize_tenant_switch(
         return None
     role = await _role_for(db, platform_user)
     if _role_has_host_manage(role):
-        return TenantSwitchGrant(role_name=(role.name if role else "admin"))
+        return TenantSwitchGrant(
+            role_name=(role.name if role else "admin"),
+            permissions=_role_permissions(role),
+            user_id=getattr(platform_user, "id", None),
+        )
     return None
