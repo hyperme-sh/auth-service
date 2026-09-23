@@ -13,13 +13,21 @@ from api.common.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
 from api.common.exceptions import ForbiddenException
 from api.core.config import settings
 from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
+from api.domain.operator.population import (
+    hosted_domains_from_claims,
+    tenant_session_permissions,
+)
 from api.infrastructure.security.tenant_session_jwt import (
     TTL_SECONDS as TENANT_SESSION_TTL_SECONDS,
     mint_tenant_session_jwt,
 )
 from controlplane_events.payloads import AuthLoginSuccessPayload, AuthTokenIssuedPayload
 
-from auth_service.claims import identity_provider_from_claims, tenant_uuid_from_claims
+from auth_service.claims import (
+    groups_from_claims,
+    identity_provider_from_claims,
+    tenant_uuid_from_claims,
+)
 from auth_service.deps import CurrentAuthUser, CurrentTenant, get_access_token_claims
 from auth_service.keycloak_oidc import (
     build_authorization_url,
@@ -182,7 +190,10 @@ async def auth_refresh(body: RefreshTokenRequest) -> TokenBundleResponse:
     description=(
         "Keycloak / M2M tokens have no tenant claim. After the actor is a "
         "member of the tenant (or has HOST_MANAGE_TENANTS), this mints a "
-        "short-lived session JWT that carries tenant_id. "
+        "short-lived session JWT that carries tenant_id and the role's "
+        "permissions. The pan-test admin seed also receives operator claims. "
+        "Inside OPERATOR_OIDC_DOMAIN, OPERATOR_OIDC_GROUP_MAP and "
+        "OPERATOR_OIDC_USER_MAP add operator and owner claims. "
         "X-Tenant-ID alone is not enough — do not use this to weaken mint."
     ),
     openapi_extra={"security": [{"BearerAuth": []}]},
@@ -221,7 +232,12 @@ async def auth_switch_tenant(
         claims=claims,
         tenant_id=body.tenant_id,
         extra_roles=[grant.role_name],
-        extra_permissions=list(grant.permissions),
+        extra_permissions=tenant_session_permissions(
+            grant.permissions,
+            email=user.email,
+            groups=groups_from_claims(claims),
+            hosted_domains=hosted_domains_from_claims(claims),
+        ),
     )
     payload = _unsafe_payload(access)
     sub = unsafe_subject_from_token(access) or user.sub or "unknown"

@@ -5,7 +5,13 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+
 import pytest
+
+from api.domain.operator.population import (
+    SEEDED_TEST_ADMIN_EMAIL,
+    SEEDED_TEST_ADMIN_OPERATOR_CLAIMS,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SEED_PATH = REPO_ROOT / "infra" / "keycloak" / "seed_pan_test_identities.py"
@@ -51,6 +57,12 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
     assert admin.email == "admin@test.hyperme.sh"
     assert admin.groups == ()
     assert admin.realm_roles == ("admin",)
+    assert admin.email == SEEDED_TEST_ADMIN_EMAIL
+    assert admin.operator_claims == SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
+    assert "org:own" not in admin.operator_claims
+    assert "org:manage" not in admin.operator_claims
+    assert renter.operator_claims == ()
+    assert leaser.operator_claims == ()
     assert "renter" not in admin.realm_roles
     assert "host" not in admin.realm_roles
     assert admin.kv_secret == "panopticon-test-portal-admin-password"

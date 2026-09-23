@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from api.core import config as api_config
+from api.domain.operator.population import SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
 from api.infrastructure.security.api_key_exchange_jwt import try_decode_api_key_session_jwt
 from api.infrastructure.security.tenant_session_jwt import (
     mint_tenant_session_jwt,
@@ -58,6 +60,96 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
         assert "admin" in claims["realm_access"]["roles"]
         assert claims.get("purpose") is None
         assert try_decode_api_key_session_jwt(token) is None
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+@pytest.mark.asyncio
+async def test_switch_tenant_seeded_admin_jwt_carries_operator_claims(
+    app, http_client, tenant_uuid, monkeypatch
+):
+    """Pan-test admin gets the four operator claims. Not org:own or org:manage."""
+    from auth_service import deps
+
+    monkeypatch.setattr(api_config.settings, "operator_oidc_domain", "")
+    monkeypatch.setattr(api_config.settings, "operator_oidc_group_map", "")
+    monkeypatch.setattr(api_config.settings, "operator_oidc_user_map", "")
+
+    async def fake_claims() -> dict:
+        return {
+            "sub": "admin-sub",
+            "email": "admin@test.hyperme.sh",
+            "azp": "controlplane-frontend",
+            "realm_access": {"roles": ["admin"]},
+            "groups": [],
+            "scope": "openid",
+        }
+
+    async def allow(*_a, **_k):
+        return TenantSwitchGrant(
+            role_name="admin",
+            permissions=("host:manage_tenants",),
+        )
+
+    app.dependency_overrides[deps.get_access_token_claims] = fake_claims
+    try:
+        with patch("auth_service.routes.authorize_tenant_switch", new=allow):
+            r = await http_client.post(
+                "/auth/switch-tenant",
+                headers={"Authorization": "Bearer fake.jwt"},
+                json={"tenant_id": str(tenant_uuid)},
+            )
+        assert r.status_code == 200, r.text
+        claims = try_decode_tenant_session_jwt(r.json()["access_token"])
+        assert claims is not None
+        for claim in SEEDED_TEST_ADMIN_OPERATOR_CLAIMS:
+            assert claim in claims["permissions"]
+        assert "org:own" not in claims["permissions"]
+        assert "org:manage" not in claims["permissions"]
+        assert "host:manage_tenants" in claims["permissions"]
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+@pytest.mark.asyncio
+async def test_switch_tenant_other_admin_does_not_inherit_seed_operator_claims(
+    app, http_client, tenant_uuid, monkeypatch
+):
+    from auth_service import deps
+
+    monkeypatch.setattr(api_config.settings, "operator_oidc_domain", "")
+    monkeypatch.setattr(api_config.settings, "operator_oidc_group_map", "")
+    monkeypatch.setattr(api_config.settings, "operator_oidc_user_map", "")
+
+    async def fake_claims() -> dict:
+        return {
+            "sub": "other-admin",
+            "email": "org-admin@example.com",
+            "azp": "controlplane-frontend",
+            "realm_access": {"roles": ["admin"]},
+            "groups": [],
+            "scope": "openid",
+        }
+
+    async def allow(*_a, **_k):
+        return TenantSwitchGrant(
+            role_name="admin",
+            permissions=("host:manage_tenants", "full:access"),
+        )
+
+    app.dependency_overrides[deps.get_access_token_claims] = fake_claims
+    try:
+        with patch("auth_service.routes.authorize_tenant_switch", new=allow):
+            r = await http_client.post(
+                "/auth/switch-tenant",
+                headers={"Authorization": "Bearer fake.jwt"},
+                json={"tenant_id": str(tenant_uuid)},
+            )
+        assert r.status_code == 200, r.text
+        claims = try_decode_tenant_session_jwt(r.json()["access_token"])
+        assert claims is not None
+        for claim in SEEDED_TEST_ADMIN_OPERATOR_CLAIMS:
+            assert claim not in claims["permissions"]
     finally:
         app.dependency_overrides.pop(deps.get_access_token_claims, None)
 
