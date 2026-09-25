@@ -27,6 +27,22 @@ class FakeRoleRepo:
         key = name.value if isinstance(name, RoleType) else str(name)
         return self.roles.get(key)
 
+    async def find_platform_role(self, name: str):
+        key = name.value if isinstance(name, RoleType) else str(name)
+        for role in self.roles.values():
+            if str(role.name).lower() != key.lower():
+                continue
+            if getattr(role, "tenant_id", None) is not None:
+                continue
+            return role
+        return None
+
+    async def insert_platform_role_if_absent(self, name: str, description: str | None) -> bool:
+        if await self.find_platform_role(name) is not None:
+            return False
+        await self.create(SimpleNamespace(name=name, description=description, tenant_id=None))
+        return True
+
     async def create(self, data):
         rid = uuid.uuid4()
         name = str(data.name)

@@ -6,6 +6,7 @@ Membership visibility is checked via authorize_tenant_switch in-process.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import uuid
@@ -34,7 +35,7 @@ from auth_service.enrollment import (
 from auth_service.schemas import AuthMeResponse
 from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
-from controlplane_db.models import ApiKey, Group, HypermeshDevice, User, UserGroupMembership
+from controlplane_db.models import ApiKey, Group, HypermeshDevice, Role, User, UserGroupMembership
 from controlplane_db.session import normalize_database_url
 from panopticon_tests.fixtures.postgres import (
     async_db_url,
@@ -317,6 +318,114 @@ async def test_renter_and_host_grant_does_not_grant_org_admin(db_session, seed):
     assert result.device_enrolled is False
     grant = await authorize_tenant_switch(person, seed.tenant_id, session=db_session)
     assert grant is not None
+
+
+@pytest.mark.asyncio
+async def test_enrollment_creates_tenant_scoped_user_role(db_session, seed):
+    """A platform "user" row stays put. Enrollment adds the marketplace one."""
+
+    platform_id = uuid.uuid4()
+    await db_session.execute(text("SELECT set_config('app.current_tenant_id', '', true)"))
+    await db_session.execute(
+        text(
+            """
+            INSERT INTO roles (id, tenant_id, name, permissions)
+            VALUES (:id, NULL, 'user', '[]'::jsonb)
+            """
+        ),
+        {"id": platform_id},
+    )
+    person = AuthMeResponse(
+        sub="kc-tenant-role-1",
+        email="tenant-role@example.com",
+        groups=["renter"],
+        roles=["renter"],
+    )
+    await grant_held_roles(db_session, person, requested=[HELD_RENTER])
+    roles = (
+        await db_session.execute(select(Role).where(func.lower(Role.name) == "user"))
+    ).scalars().all()
+    tenant_roles = [role for role in roles if role.tenant_id == seed.tenant_id]
+    platform_roles = [role for role in roles if role.tenant_id is None]
+    assert len(tenant_roles) == 1
+    assert tenant_roles[0].id != platform_id
+    assert {role.id for role in platform_roles} == {platform_id}
+    group = (
+        await db_session.execute(
+            select(Group).where(
+                Group.tenant_id == seed.tenant_id,
+                func.lower(Group.name) == "renter",
+            )
+        )
+    ).scalar_one()
+    assert group.role_id == tenant_roles[0].id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_enrollment_creates_one_tenant_role(migrated_sync_url, seed):
+    tenant_id = uuid.uuid4()
+    eng = create_engine(migrated_sync_url)
+    with eng.begin() as cx:
+        cx.execute(
+            text(
+                "INSERT INTO tenants (id, name, is_active) VALUES (:id, :name, true)"
+            ),
+            {"id": tenant_id, "name": f"enroll-{tenant_id.hex[:8]}"},
+        )
+
+    db_url = async_db_url(migrated_sync_url)
+    engine = create_async_engine(normalize_database_url(db_url), pool_size=8, max_overflow=4)
+    maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+
+    async def _enroll(n: int) -> None:
+        async with maker() as session:
+            person = AuthMeResponse(
+                sub=f"kc-conc-{n}",
+                email=f"conc-{n}@example.com",
+                groups=["renter"],
+                roles=["renter"],
+            )
+            await grant_held_roles(
+                session,
+                person,
+                tenant_id=tenant_id,
+                requested=[HELD_RENTER],
+            )
+            await session.commit()
+
+    try:
+        await asyncio.gather(*[_enroll(n) for n in range(6)])
+        async with maker() as session:
+            roles = (
+                await session.execute(
+                    select(Role).where(
+                        Role.tenant_id == tenant_id,
+                        func.lower(Role.name) == "user",
+                    )
+                )
+            ).scalars().all()
+            groups = (
+                await session.execute(
+                    select(Group).where(
+                        Group.tenant_id == tenant_id,
+                        func.lower(Group.name) == "renter",
+                    )
+                )
+            ).scalars().all()
+            members = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(UserGroupMembership)
+                    .where(UserGroupMembership.tenant_id == tenant_id)
+                )
+            ).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert len(roles) == 1
+    assert len(groups) == 1
+    assert groups[0].role_id == roles[0].id
+    assert int(members) == 6
 
 
 @pytest.mark.asyncio

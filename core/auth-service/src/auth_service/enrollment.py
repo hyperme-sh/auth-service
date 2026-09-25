@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import bcrypt
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.common.portal_controls import (
@@ -246,51 +248,88 @@ async def _bound_wallet(
     return found.scalar_one_or_none()
 
 
-async def _get_or_create_role(
+async def _select_role(
     session: AsyncSession, tenant_id: uuid.UUID, name: str
-) -> Role:
+) -> Role | None:
     found = await session.execute(
-        select(Role).where(
+        select(Role)
+        .where(
             Role.tenant_id == tenant_id,
             func.lower(Role.name) == name.lower(),
         )
+        .order_by(Role.created_at.asc(), Role.id.asc())
+        .limit(1)
     )
-    role = found.scalar_one_or_none()
+    return found.scalars().first()
+
+
+async def _select_group(
+    session: AsyncSession, tenant_id: uuid.UUID, name: str
+) -> Group | None:
+    found = await session.execute(
+        select(Group)
+        .where(
+            Group.tenant_id == tenant_id,
+            func.lower(Group.name) == name.lower(),
+        )
+        .order_by(Group.created_at.asc(), Group.id.asc())
+        .limit(1)
+    )
+    return found.scalars().first()
+
+
+async def _get_or_create_role(
+    session: AsyncSession, tenant_id: uuid.UUID, name: str
+) -> Role:
+    """Tenant-scoped role. A NULL-tenant row with the same name is not reused."""
+    role = await _select_role(session, tenant_id, name)
     if role is not None:
         return role
-    role = Role(
-        id=uuid.uuid4(),
-        tenant_id=tenant_id,
-        name=name,
-        description=None,
-        permissions=[],
-    )
-    session.add(role)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                pg_insert(Role)
+                .values(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    name=name,
+                    description=None,
+                    permissions=[],
+                )
+                .on_conflict_do_nothing()
+            )
+    except IntegrityError:
+        pass
+    role = await _select_role(session, tenant_id, name)
+    if role is None:
+        raise EnrollmentError(f"role {name} was not created")
     return role
 
 
 async def _get_or_create_group(
     session: AsyncSession, tenant_id: uuid.UUID, name: str, role_id: uuid.UUID
 ) -> Group:
-    found = await session.execute(
-        select(Group).where(
-            Group.tenant_id == tenant_id,
-            func.lower(Group.name) == name.lower(),
-        )
-    )
-    group = found.scalar_one_or_none()
+    group = await _select_group(session, tenant_id, name)
     if group is not None:
         return group
-    group = Group(
-        id=uuid.uuid4(),
-        tenant_id=tenant_id,
-        name=name,
-        description=None,
-        role_id=role_id,
-    )
-    session.add(group)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                pg_insert(Group)
+                .values(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    name=name,
+                    description=None,
+                    role_id=role_id,
+                )
+                .on_conflict_do_nothing()
+            )
+    except IntegrityError:
+        pass
+    group = await _select_group(session, tenant_id, name)
+    if group is None:
+        raise EnrollmentError(f"group {name} was not created")
     return group
 
 
