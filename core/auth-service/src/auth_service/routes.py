@@ -47,9 +47,17 @@ from auth_service.schemas import (
     SiweBindRequest,
     SiweNonceRequest,
     SiweNonceResponse,
+    SmokeSessionResponse,
     SwitchTenantRequest,
     TokenBundleResponse,
     WalletBindingResponse,
+)
+from auth_service.smoke_oidc import (
+    SMOKE_EMAIL,
+    SMOKE_KEYCLOAK_SUB,
+    SmokeOidcRejected,
+    smoke_oidc_enabled,
+    verify_github_actions_oidc,
 )
 from auth_service.siwe import SiweError
 from auth_service.tenant_switch import authorize_tenant_switch
@@ -255,6 +263,120 @@ async def auth_switch_tenant(
         refresh_token=None,
         expires_in=TENANT_SESSION_TTL_SECONDS,
         token_type="Bearer",
+    )
+
+
+def _bearer_token(request: Request) -> str:
+    raw = request.headers.get("Authorization") or ""
+    scheme, _, token = raw.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub OIDC token required",
+        )
+    return token.strip()
+
+
+@router.post(
+    "/hypermesh-smoke/session",
+    response_model=SmokeSessionResponse,
+    summary="Mint a test-plane smoke renter session from GitHub OIDC",
+    description=(
+        "Test plane only. Verifies a GitHub Actions OIDC token for "
+        "Environment test, enrolls hypermesh-smoke on the marketplace "
+        "tenant, and returns a short-lived tenant-session JWT. The smoke "
+        "job uses that JWT on the existing api-keys and lease routes. "
+        "Not a stored credential. Not a Keycloak admin call. "
+        "HYPERMESH_SMOKE_OIDC=0 forces this off."
+    ),
+)
+async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse:
+    # Flag and token checks run before the database. A disabled route stays
+    # 404, and a rejected OIDC token stays 401, with no session opened.
+    if not smoke_oidc_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    token = _bearer_token(request)
+    try:
+        verify_github_actions_oidc(token)
+    except SmokeOidcRejected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub OIDC token rejected",
+        ) from None
+    session = get_db_session()
+
+    from api.infrastructure.persistence.tenant_membership import (
+        MARKETPLACE_TENANT_ID,
+        get_tenant_membership_row,
+    )
+
+    identity = AuthMeResponse(
+        sub=SMOKE_KEYCLOAK_SUB,
+        email=SMOKE_EMAIL,
+        preferred_username="hypermesh-smoke",
+        roles=["renter"],
+        groups=["renter"],
+    )
+    try:
+        granted = await grant_held_roles(
+            session,
+            identity,
+            tenant_id=MARKETPLACE_TENANT_ID,
+            requested=["renter"],
+        )
+    except EnrollmentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="smoke renter enrollment failed",
+        ) from exc
+    if granted.refused:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="smoke renter enrollment refused",
+        )
+    member = await get_tenant_membership_row(
+        session,
+        MARKETPLACE_TENANT_ID,
+        email=SMOKE_EMAIL,
+        keycloak_sub=SMOKE_KEYCLOAK_SUB,
+    )
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="smoke renter membership missing",
+        )
+    from api.domain.operator.bans import ban_book
+
+    if not ban_book().user_may_enter(MARKETPLACE_TENANT_ID, member.id):
+        raise ForbiddenException("This user is banned from the tenant")
+
+    access = mint_tenant_session_jwt(
+        claims={
+            "sub": str(member.id),
+            "email": SMOKE_EMAIL,
+            "preferred_username": "hypermesh-smoke",
+            "azp": "hypermesh-gateway-smoke",
+            "realm_access": {"roles": ["renter"]},
+            "groups": ["renter"],
+        },
+        tenant_id=MARKETPLACE_TENANT_ID,
+        extra_roles=["renter"],
+    )
+    await get_tenant_event_publisher().publish(
+        tenant_id=MARKETPLACE_TENANT_ID,
+        event_type=AUTH_TOKEN_ISSUED_V1,
+        payload=AuthTokenIssuedPayload(
+            subject=str(member.id),
+            grant_type="hypermesh_smoke",
+            client_id="hypermesh-gateway-smoke",
+        ).model_dump(mode="json"),
+    )
+    return SmokeSessionResponse(
+        access_token=access,
+        expires_in=TENANT_SESSION_TTL_SECONDS,
+        token_type="Bearer",
+        tenant_id=MARKETPLACE_TENANT_ID,
+        user_id=member.id,
     )
 
 

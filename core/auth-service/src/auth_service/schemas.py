@@ -104,6 +104,16 @@ class TokenBundleResponse(BaseModel):
     token_type: str = "Bearer"
 
 
+class SmokeSessionResponse(BaseModel):
+    """Short-lived tenant session for the test-plane smoke renter. Not a stored key."""
+
+    access_token: str
+    expires_in: int
+    token_type: str = "Bearer"
+    tenant_id: uuid.UUID
+    user_id: uuid.UUID
+
+
 class AuthMeResponse(BaseModel):
     sub: str
     email: str | None = None
