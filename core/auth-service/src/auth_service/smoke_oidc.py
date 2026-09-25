@@ -105,8 +105,8 @@ def _audience_ok(audience: object) -> bool:
     return False
 
 
-def _workflow_ref_ok(value: object) -> bool:
-    """GitHub workflow_ref is ``<repo>/.github/workflows/<file>@refs/...``."""
+def _job_workflow_ref_ok(value: object) -> bool:
+    """GitHub job_workflow_ref is ``<repo>/.github/workflows/<file>@refs/...``."""
 
     if not isinstance(value, str):
         return False
@@ -120,7 +120,12 @@ def _workflow_ref_ok(value: object) -> bool:
 
 
 def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
-    """Pin repository, environment, workflow file, audience, and subject."""
+    """Pin repository, environment, job_workflow_ref, and audience.
+
+    ``job_workflow_ref`` is the workflow file that requested the token.
+    ``workflow_ref`` is not accepted in its place. A pull-request subject
+    is not this job.
+    """
 
     repository = str(claims.get("repository") or "")
     environment = str(claims.get("environment") or "")
@@ -131,7 +136,7 @@ def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
         raise SmokeOidcRejected()
     if subject != SMOKE_OIDC_SUBJECT:
         raise SmokeOidcRejected()
-    if not _workflow_ref_ok(claims.get("workflow_ref")):
+    if not _job_workflow_ref_ok(claims.get("job_workflow_ref")):
         raise SmokeOidcRejected()
     if not _audience_ok(claims.get("aud")):
         raise SmokeOidcRejected()

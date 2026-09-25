@@ -30,7 +30,7 @@ from auth_service.smoke_oidc import (
 REPO = Path(__file__).resolve().parents[3]
 TEST_ISSUER = "https://auth.test.hyperme.sh/realms/controlplane"
 PROD_ISSUER = "https://auth.hyperme.sh/realms/controlplane"
-WORKFLOW_REF = f"{SMOKE_WORKFLOW_PATH}@refs/heads/main"
+JOB_WORKFLOW_REF = f"{SMOKE_WORKFLOW_PATH}@refs/heads/main"
 
 USER_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
@@ -44,7 +44,7 @@ def _claims(**overrides: object) -> dict[str, object]:
         "repository": SMOKE_OIDC_REPOSITORY,
         "environment": SMOKE_OIDC_ENVIRONMENT,
         "sub": SMOKE_OIDC_SUBJECT,
-        "workflow_ref": WORKFLOW_REF,
+        "job_workflow_ref": JOB_WORKFLOW_REF,
         "aud": SMOKE_OIDC_AUDIENCE,
     }
     body.update(overrides)
@@ -100,14 +100,19 @@ def test_claims_pin_repo_environment_workflow_and_audience() -> None:
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(
             _claims(
-                workflow_ref=(
+                job_workflow_ref=(
                     "FyberLabs/panopticon/.github/workflows/acr-frontend-test.yml"
                     "@refs/heads/main"
                 )
             )
         )
     with pytest.raises(SmokeOidcRejected):
-        require_smoke_oidc_claims(_claims(workflow_ref=SMOKE_WORKFLOW_PATH))
+        require_smoke_oidc_claims(_claims(job_workflow_ref=SMOKE_WORKFLOW_PATH))
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(
+            _claims(job_workflow_ref=JOB_WORKFLOW_REF, workflow_ref=JOB_WORKFLOW_REF)
+            | {"job_workflow_ref": None}
+        )
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(_claims(aud="https://github.com/FyberLabs/panopticon"))
 
@@ -118,8 +123,10 @@ def test_verify_rejects_a_non_jwt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_is_404_when_disabled(app, http_client, monkeypatch) -> None:
-    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "0")
+async def test_session_is_404_when_the_flag_is_unset(app, http_client, monkeypatch) -> None:
+    del app
+    monkeypatch.delenv("HYPERMESH_SMOKE_OIDC", raising=False)
+    monkeypatch.setenv("KEYCLOAK_ISSUER", TEST_ISSUER)
     response = await http_client.post(
         "/auth/hypermesh-smoke/session",
         headers={"Authorization": "Bearer not-a-jwt"},
@@ -127,6 +134,9 @@ async def test_session_is_404_when_disabled(app, http_client, monkeypatch) -> No
     )
     assert response.status_code == 404
     assert "not-a-jwt" not in response.text
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "true")
+    again = await http_client.post("/auth/hypermesh-smoke/session", json={})
+    assert again.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -191,10 +201,25 @@ async def test_session_mints_renter_tenant_jwt(
     assert claims["sub"] == str(USER_ID)
     assert claims["email"] == SMOKE_EMAIL
     assert claims["panopticon_auth"] == "tenant_session"
-    assert "renter" in claims["realm_access"]["roles"]
-    assert "renter" in claims["groups"]
+    assert claims["realm_access"]["roles"] == ["renter"]
+    assert claims["groups"] == ["renter"]
+    assert claims["permissions"] == []
+    assert claims["scope"] == "openid"
+    assert claims["hypermesh_smoke"] is True
+    assert claims["email"] == SMOKE_EMAIL
+    assert "admin" not in claims["realm_access"]["roles"]
+    forbidden = ("operator:", "manage:payments", "org:own", "org:manage")
+    assert not any(str(item).startswith(forbidden) for item in claims["permissions"])
     assert event_sink[-1]["payload"]["grant_type"] == "hypermesh_smoke"
     assert "header.payload.sig" not in response.text
+
+    switched = await http_client.post(
+        "/auth/switch-tenant",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+        json={"tenant_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"},
+    )
+    assert switched.status_code == 403
+    assert "switch tenant" in switched.text.lower()
 
 
 @pytest.mark.asyncio

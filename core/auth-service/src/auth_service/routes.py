@@ -212,6 +212,8 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
+    if claims.get("hypermesh_smoke") is True:
+        raise ForbiddenException("Smoke session cannot switch tenant")
     raw = request.headers.get("X-Tenant-ID")
     if raw:
         try:
@@ -357,6 +359,8 @@ async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse
             "email": SMOKE_EMAIL,
             "preferred_username": "hypermesh-smoke",
             "azp": "hypermesh-gateway-smoke",
+            "scope": "openid",
+            "hypermesh_smoke": True,
             "realm_access": {"roles": ["renter"]},
             "groups": ["renter"],
         },
