@@ -23,6 +23,7 @@ from controlplane_db.session import normalize_database_url
 from controlplane_events import AioKafkaEventProducer
 
 from auth_service.routes import router as auth_router
+from auth_service.smoke_oidc import assert_smoke_oidc_plane
 
 logger = get_logger(__name__)
 
@@ -35,6 +36,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         configure_logging()
+        assert_smoke_oidc_plane()
         engine = None
         if enable_db_middleware:
             engine = create_async_engine(normalize_database_url(settings.database_url))

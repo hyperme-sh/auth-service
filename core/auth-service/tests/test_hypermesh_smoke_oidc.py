@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,14 +14,23 @@ from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_ses
 from auth_service.enrollment import EnrollmentError, EnrollmentGrantResult
 from auth_service.smoke_oidc import (
     SMOKE_EMAIL,
+    SMOKE_OIDC_AUDIENCE,
     SMOKE_OIDC_ENVIRONMENT,
     SMOKE_OIDC_REPOSITORY,
     SMOKE_OIDC_SUBJECT,
+    SMOKE_WORKFLOW_PATH,
+    SmokeOidcMisconfigured,
     SmokeOidcRejected,
+    assert_smoke_oidc_plane,
     require_smoke_oidc_claims,
     smoke_oidc_enabled,
     verify_github_actions_oidc,
 )
+
+REPO = Path(__file__).resolve().parents[3]
+TEST_ISSUER = "https://auth.test.hyperme.sh/realms/controlplane"
+PROD_ISSUER = "https://auth.hyperme.sh/realms/controlplane"
+WORKFLOW_REF = f"{SMOKE_WORKFLOW_PATH}@refs/heads/main"
 
 USER_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
@@ -29,38 +39,55 @@ class _Member:
     id = USER_ID
 
 
-def _claims(**overrides: str) -> dict[str, str]:
-    body = {
+def _claims(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
         "repository": SMOKE_OIDC_REPOSITORY,
         "environment": SMOKE_OIDC_ENVIRONMENT,
         "sub": SMOKE_OIDC_SUBJECT,
+        "workflow_ref": WORKFLOW_REF,
+        "aud": SMOKE_OIDC_AUDIENCE,
     }
     body.update(overrides)
     return body
 
 
-def test_flag_overrides_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "KEYCLOAK_ISSUER", "https://auth.test.hyperme.sh/realms/controlplane"
-    )
-    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "0")
+def test_flag_defaults_off_even_on_a_test_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HYPERMESH_SMOKE_OIDC", raising=False)
+    monkeypatch.setenv("KEYCLOAK_ISSUER", TEST_ISSUER)
+    assert smoke_oidc_enabled() is False
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "true")
     assert smoke_oidc_enabled() is False
     monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
-    monkeypatch.setenv("KEYCLOAK_ISSUER", "https://auth.hyperme.sh/realms/controlplane")
+    monkeypatch.setenv("KEYCLOAK_ISSUER", PROD_ISSUER)
     assert smoke_oidc_enabled() is True
 
 
-def test_test_issuer_enables_and_prod_issuer_does_not(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_startup_refuses_prod_issuer_or_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
+    monkeypatch.setenv("KEYCLOAK_ISSUER", PROD_ISSUER)
+    monkeypatch.delenv("KEYCLOAK_HOSTNAME", raising=False)
+    monkeypatch.delenv("KEYCLOAK_HOSTNAME_PUBLIC", raising=False)
+    with pytest.raises(SmokeOidcMisconfigured):
+        assert_smoke_oidc_plane()
+
+    monkeypatch.setenv("KEYCLOAK_ISSUER", TEST_ISSUER)
+    monkeypatch.setenv("KEYCLOAK_HOSTNAME_PUBLIC", "auth.hyperme.sh")
+    with pytest.raises(SmokeOidcMisconfigured):
+        assert_smoke_oidc_plane()
+
+    monkeypatch.setenv("KEYCLOAK_HOSTNAME_PUBLIC", "auth.test.hyperme.sh")
+    assert_smoke_oidc_plane()
+
+
+def test_startup_allows_a_prod_issuer_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("HYPERMESH_SMOKE_OIDC", raising=False)
-    monkeypatch.setenv(
-        "KEYCLOAK_ISSUER", "https://auth.test.hyperme.sh/realms/controlplane"
-    )
-    assert smoke_oidc_enabled() is True
-    monkeypatch.setenv("KEYCLOAK_ISSUER", "https://auth.hyperme.sh/realms/controlplane")
-    assert smoke_oidc_enabled() is False
+    monkeypatch.setenv("KEYCLOAK_ISSUER", PROD_ISSUER)
+    assert_smoke_oidc_plane()
 
 
-def test_claims_reject_a_pull_request_subject() -> None:
+def test_claims_pin_repo_environment_workflow_and_audience() -> None:
     require_smoke_oidc_claims(_claims())
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(
@@ -70,6 +97,19 @@ def test_claims_reject_a_pull_request_subject() -> None:
         require_smoke_oidc_claims(_claims(repository="other/panopticon"))
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(_claims(environment="production"))
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(
+            _claims(
+                workflow_ref=(
+                    "FyberLabs/panopticon/.github/workflows/acr-frontend-test.yml"
+                    "@refs/heads/main"
+                )
+            )
+        )
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims(workflow_ref=SMOKE_WORKFLOW_PATH))
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims(aud="https://github.com/FyberLabs/panopticon"))
 
 
 def test_verify_rejects_a_non_jwt() -> None:
@@ -185,3 +225,29 @@ async def test_session_enrollment_failure_is_generic(
     assert response.status_code == 400
     assert response.json()["detail"] == "smoke renter enrollment failed"
     assert "super-secret" not in response.text
+
+
+def test_vm_overlay_sets_the_flag_only_on_auth_service() -> None:
+    overlay = (REPO / "docker-compose.vm.yaml").read_text(encoding="utf-8")
+    base = (REPO / "docker-compose.yaml").read_text(encoding="utf-8")
+    auth = overlay.split("\n  auth-service:\n", 1)[1].split("\n  user-service:\n", 1)[0]
+    assert 'HYPERMESH_SMOKE_OIDC: "1"' in auth
+    assert "KEYCLOAK_HOSTNAME_PUBLIC" in auth
+    assert "HYPERMESH_SMOKE_OIDC" not in overlay.replace(auth, "", 1)
+    assert "HYPERMESH_SMOKE_OIDC" not in base
+
+
+@pytest.mark.asyncio
+async def test_lifespan_refuses_to_start_on_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
+    monkeypatch.setenv("KEYCLOAK_ISSUER", PROD_ISSUER)
+    monkeypatch.delenv("KEYCLOAK_HOSTNAME", raising=False)
+    monkeypatch.delenv("KEYCLOAK_HOSTNAME_PUBLIC", raising=False)
+    from asgi_lifespan import LifespanManager
+
+    from auth_service.app import create_app
+
+    application = create_app(test_event_sink=[], enable_db_middleware=False)
+    with pytest.raises(SmokeOidcMisconfigured):
+        async with LifespanManager(application):
+            pass

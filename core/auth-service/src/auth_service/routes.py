@@ -287,7 +287,8 @@ def _bearer_token(request: Request) -> str:
         "tenant, and returns a short-lived tenant-session JWT. The smoke "
         "job uses that JWT on the existing api-keys and lease routes. "
         "Not a stored credential. Not a Keycloak admin call. "
-        "HYPERMESH_SMOKE_OIDC=0 forces this off."
+        "Off unless HYPERMESH_SMOKE_OIDC=1. Startup refuses that flag "
+        "when the issuer or host has no .test."
     ),
 )
 async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse:
