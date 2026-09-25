@@ -97,6 +97,7 @@ def test_existing_clients_and_bootstrap_user_remain() -> None:
         "controlplane-device",
         "controlplane-m2m",
         "controlplane-api-key",
+        "hypermesh-native",
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
@@ -207,3 +208,158 @@ def test_frontend_client_includes_portal_test_redirects() -> None:
     assert not any(
         c.get("clientId") == "controlplane-portal" for c in _realm()["clients"]
     )
+
+
+def _native_module():
+    import importlib.util
+
+    path = REPO_ROOT / "infra" / "keycloak" / "hypermesh_native.py"
+    spec = importlib.util.spec_from_file_location("hypermesh_native", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_hypermesh_native_client_contract() -> None:
+    """Visor/CLI public client: PKCE S256, device grant, no offline_access."""
+    module = _native_module()
+    client = module.declared_client(_realm())
+    module.validate_declared_client(client)
+    assert client["publicClient"] is True
+    assert "secret" not in client
+    assert client["standardFlowEnabled"] is True
+    assert client["directAccessGrantsEnabled"] is False
+    assert client["implicitFlowEnabled"] is False
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
+    assert "access.token.lifespan" not in client["attributes"]
+    assert client["redirectUris"] == ["http://127.0.0.1/callback"]
+    assert client["webOrigins"] == []
+    assert "offline_access" not in client["defaultClientScopes"]
+    assert "offline_access" not in client["optionalClientScopes"]
+    assert _realm()["accessTokenLifespan"] == 300
+
+
+class _FakeKeycloak:
+    """In-memory admin API. A new client starts with realm-default scopes."""
+
+    def __init__(self) -> None:
+        self.clients: list[dict] = []
+        self.posts: list[str] = []
+        self.client_puts = 0
+        self.scope_puts: list[str] = []
+        self.scope_deletes: list[str] = []
+        self.catalog = [
+            {"id": name, "name": name}
+            for name in (
+                "web-origins",
+                "acr",
+                "profile",
+                "roles",
+                "email",
+                "basic",
+                "address",
+                "phone",
+                "microprofile-jwt",
+            )
+        ]
+        self.catalog.append({"id": "offline", "name": "offline_access"})
+        self.assigned: dict[str, dict[str, list[dict[str, str]]]] = {}
+
+    def get(self, path: str):
+        if path.startswith("/clients?clientId="):
+            client_id = path.split("=", 1)[1]
+            return [item for item in self.clients if item.get("clientId") == client_id]
+        if path == "/client-scopes":
+            return self.catalog
+        if "/default-client-scopes" in path and path.count("/") == 3:
+            return self.assigned[path.split("/")[2]]["default"]
+        if "/optional-client-scopes" in path and path.count("/") == 3:
+            return self.assigned[path.split("/")[2]]["optional"]
+        raise AssertionError(path)
+
+    def post(self, path: str, payload: dict) -> None:
+        assert path == "/clients"
+        if any(item.get("clientId") == payload.get("clientId") for item in self.clients):
+            raise AssertionError("duplicate client")
+        client = dict(payload)
+        client["id"] = "native-1"
+        self.clients.append(client)
+        self.posts.append(path)
+        self.assigned["native-1"] = {
+            "default": [
+                {"id": "profile", "name": "profile"},
+                {"id": "email", "name": "email"},
+                {"id": "roles", "name": "roles"},
+                {"id": "web-origins", "name": "web-origins"},
+                {"id": "acr", "name": "acr"},
+            ],
+            "optional": [
+                {"id": "address", "name": "address"},
+                {"id": "phone", "name": "phone"},
+                {"id": "microprofile-jwt", "name": "microprofile-jwt"},
+                {"id": "offline", "name": "offline_access"},
+            ],
+        }
+
+    def put(self, path: str, payload) -> None:
+        if path == "/clients/native-1":
+            self.client_puts += 1
+            updated = dict(payload)
+            updated["id"] = "native-1"
+            self.clients = [updated]
+            return
+        parts = path.strip("/").split("/")
+        assert parts[0] == "clients" and parts[1] == "native-1"
+        bucket = "default" if parts[2].startswith("default") else "optional"
+        scope_id = parts[3]
+        name = next(item["name"] for item in self.catalog if item["id"] == scope_id)
+        self.assigned["native-1"][bucket].append({"id": scope_id, "name": name})
+        self.scope_puts.append(path)
+
+    def delete(self, path: str) -> None:
+        parts = path.strip("/").split("/")
+        bucket = "default" if parts[2].startswith("default") else "optional"
+        scope_id = parts[3]
+        self.assigned["native-1"][bucket] = [
+            item for item in self.assigned["native-1"][bucket] if item["id"] != scope_id
+        ]
+        self.scope_deletes.append(path)
+
+
+def test_hypermesh_native_upsert_is_idempotent() -> None:
+    module = _native_module()
+    admin = _FakeKeycloak()
+    module.ensure_hypermesh_native(admin)
+    module.ensure_hypermesh_native(admin)
+
+    assert admin.posts == ["/clients"]
+    assert len(admin.clients) == 1
+    client = admin.clients[0]
+    assert client["id"] == "native-1"
+    assert client["publicClient"] is True
+    assert "secret" not in client
+    assert client["redirectUris"] == ["http://127.0.0.1/callback"]
+    assert client["webOrigins"] == []
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
+    assert "access.token.lifespan" not in client["attributes"]
+    assert admin.client_puts == 1
+
+    stale = module.upsert_payload(
+        module.declared_client(),
+        {"id": "native-1", "attributes": {"access.token.lifespan": "86400", "keep": "yes"}},
+    )
+    assert stale["id"] == "native-1"
+    assert stale["attributes"]["access.token.lifespan"] == ""
+    assert stale["attributes"]["keep"] == "yes"
+    assert "secret" not in stale
+    assert admin.scope_deletes == ["/clients/native-1/optional-client-scopes/offline"]
+    assert admin.scope_puts == ["/clients/native-1/default-client-scopes/basic"]
+
+    default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
+    optional_names = {item["name"] for item in admin.assigned["native-1"]["optional"]}
+    assert "offline_access" not in default_names
+    assert "offline_access" not in optional_names
+    assert "basic" in default_names
