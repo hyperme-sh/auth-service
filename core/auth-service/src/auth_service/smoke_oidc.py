@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 import jwt
 from jwt import InvalidTokenError, PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks"
@@ -42,6 +43,10 @@ _TEST_MARKER = ".test."
 
 class SmokeOidcRejected(Exception):
     """The bearer is not the test-plane smoke job. Detail stays generic."""
+
+
+class SmokeOidcUnavailable(Exception):
+    """GitHub's JWKS could not be fetched. The token was not accepted."""
 
 
 class SmokeOidcMisconfigured(RuntimeError):
@@ -161,7 +166,9 @@ def verify_github_actions_oidc(
             issuer=GITHUB_OIDC_ISSUER,
             options={"require": ["exp", "iss", "aud", "sub"]},
         )
-    except InvalidTokenError as exc:
+    except PyJWKClientConnectionError as exc:
+        raise SmokeOidcUnavailable() from exc
+    except (InvalidTokenError, PyJWKClientError) as exc:
         raise SmokeOidcRejected() from exc
     if not isinstance(payload, dict):
         raise SmokeOidcRejected()

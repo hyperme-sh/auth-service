@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError
 
 from api.infrastructure.persistence.db_session import reset_db_session, set_db_session
 from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
@@ -22,6 +24,7 @@ from auth_service.smoke_oidc import (
     SMOKE_WORKFLOW_PATH,
     SmokeOidcMisconfigured,
     SmokeOidcRejected,
+    SmokeOidcUnavailable,
     assert_smoke_oidc_plane,
     require_smoke_oidc_claims,
     smoke_oidc_enabled,
@@ -139,6 +142,18 @@ def test_verify_rejects_a_non_jwt() -> None:
         verify_github_actions_oidc("not-a-jwt")
 
 
+def test_verify_reports_jwks_unreachable() -> None:
+    class _Down(PyJWKClient):
+        def __init__(self) -> None:
+            return None
+
+        def get_signing_key_from_jwt(self, token: str):
+            raise PyJWKClientConnectionError("no route to token.actions.githubusercontent.com")
+
+    with pytest.raises(SmokeOidcUnavailable):
+        verify_github_actions_oidc("header.payload.sig", jwks_client=_Down())
+
+
 @pytest.mark.asyncio
 async def test_session_is_404_when_the_flag_is_unset(app, http_client, monkeypatch) -> None:
     del app
@@ -170,6 +185,7 @@ async def test_session_rejects_bad_oidc_without_echoing_the_token(
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "GitHub OIDC token rejected"
+    assert response.json()["code"] == "github_oidc_rejected"
     assert secret not in response.text
 
 
@@ -266,7 +282,41 @@ async def test_session_enrollment_failure_is_generic(
         reset_db_session(token_ctx)
     assert response.status_code == 400
     assert response.json()["detail"] == "smoke renter enrollment failed"
+    assert response.json()["code"] == "smoke_enrollment_failed"
     assert "super-secret" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_session_unexpected_failure_names_the_exception_class(
+    app, http_client, monkeypatch
+) -> None:
+    del app
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
+    token_ctx = set_db_session(object())  # type: ignore[arg-type]
+    try:
+        with (
+            patch(
+                "auth_service.routes.verify_github_actions_oidc",
+                return_value=_claims(),
+            ),
+            patch(
+                "auth_service.routes.grant_held_roles",
+                new=AsyncMock(side_effect=RuntimeError("db password=super-secret")),
+            ),
+        ):
+            response = await http_client.post(
+                "/auth/hypermesh-smoke/session",
+                headers={"Authorization": "Bearer header.payload.sig"},
+                json={},
+            )
+    finally:
+        reset_db_session(token_ctx)
+    assert response.status_code == 503
+    body = response.json()
+    assert body["code"] == "smoke_session_failed"
+    assert body["error"] == "RuntimeError"
+    assert "super-secret" not in response.text
+    assert "header.payload.sig" not in response.text
 
 
 def test_vm_overlay_sets_the_flag_only_on_auth_service() -> None:
