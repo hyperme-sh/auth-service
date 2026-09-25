@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from typing import Annotated
@@ -7,6 +8,7 @@ from typing import Annotated
 import jwt
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.common.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
@@ -56,6 +58,7 @@ from auth_service.smoke_oidc import (
     SMOKE_EMAIL,
     SMOKE_KEYCLOAK_SUB,
     SmokeOidcRejected,
+    SmokeOidcUnavailable,
     smoke_oidc_enabled,
     verify_github_actions_oidc,
 )
@@ -65,6 +68,22 @@ from auth_service.token_validation import unsafe_subject_from_token
 from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
+
+
+def _smoke_json(
+    status_code: int,
+    code: str,
+    detail: str,
+    *,
+    error: str | None = None,
+) -> JSONResponse:
+    """Typed smoke failure. ``error`` is an exception class name, never a message."""
+
+    body: dict[str, str] = {"detail": detail, "code": code}
+    if error:
+        body["error"] = error
+    return JSONResponse(status_code=status_code, content=body)
 
 
 def _unsafe_payload(access_token: str) -> dict:
@@ -293,7 +312,9 @@ def _bearer_token(request: Request) -> str:
         "when the issuer or host has no .test."
     ),
 )
-async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse:
+async def auth_hypermesh_smoke_session(
+    request: Request,
+) -> SmokeSessionResponse | JSONResponse:
     # Flag and token checks run before the database. A disabled route stays
     # 404, and a rejected OIDC token stays 401, with no session opened.
     if not smoke_oidc_enabled():
@@ -301,11 +322,18 @@ async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse
     token = _bearer_token(request)
     try:
         verify_github_actions_oidc(token)
+    except SmokeOidcUnavailable:
+        return _smoke_json(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "github_jwks_unreachable",
+            "GitHub OIDC JWKS unreachable",
+        )
     except SmokeOidcRejected:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub OIDC token rejected",
-        ) from None
+        return _smoke_json(
+            status.HTTP_401_UNAUTHORIZED,
+            "github_oidc_rejected",
+            "GitHub OIDC token rejected",
+        )
     session = get_db_session()
 
     from api.infrastructure.persistence.tenant_membership import (
@@ -327,55 +355,69 @@ async def auth_hypermesh_smoke_session(request: Request) -> SmokeSessionResponse
             tenant_id=MARKETPLACE_TENANT_ID,
             requested=["renter"],
         )
-    except EnrollmentError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="smoke renter enrollment failed",
-        ) from exc
-    if granted.refused:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="smoke renter enrollment refused",
+        if granted.refused:
+            return _smoke_json(
+                status.HTTP_403_FORBIDDEN,
+                "smoke_enrollment_refused",
+                "smoke renter enrollment refused",
+            )
+        member = await get_tenant_membership_row(
+            session,
+            MARKETPLACE_TENANT_ID,
+            email=SMOKE_EMAIL,
+            keycloak_sub=SMOKE_KEYCLOAK_SUB,
         )
-    member = await get_tenant_membership_row(
-        session,
-        MARKETPLACE_TENANT_ID,
-        email=SMOKE_EMAIL,
-        keycloak_sub=SMOKE_KEYCLOAK_SUB,
-    )
-    if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="smoke renter membership missing",
+        if member is None:
+            return _smoke_json(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "smoke_membership_missing",
+                "smoke renter membership missing",
+            )
+        from api.domain.operator.bans import ban_book
+
+        if not ban_book().user_may_enter(MARKETPLACE_TENANT_ID, member.id):
+            raise ForbiddenException("This user is banned from the tenant")
+
+        access = mint_tenant_session_jwt(
+            claims={
+                "sub": str(member.id),
+                "email": SMOKE_EMAIL,
+                "preferred_username": "hypermesh-smoke",
+                "azp": "hypermesh-gateway-smoke",
+                "scope": "openid",
+                "hypermesh_smoke": True,
+                "realm_access": {"roles": ["renter"]},
+                "groups": ["renter"],
+            },
+            tenant_id=MARKETPLACE_TENANT_ID,
+            extra_roles=["renter"],
         )
-    from api.domain.operator.bans import ban_book
-
-    if not ban_book().user_may_enter(MARKETPLACE_TENANT_ID, member.id):
-        raise ForbiddenException("This user is banned from the tenant")
-
-    access = mint_tenant_session_jwt(
-        claims={
-            "sub": str(member.id),
-            "email": SMOKE_EMAIL,
-            "preferred_username": "hypermesh-smoke",
-            "azp": "hypermesh-gateway-smoke",
-            "scope": "openid",
-            "hypermesh_smoke": True,
-            "realm_access": {"roles": ["renter"]},
-            "groups": ["renter"],
-        },
-        tenant_id=MARKETPLACE_TENANT_ID,
-        extra_roles=["renter"],
-    )
-    await get_tenant_event_publisher().publish(
-        tenant_id=MARKETPLACE_TENANT_ID,
-        event_type=AUTH_TOKEN_ISSUED_V1,
-        payload=AuthTokenIssuedPayload(
-            subject=str(member.id),
-            grant_type="hypermesh_smoke",
-            client_id="hypermesh-gateway-smoke",
-        ).model_dump(mode="json"),
-    )
+        await get_tenant_event_publisher().publish(
+            tenant_id=MARKETPLACE_TENANT_ID,
+            event_type=AUTH_TOKEN_ISSUED_V1,
+            payload=AuthTokenIssuedPayload(
+                subject=str(member.id),
+                grant_type="hypermesh_smoke",
+                client_id="hypermesh-gateway-smoke",
+            ).model_dump(mode="json"),
+        )
+    except EnrollmentError:
+        return _smoke_json(
+            status.HTTP_400_BAD_REQUEST,
+            "smoke_enrollment_failed",
+            "smoke renter enrollment failed",
+        )
+    except ForbiddenException:
+        raise
+    except Exception as exc:
+        # Class name only. The message can carry a SQL row or a token.
+        logger.exception("hypermesh smoke session failed")
+        return _smoke_json(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "smoke_session_failed",
+            "smoke session failed",
+            error=type(exc).__name__,
+        )
     return SmokeSessionResponse(
         access_token=access,
         expires_in=TENANT_SESSION_TTL_SECONDS,
