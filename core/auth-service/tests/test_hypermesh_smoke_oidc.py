@@ -17,6 +17,7 @@ from auth_service.smoke_oidc import (
     SMOKE_OIDC_AUDIENCE,
     SMOKE_OIDC_ENVIRONMENT,
     SMOKE_OIDC_REPOSITORY,
+    SMOKE_OIDC_REF,
     SMOKE_OIDC_SUBJECT,
     SMOKE_WORKFLOW_PATH,
     SmokeOidcMisconfigured,
@@ -45,6 +46,7 @@ def _claims(**overrides: object) -> dict[str, object]:
         "environment": SMOKE_OIDC_ENVIRONMENT,
         "sub": SMOKE_OIDC_SUBJECT,
         "job_workflow_ref": JOB_WORKFLOW_REF,
+        "ref": SMOKE_OIDC_REF,
         "aud": SMOKE_OIDC_AUDIENCE,
     }
     body.update(overrides)
@@ -115,6 +117,21 @@ def test_claims_pin_repo_environment_workflow_and_audience() -> None:
         )
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(_claims(aud="https://github.com/FyberLabs/panopticon"))
+
+
+def test_claims_reject_feature_branch_and_pull_refs() -> None:
+    feature = f"{SMOKE_WORKFLOW_PATH}@refs/heads/cursor/hypermesh-gateway-smoke-853b"
+    pull = f"{SMOKE_WORKFLOW_PATH}@refs/pull/202/merge"
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims(job_workflow_ref=feature))
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims(job_workflow_ref=pull))
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(
+            _claims(ref="refs/heads/cursor/hypermesh-gateway-smoke-853b")
+        )
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims(ref="refs/pull/202/merge"))
 
 
 def test_verify_rejects_a_non_jwt() -> None:

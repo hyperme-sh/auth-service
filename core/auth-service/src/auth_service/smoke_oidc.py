@@ -33,6 +33,8 @@ SMOKE_OIDC_SUBJECT = "repo:FyberLabs/panopticon:environment:test"
 SMOKE_WORKFLOW_PATH = (
     "FyberLabs/panopticon/.github/workflows/hypermesh-gateway-smoke.yml"
 )
+SMOKE_OIDC_REF = "refs/heads/main"
+SMOKE_JOB_WORKFLOW_REF = f"{SMOKE_WORKFLOW_PATH}@{SMOKE_OIDC_REF}"
 SMOKE_EMAIL = "hypermesh-smoke@test.hyperme.sh"
 SMOKE_KEYCLOAK_SUB = "c0ffee00-5a0e-4000-8000-0000000005a0"
 _TEST_MARKER = ".test."
@@ -106,25 +108,22 @@ def _audience_ok(audience: object) -> bool:
 
 
 def _job_workflow_ref_ok(value: object) -> bool:
-    """GitHub job_workflow_ref is ``<repo>/.github/workflows/<file>@refs/...``."""
+    """Accept only the smoke workflow on ``refs/heads/main``.
 
-    if not isinstance(value, str):
-        return False
-    path, separator, ref = value.partition("@")
-    return (
-        bool(separator)
-        and path == SMOKE_WORKFLOW_PATH
-        and ref.startswith("refs/")
-        and len(ref) > len("refs/")
-    )
+    A feature-branch ref and a ``refs/pull/...`` ref are both rejected.
+    """
+
+    return value == SMOKE_JOB_WORKFLOW_REF
 
 
 def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
-    """Pin repository, environment, job_workflow_ref, and audience.
+    """Pin repository, environment, job_workflow_ref, ref, and audience.
 
     ``job_workflow_ref`` is the workflow file that requested the token.
-    ``workflow_ref`` is not accepted in its place. A pull-request subject
-    is not this job.
+    It is accepted only as
+    ``FyberLabs/panopticon/.github/workflows/hypermesh-gateway-smoke.yml@refs/heads/main``.
+    The ``ref`` claim must be ``refs/heads/main``. ``workflow_ref`` is not
+    accepted in its place. A pull-request subject is not this job.
     """
 
     repository = str(claims.get("repository") or "")
@@ -137,6 +136,8 @@ def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
     if subject != SMOKE_OIDC_SUBJECT:
         raise SmokeOidcRejected()
     if not _job_workflow_ref_ok(claims.get("job_workflow_ref")):
+        raise SmokeOidcRejected()
+    if claims.get("ref") != SMOKE_OIDC_REF:
         raise SmokeOidcRejected()
     if not _audience_ok(claims.get("aud")):
         raise SmokeOidcRejected()
