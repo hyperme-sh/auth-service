@@ -32,7 +32,6 @@ def app(event_sink, monkeypatch):
         "http://client.test/oauth/callback",
     )
     monkeypatch.setattr(api_config.settings, "database_url", "postgresql+asyncpg://x:x@localhost:1/x")
-    monkeypatch.setattr(api_config.settings, "kafka_bootstrap_servers", None)
     monkeypatch.setattr(api_config.settings, "oidc_require_mfa", False)
     monkeypatch.setattr(api_config.settings, "auth_token_validation_mode", "jwt")
     monkeypatch.setattr(

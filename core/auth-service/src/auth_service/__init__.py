@@ -1,4 +1,4 @@
-"""Auth microservice: Keycloak OIDC routes, JWT / introspection, Kafka auth events.
+"""Auth microservice: Keycloak OIDC routes, JWT / introspection, control-plane auth events.
 
 Import the ASGI app as ``from auth_service.app import app`` (avoids import cycles).
 """
