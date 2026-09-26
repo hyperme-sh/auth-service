@@ -233,11 +233,24 @@ def test_hypermesh_native_client_contract() -> None:
     assert client["implicitFlowEnabled"] is False
     assert client["attributes"]["pkce.code.challenge.method"] == "S256"
     assert client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
+    assert client["attributes"]["client.session.idle.timeout"] == "1800"
+    assert client["attributes"]["client.session.max.lifespan"] == "36000"
+    assert client["attributes"]["oauth2.device.code.lifespan"] == "600"
     assert "access.token.lifespan" not in client["attributes"]
+    assert "client.offline.session.idle.timeout" not in client["attributes"]
+    assert "client.offline.session.max.lifespan" not in client["attributes"]
     assert client["redirectUris"] == ["http://127.0.0.1/callback"]
     assert client["webOrigins"] == []
+    assert client["defaultClientScopes"] == ["basic", "roles", "email", "profile", "acr"]
+    assert client["optionalClientScopes"] == []
     assert "offline_access" not in client["defaultClientScopes"]
-    assert "offline_access" not in client["optionalClientScopes"]
+    assert "web-origins" not in client["defaultClientScopes"]
+    realm = _realm()
+    frontend = next(item for item in realm["clients"] if item["clientId"] == "controlplane-frontend")
+    frontend_idp = [
+        item for item in frontend["protocolMappers"] if str(item["name"]).startswith("idp_")
+    ]
+    assert client["protocolMappers"] == frontend_idp
     assert _realm()["accessTokenLifespan"] == 300
 
 
@@ -250,6 +263,10 @@ class _FakeKeycloak:
         self.client_puts = 0
         self.scope_puts: list[str] = []
         self.scope_deletes: list[str] = []
+        self.mapper_posts: list[str] = []
+        self.mapper_puts: list[str] = []
+        self.mapper_deletes: list[str] = []
+        self._mapper_seq = 0
         self.catalog = [
             {"id": name, "name": name}
             for name in (
@@ -265,7 +282,9 @@ class _FakeKeycloak:
             )
         ]
         self.catalog.append({"id": "offline", "name": "offline_access"})
+        self.catalog.append({"id": "extra", "name": "extra-scope"})
         self.assigned: dict[str, dict[str, list[dict[str, str]]]] = {}
+        self.mappers: dict[str, list[dict]] = {}
 
     def get(self, path: str):
         if path.startswith("/clients?clientId="):
@@ -273,6 +292,8 @@ class _FakeKeycloak:
             return [item for item in self.clients if item.get("clientId") == client_id]
         if path == "/client-scopes":
             return self.catalog
+        if path.endswith("/protocol-mappers/models"):
+            return list(self.mappers.get(path.split("/")[2], []))
         if "/default-client-scopes" in path and path.count("/") == 3:
             return self.assigned[path.split("/")[2]]["default"]
         if "/optional-client-scopes" in path and path.count("/") == 3:
@@ -280,6 +301,14 @@ class _FakeKeycloak:
         raise AssertionError(path)
 
     def post(self, path: str, payload: dict) -> None:
+        if path.endswith("/protocol-mappers/models"):
+            client_uuid = path.split("/")[2]
+            self._mapper_seq += 1
+            item = dict(payload)
+            item["id"] = f"mapper-{self._mapper_seq}"
+            self.mappers.setdefault(client_uuid, []).append(item)
+            self.mapper_posts.append(path)
+            return
         assert path == "/clients"
         if any(item.get("clientId") == payload.get("clientId") for item in self.clients):
             raise AssertionError("duplicate client")
@@ -287,6 +316,7 @@ class _FakeKeycloak:
         client["id"] = "native-1"
         self.clients.append(client)
         self.posts.append(path)
+        self.mappers["native-1"] = []
         self.assigned["native-1"] = {
             "default": [
                 {"id": "profile", "name": "profile"},
@@ -304,26 +334,49 @@ class _FakeKeycloak:
         }
 
     def put(self, path: str, payload) -> None:
-        if path == "/clients/native-1":
-            self.client_puts += 1
-            updated = dict(payload)
-            updated["id"] = "native-1"
-            self.clients = [updated]
-            return
         parts = path.strip("/").split("/")
-        assert parts[0] == "clients" and parts[1] == "native-1"
+        if len(parts) == 2 and parts[0] == "clients":
+            client_uuid = parts[1]
+            updated = dict(payload)
+            updated["id"] = client_uuid
+            for index, client in enumerate(self.clients):
+                if client.get("id") == client_uuid:
+                    self.clients[index] = updated
+                    self.client_puts += 1
+                    return
+            raise AssertionError(path)
+        if "/protocol-mappers/models/" in path:
+            client_uuid = parts[1]
+            mapper_id = parts[4]
+            updated = dict(payload)
+            updated["id"] = mapper_id
+            for index, item in enumerate(self.mappers.get(client_uuid, [])):
+                if item.get("id") == mapper_id:
+                    self.mappers[client_uuid][index] = updated
+                    self.mapper_puts.append(path)
+                    return
+            raise AssertionError(path)
+        client_uuid = parts[1]
         bucket = "default" if parts[2].startswith("default") else "optional"
         scope_id = parts[3]
         name = next(item["name"] for item in self.catalog if item["id"] == scope_id)
-        self.assigned["native-1"][bucket].append({"id": scope_id, "name": name})
+        self.assigned[client_uuid][bucket].append({"id": scope_id, "name": name})
         self.scope_puts.append(path)
 
     def delete(self, path: str) -> None:
         parts = path.strip("/").split("/")
+        client_uuid = parts[1]
+        if "/protocol-mappers/models/" in path:
+            mapper_id = parts[4]
+            self.mappers[client_uuid] = [
+                item for item in self.mappers.get(client_uuid, []) if item.get("id") != mapper_id
+            ]
+            self.mapper_deletes.append(path)
+            return
         bucket = "default" if parts[2].startswith("default") else "optional"
         scope_id = parts[3]
-        self.assigned["native-1"][bucket] = [
-            item for item in self.assigned["native-1"][bucket] if item["id"] != scope_id
+        self.assigned[client_uuid][bucket] = [
+            item for item in self.assigned[client_uuid][bucket] if item["id"] != scope_id
         ]
         self.scope_deletes.append(path)
 
@@ -344,22 +397,175 @@ def test_hypermesh_native_upsert_is_idempotent() -> None:
     assert client["webOrigins"] == []
     assert client["attributes"]["pkce.code.challenge.method"] == "S256"
     assert client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
-    assert "access.token.lifespan" not in client["attributes"]
+    assert client["attributes"]["client.session.idle.timeout"] == "1800"
+    assert client["attributes"]["client.session.max.lifespan"] == "36000"
+    assert client["attributes"]["oauth2.device.code.lifespan"] == "600"
+    assert client["attributes"]["access.token.lifespan"] is None
+    assert client["attributes"]["client.offline.session.idle.timeout"] is None
+    assert client["attributes"]["client.offline.session.max.lifespan"] is None
     assert admin.client_puts == 1
-
-    stale = module.upsert_payload(
-        module.declared_client(),
-        {"id": "native-1", "attributes": {"access.token.lifespan": "86400", "keep": "yes"}},
-    )
-    assert stale["id"] == "native-1"
-    assert stale["attributes"]["access.token.lifespan"] == ""
-    assert stale["attributes"]["keep"] == "yes"
-    assert "secret" not in stale
-    assert admin.scope_deletes == ["/clients/native-1/optional-client-scopes/offline"]
     assert admin.scope_puts == ["/clients/native-1/default-client-scopes/basic"]
+    assert set(admin.scope_deletes) == {
+        "/clients/native-1/default-client-scopes/web-origins",
+        "/clients/native-1/optional-client-scopes/address",
+        "/clients/native-1/optional-client-scopes/phone",
+        "/clients/native-1/optional-client-scopes/microprofile-jwt",
+        "/clients/native-1/optional-client-scopes/offline",
+    }
+    assert len(admin.mapper_posts) == 5
+    assert admin.mapper_deletes == []
 
     default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
     optional_names = {item["name"] for item in admin.assigned["native-1"]["optional"]}
-    assert "offline_access" not in default_names
-    assert "offline_access" not in optional_names
-    assert "basic" in default_names
+    assert default_names == {"basic", "roles", "email", "profile", "acr"}
+    assert optional_names == set()
+    assert {item["name"] for item in admin.mappers["native-1"]} == set(module.IDP_MAPPER_NAMES)
+
+
+def test_hypermesh_native_corrects_drift_and_keeps_other_clients() -> None:
+    module = _native_module()
+    admin = _FakeKeycloak()
+    year = str(365 * 24 * 60 * 60)
+    other = {
+        "id": "frontend-1",
+        "clientId": "controlplane-frontend",
+        "secret": "leave-me",
+        "redirectUris": ["https://portal.test.hyperme.sh/*"],
+        "webOrigins": ["https://portal.test.hyperme.sh"],
+    }
+    admin.clients = [
+        {
+            "id": "native-1",
+            "clientId": "hypermesh-native",
+            "publicClient": False,
+            "secret": "hand-set-secret",
+            "standardFlowEnabled": True,
+            "implicitFlowEnabled": True,
+            "directAccessGrantsEnabled": True,
+            "redirectUris": [
+                "http://127.0.0.1/callback",
+                "http://127.0.0.1:3000/callback",
+            ],
+            "webOrigins": ["*"],
+            "attributes": {
+                "pkce.code.challenge.method": "plain",
+                "client.session.idle.timeout": year,
+                "client.session.max.lifespan": year,
+                "client.offline.session.max.lifespan": year,
+                "oauth2.device.code.lifespan": "999999",
+                "hand.edit": "yes",
+            },
+        },
+        other,
+    ]
+    admin.assigned["native-1"] = {
+        "default": [
+            {"id": "basic", "name": "basic"},
+            {"id": "roles", "name": "roles"},
+            {"id": "email", "name": "email"},
+            {"id": "profile", "name": "profile"},
+            {"id": "acr", "name": "acr"},
+            {"id": "web-origins", "name": "web-origins"},
+            {"id": "extra", "name": "extra-scope"},
+        ],
+        "optional": [
+            {"id": "phone", "name": "phone"},
+            {"id": "offline", "name": "offline_access"},
+        ],
+    }
+    admin.mappers["native-1"] = [
+        {
+            "id": "stray-1",
+            "name": "stray-mapper",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-hardcoded-claim-mapper",
+            "consentRequired": False,
+            "config": {"claim.name": "stray"},
+        },
+        {
+            "id": "idp-org-1",
+            "name": "idp_org",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-usermodel-attribute-mapper",
+            "consentRequired": False,
+            "config": {"claim.name": "nope"},
+        },
+    ]
+
+    module.ensure_hypermesh_native(admin)
+
+    assert other in admin.clients
+    assert other["secret"] == "leave-me"
+    assert other["redirectUris"] == ["https://portal.test.hyperme.sh/*"]
+    assert admin.posts == []
+    native = next(item for item in admin.clients if item["clientId"] == "hypermesh-native")
+    assert native["id"] == "native-1"
+    assert native["publicClient"] is True
+    assert native["directAccessGrantsEnabled"] is False
+    assert native["implicitFlowEnabled"] is False
+    assert "secret" not in native
+    assert native["redirectUris"] == ["http://127.0.0.1/callback"]
+    assert native["webOrigins"] == []
+    assert native["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert native["attributes"]["client.session.idle.timeout"] == "1800"
+    assert native["attributes"]["client.session.max.lifespan"] == "36000"
+    assert native["attributes"]["oauth2.device.code.lifespan"] == "600"
+    assert native["attributes"]["client.offline.session.max.lifespan"] is None
+    assert native["attributes"]["client.offline.session.idle.timeout"] is None
+    assert native["attributes"]["hand.edit"] is None
+    assert native["attributes"]["access.token.lifespan"] is None
+    assert year not in json.dumps(native["attributes"])
+    default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
+    optional_names = {item["name"] for item in admin.assigned["native-1"]["optional"]}
+    assert default_names == {"basic", "roles", "email", "profile", "acr"}
+    assert optional_names == set()
+    assert "stray-mapper" not in {item["name"] for item in admin.mappers["native-1"]}
+    declared = {
+        item["name"]: item for item in module.declared_client()["protocolMappers"]
+    }
+    live = {item["name"]: item for item in admin.mappers["native-1"]}
+    assert set(live) == set(declared)
+    assert live["idp_org"]["config"]["claim.name"] == "idp_org"
+
+
+def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatch) -> None:
+    import importlib.util
+
+    path = REPO_ROOT / "infra" / "keycloak" / "configure_idp_brokers.py"
+    spec = importlib.util.spec_from_file_location("configure_idp_brokers", path)
+    assert spec is not None and spec.loader is not None
+    brokers = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(brokers)
+    calls: list[str] = []
+
+    def boom(_admin: object) -> None:
+        calls.append("native")
+        raise brokers.NativeClientError("session cap rejected")
+
+    def brokers_ok(_admin: object) -> None:
+        calls.append("brokers")
+
+    monkeypatch.setattr(brokers, "ensure_hypermesh_native", boom)
+    monkeypatch.setattr(brokers, "configure", brokers_ok)
+    assert brokers.apply_realm_updates(object()) == 1
+    assert calls == ["native", "brokers"]
+    error = capsys.readouterr().err
+    assert "hypermesh-native client was not applied: session cap rejected" in error
+    assert "IdP broker configure failed" not in error
+
+    calls.clear()
+
+    def native_ok(_admin: object) -> None:
+        calls.append("native")
+
+    def brokers_bad(_admin: object) -> None:
+        calls.append("brokers")
+        raise brokers.ConfigureError("token claim missing")
+
+    monkeypatch.setattr(brokers, "ensure_hypermesh_native", native_ok)
+    monkeypatch.setattr(brokers, "configure", brokers_bad)
+    assert brokers.apply_realm_updates(object()) == 1
+    assert calls == ["native", "brokers"]
+    error = capsys.readouterr().err
+    assert "IdP broker configure failed: token claim missing" in error
+    assert "hypermesh-native client was not applied" not in error
