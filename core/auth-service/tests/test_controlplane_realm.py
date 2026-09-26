@@ -98,6 +98,7 @@ def test_existing_clients_and_bootstrap_user_remain() -> None:
         "controlplane-m2m",
         "controlplane-api-key",
         "hypermesh-native",
+        "s3rch-web",
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
@@ -533,6 +534,161 @@ def test_hypermesh_native_corrects_drift_and_keeps_other_clients() -> None:
     assert live["idp_org"]["config"]["claim.name"] == "idp_org"
 
 
+def _s3rch_module():
+    import importlib.util
+
+    path = REPO_ROOT / "infra" / "keycloak" / "s3rch_web.py"
+    spec = importlib.util.spec_from_file_location("s3rch_web", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_s3rch_web_client_contract() -> None:
+    """s3r.ch backup client: public PKCE, exact callbacks, no secret, no roles."""
+    module = _s3rch_module()
+    client = module.declared_client(_realm())
+    module.validate_declared_client(client)
+    assert client["publicClient"] is True
+    assert "secret" not in client
+    assert client["fullScopeAllowed"] is False
+    assert client["directAccessGrantsEnabled"] is False
+    assert client["attributes"] == {"pkce.code.challenge.method": "S256"}
+    assert "oauth2.device.authorization.grant.enabled" not in client["attributes"]
+    assert client["redirectUris"] == [
+        "https://s3r.ch/api/identity/oauth/callback",
+        "https://www.s3r.ch/api/identity/oauth/callback",
+        "http://localhost:3000/api/identity/oauth/callback",
+        "http://127.0.0.1:3000/api/identity/oauth/callback",
+    ]
+    assert client["webOrigins"] == []
+    assert client["defaultClientScopes"] == ["basic", "email", "profile", "acr"]
+    assert "roles" not in client["defaultClientScopes"]
+    assert client["optionalClientScopes"] == []
+    assert client["protocolMappers"] == module.token_claim_mappers()
+    assert "groups" not in {item["name"] for item in client["protocolMappers"]}
+    providers = {item["alias"] for item in _realm()["identityProviders"]}
+    assert providers == {"microsoft", "github", "google"}
+
+
+def test_s3rch_web_upsert_is_idempotent() -> None:
+    module = _s3rch_module()
+    admin = _FakeKeycloak()
+    module.ensure_s3rch_web(admin)
+    module.ensure_s3rch_web(admin)
+
+    assert admin.posts == ["/clients"]
+    assert len(admin.clients) == 1
+    client = admin.clients[0]
+    assert client["clientId"] == "s3rch-web"
+    assert client["publicClient"] is True
+    assert "secret" not in client
+    assert client["fullScopeAllowed"] is False
+    assert client["redirectUris"] == list(module.REDIRECT_URIS)
+    assert client["webOrigins"] == []
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert client["attributes"]["oauth2.device.authorization.grant.enabled"] is None
+    assert client["attributes"]["access.token.lifespan"] is None
+    assert client["attributes"]["client.offline.session.idle.timeout"] is None
+    assert client["attributes"]["client.offline.session.max.lifespan"] is None
+    assert admin.client_puts == 1
+    assert admin.scope_puts == ["/clients/native-1/default-client-scopes/basic"]
+    assert set(admin.scope_deletes) == {
+        "/clients/native-1/default-client-scopes/roles",
+        "/clients/native-1/default-client-scopes/web-origins",
+        "/clients/native-1/optional-client-scopes/address",
+        "/clients/native-1/optional-client-scopes/phone",
+        "/clients/native-1/optional-client-scopes/microprofile-jwt",
+        "/clients/native-1/optional-client-scopes/offline",
+    }
+    assert len(admin.mapper_posts) == 5
+    names = {item["name"] for item in admin.mappers["native-1"]}
+    assert names == {item["name"] for item in module.declared_protocol_mappers()}
+    assert "groups" not in names
+    default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
+    optional_names = {item["name"] for item in admin.assigned["native-1"]["optional"]}
+    assert default_names == {"basic", "email", "profile", "acr"}
+    assert optional_names == set()
+
+
+def test_s3rch_web_corrects_drift_and_keeps_other_clients() -> None:
+    module = _s3rch_module()
+    admin = _FakeKeycloak()
+    other = {
+        "id": "frontend-1",
+        "clientId": "controlplane-frontend",
+        "secret": "leave-me",
+        "redirectUris": ["https://portal.test.hyperme.sh/*"],
+    }
+    admin.clients = [
+        {
+            "id": "s3rch-1",
+            "clientId": "s3rch-web",
+            "publicClient": False,
+            "secret": "hand-set-secret",
+            "standardFlowEnabled": True,
+            "implicitFlowEnabled": True,
+            "directAccessGrantsEnabled": True,
+            "fullScopeAllowed": True,
+            "redirectUris": [
+                "https://s3r.ch/*",
+                "https://evil.example/callback",
+            ],
+            "webOrigins": ["*"],
+            "attributes": {
+                "pkce.code.challenge.method": "plain",
+                "oauth2.device.authorization.grant.enabled": "true",
+                "hand.edit": "yes",
+            },
+        },
+        other,
+    ]
+    admin.assigned["s3rch-1"] = {
+        "default": [
+            {"id": "basic", "name": "basic"},
+            {"id": "roles", "name": "roles"},
+            {"id": "offline", "name": "offline_access"},
+        ],
+        "optional": [{"id": "phone", "name": "phone"}],
+    }
+    admin.mappers["s3rch-1"] = [
+        {
+            "id": "stray-1",
+            "name": "groups",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-group-membership-mapper",
+            "consentRequired": False,
+            "config": {"claim.name": "groups"},
+        }
+    ]
+
+    module.ensure_s3rch_web(admin)
+
+    assert other in admin.clients
+    assert other["secret"] == "leave-me"
+    assert admin.posts == []
+    client = next(item for item in admin.clients if item["clientId"] == "s3rch-web")
+    assert client["id"] == "s3rch-1"
+    assert client["publicClient"] is True
+    assert "secret" not in client
+    assert client["directAccessGrantsEnabled"] is False
+    assert client["implicitFlowEnabled"] is False
+    assert client["fullScopeAllowed"] is False
+    assert client["redirectUris"] == list(module.REDIRECT_URIS)
+    assert client["webOrigins"] == []
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert client["attributes"]["oauth2.device.authorization.grant.enabled"] is None
+    assert client["attributes"]["hand.edit"] is None
+    assert "groups" not in {item["name"] for item in admin.mappers["s3rch-1"]}
+    assert {item["name"] for item in admin.mappers["s3rch-1"]} == {
+        item["name"] for item in module.declared_protocol_mappers()
+    }
+    default_names = {item["name"] for item in admin.assigned["s3rch-1"]["default"]}
+    assert default_names == {"basic", "email", "profile", "acr"}
+    assert admin.assigned["s3rch-1"]["optional"] == []
+
+
 def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatch) -> None:
     import importlib.util
 
@@ -547,15 +703,20 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
         calls.append("native")
         raise brokers.NativeClientError("session cap rejected")
 
+    def s3rch_ok(_admin: object) -> None:
+        calls.append("s3rch")
+
     def brokers_ok(_admin: object) -> None:
         calls.append("brokers")
 
     monkeypatch.setattr(brokers, "ensure_hypermesh_native", boom)
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_ok)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "brokers"]
+    assert calls == ["native", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "hypermesh-native client was not applied: session cap rejected" in error
+    assert "s3rch-web client was not applied" not in error
     assert "IdP broker configure failed" not in error
 
     calls.clear()
@@ -563,17 +724,34 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     def native_ok(_admin: object) -> None:
         calls.append("native")
 
+    def s3rch_bad(_admin: object) -> None:
+        calls.append("s3rch")
+        raise brokers.S3rchClientError("redirect rejected")
+
     def brokers_bad(_admin: object) -> None:
         calls.append("brokers")
         raise brokers.ConfigureError("token claim missing")
 
     monkeypatch.setattr(brokers, "ensure_hypermesh_native", native_ok)
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_bad)
+    monkeypatch.setattr(brokers, "configure", brokers_ok)
+    assert brokers.apply_realm_updates(object()) == 1
+    assert calls == ["native", "s3rch", "brokers"]
+    error = capsys.readouterr().err
+    assert "s3rch-web client was not applied: redirect rejected" in error
+    assert "hypermesh-native client was not applied" not in error
+    assert "IdP broker configure failed" not in error
+
+    calls.clear()
+
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_bad)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "brokers"]
+    assert calls == ["native", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "IdP broker configure failed: token claim missing" in error
     assert "hypermesh-native client was not applied" not in error
+    assert "s3rch-web client was not applied" not in error
 
     calls.clear()
 
@@ -582,10 +760,12 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
         raise brokers.urllib.error.URLError("connection refused")
 
     monkeypatch.setattr(brokers, "ensure_hypermesh_native", network)
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_ok)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "brokers"]
+    assert calls == ["native", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "hypermesh-native client was not applied" in error
     assert "connection refused" in error
+    assert "s3rch-web client was not applied" not in error
     assert "IdP broker configure failed" not in error
