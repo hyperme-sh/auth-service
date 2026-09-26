@@ -247,10 +247,10 @@ def test_hypermesh_native_client_contract() -> None:
     assert "web-origins" not in client["defaultClientScopes"]
     realm = _realm()
     frontend = next(item for item in realm["clients"] if item["clientId"] == "controlplane-frontend")
-    frontend_idp = [
-        item for item in frontend["protocolMappers"] if str(item["name"]).startswith("idp_")
-    ]
-    assert client["protocolMappers"] == frontend_idp
+    frontend_groups = next(item for item in frontend["protocolMappers"] if item["name"] == "groups")
+    assert client["protocolMappers"][0] == frontend_groups
+    assert client["protocolMappers"][1:] == module.token_claim_mappers()
+    assert client["protocolMappers"] == module.declared_protocol_mappers(realm)
     assert _realm()["accessTokenLifespan"] == 300
 
 
@@ -412,14 +412,17 @@ def test_hypermesh_native_upsert_is_idempotent() -> None:
         "/clients/native-1/optional-client-scopes/microprofile-jwt",
         "/clients/native-1/optional-client-scopes/offline",
     }
-    assert len(admin.mapper_posts) == 5
+    assert len(admin.mapper_posts) == 6
     assert admin.mapper_deletes == []
 
     default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
     optional_names = {item["name"] for item in admin.assigned["native-1"]["optional"]}
     assert default_names == {"basic", "roles", "email", "profile", "acr"}
     assert optional_names == set()
-    assert {item["name"] for item in admin.mappers["native-1"]} == set(module.IDP_MAPPER_NAMES)
+    assert {item["name"] for item in admin.mappers["native-1"]} == {
+        item["name"] for item in module.declared_protocol_mappers()
+    }
+    assert "groups" in {item["name"] for item in admin.mappers["native-1"]}
 
 
 def test_hypermesh_native_corrects_drift_and_keeps_other_clients() -> None:
@@ -521,10 +524,12 @@ def test_hypermesh_native_corrects_drift_and_keeps_other_clients() -> None:
     assert optional_names == set()
     assert "stray-mapper" not in {item["name"] for item in admin.mappers["native-1"]}
     declared = {
-        item["name"]: item for item in module.declared_client()["protocolMappers"]
+        item["name"]: item for item in module.declared_protocol_mappers()
     }
     live = {item["name"]: item for item in admin.mappers["native-1"]}
     assert set(live) == set(declared)
+    assert live["groups"]["protocolMapper"] == "oidc-group-membership-mapper"
+    assert live["groups"]["config"]["claim.name"] == "groups"
     assert live["idp_org"]["config"]["claim.name"] == "idp_org"
 
 
@@ -569,3 +574,18 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     error = capsys.readouterr().err
     assert "IdP broker configure failed: token claim missing" in error
     assert "hypermesh-native client was not applied" not in error
+
+    calls.clear()
+
+    def network(_admin: object) -> None:
+        calls.append("native")
+        raise brokers.urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(brokers, "ensure_hypermesh_native", network)
+    monkeypatch.setattr(brokers, "configure", brokers_ok)
+    assert brokers.apply_realm_updates(object()) == 1
+    assert calls == ["native", "brokers"]
+    error = capsys.readouterr().err
+    assert "hypermesh-native client was not applied" in error
+    assert "connection refused" in error
+    assert "IdP broker configure failed" not in error
