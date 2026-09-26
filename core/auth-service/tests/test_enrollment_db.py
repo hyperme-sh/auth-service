@@ -438,7 +438,6 @@ async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypat
     if "+psycopg" in db_url:
         db_url = db_url.replace("postgresql+psycopg://", "postgresql://", 1)
     monkeypatch.setattr(api_config.settings, "database_url", db_url)
-    monkeypatch.setattr(api_config.settings, "kafka_bootstrap_servers", None)
     monkeypatch.setattr(api_config.settings, "oidc_require_mfa", False)
     monkeypatch.setattr(api_config.settings, "auth_token_validation_mode", "jwt")
 

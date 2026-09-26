@@ -15,7 +15,9 @@ COPY core/lib/controlplane-core ./core/lib/controlplane-core
 COPY core/auth-service ./core/auth-service
 # --no-dev skips panopticon-tests so the image does not need core/tests.
 # uv run must use the same flags or it re-resolves the missing workspace member.
-RUN uv sync --frozen --no-dev --package auth-service
+ARG CONTROLPLANE_SERVICEBUS=0
+RUN uv sync --frozen --no-dev --package auth-service \
+ && if [ "$CONTROLPLANE_SERVICEBUS" = "1" ]; then uv pip install --python /app/.venv 'azure-servicebus>=7.12.0'; fi
 ENV PYTHONPATH=/app/core/lib/controlplane-core/src:/app/core/lib/controlplane-db/src:/app/core/events/src:/app/core/auth-service/src
 WORKDIR /app/core/auth-service
 CMD ["uv", "run", "--frozen", "--no-dev", "--project", "/app/core/auth-service", "python", "-m", "auth_service.main"]

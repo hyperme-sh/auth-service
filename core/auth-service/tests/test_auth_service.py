@@ -45,7 +45,7 @@ async def test_login_accepts_identity_provider_hint(http_client):
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_callback_exchanges_code_and_publishes_kafka_events(app, event_sink, http_client):
+async def test_callback_exchanges_code_and_publishes_events(app, event_sink, http_client):
     tid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     access = _sample_access_jwt(sub="u1", tenant_id=tid)
     token_url = "http://keycloak.test/realms/demo/protocol/openid-connect/token"
