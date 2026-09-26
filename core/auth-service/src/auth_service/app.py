@@ -125,6 +125,9 @@ def create_app(
     if enable_db_middleware:
         logger.info("Auth service middleware: DbSessionMiddleware (RLS GUC)")
     add_optional_service_cors(app, env_var="AUTH_SERVICE_CORS_ORIGINS")
+    from api.infrastructure.metrics import install_http_metrics
+
+    install_http_metrics(app)
     return app
 
 
