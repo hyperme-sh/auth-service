@@ -18,6 +18,7 @@ from api.infrastructure.messaging.tenant_event_publisher import (
 from api.infrastructure.persistence.db_session import configure_session_maker
 from api.infrastructure.service_cors import add_optional_service_cors
 from api.interfaces.api_controllers.health_endpoint import router as health_router
+from api.interfaces.api_controllers.version_endpoint import router as version_router
 from api.interfaces.middlewares.database_middleware import DbSessionMiddleware
 from controlplane_db.session import normalize_database_url
 
@@ -121,6 +122,7 @@ def create_app(
     if enable_db_middleware:
         app.add_middleware(DbSessionMiddleware)
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")
     if enable_db_middleware:
         logger.info("Auth service middleware: DbSessionMiddleware (RLS GUC)")
