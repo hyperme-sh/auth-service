@@ -296,3 +296,81 @@ def test_reconcile_strips_cross_role_mappings(monkeypatch):
     )
     assert fake.user_roles[admin_id] == {"admin"}
     assert fake.user_groups[admin_id] == set()
+
+
+def test_deploy_wait_retries_then_succeeds(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    now = [0.0]
+    calls = []
+    monkeypatch.setattr(seed.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(seed.time, "sleep", lambda seconds: now.__setitem__(0, now[0] + seconds))
+
+    def open_url(url, timeout):
+        calls.append((url, timeout))
+        if len(calls) == 1:
+            raise OSError("synthetic network failure")
+        return nullcontext(SimpleNamespace(status=200))
+
+    monkeypatch.setattr(seed.urllib.request, "urlopen", open_url)
+    seed.wait_until_ready("http://127.0.0.1:8081/", 5)
+    assert len(calls) == 2
+    assert calls[0] == ("http://127.0.0.1:8081/realms/master", 2.0)
+
+
+def test_deploy_wait_timeout_is_bounded_and_sanitized(monkeypatch):
+    now = [0.0]
+    monkeypatch.setattr(seed.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(seed.time, "sleep", lambda seconds: now.__setitem__(0, now[0] + seconds))
+
+    def unavailable(*args, **kwargs):
+        raise OSError("synthetic-secret-must-not-appear")
+
+    monkeypatch.setattr(seed.urllib.request, "urlopen", unavailable)
+    with pytest.raises(seed.SeedError, match="readiness timed out") as error:
+        seed.wait_until_ready("http://127.0.0.1:8081", 3)
+    assert now[0] == 3
+    assert "synthetic-secret" not in str(error.value)
+
+
+def test_deploy_missing_password_fails_before_wait(monkeypatch, capsys):
+    monkeypatch.delenv("PANOPTICON_TEST_RENTER_PASSWORD", raising=False)
+    monkeypatch.setattr(seed, "wait_until_ready", lambda *_: pytest.fail("must validate credentials first"))
+    assert seed.main(["--wait-seconds", "60"]) == 1
+    assert "seed failed" in capsys.readouterr().err
+
+
+def test_deploy_wait_precedes_seed_and_does_not_rotate(monkeypatch):
+    events = []
+    monkeypatch.setattr(seed, "require_passwords", lambda: {})
+    monkeypatch.setattr(seed, "require_env", lambda name: "synthetic")
+    monkeypatch.setenv("KEYCLOAK_URL", "http://127.0.0.1:8081")
+    monkeypatch.setattr(seed, "wait_until_ready", lambda url, seconds: events.append(("wait", seconds)))
+
+    def run_seed(**kwargs):
+        events.append(("seed", kwargs["rotate_passwords"]))
+        return {}
+
+    monkeypatch.setattr(seed, "seed", run_seed)
+    assert seed.main(["--wait-seconds", "60"]) == 0
+    assert events == [("wait", 60), ("seed", False)]
+
+
+def test_negative_wait_is_rejected():
+    with pytest.raises(SystemExit):
+        seed.parse_args(["--wait-seconds", "-1"])
+
+
+def test_deploy_timeout_prevents_seed(monkeypatch, capsys):
+    monkeypatch.setattr(seed, "require_passwords", lambda: {})
+    monkeypatch.setattr(seed, "require_env", lambda name: "synthetic")
+    monkeypatch.setenv("KEYCLOAK_URL", "http://127.0.0.1:8081")
+
+    def timeout(*_):
+        raise seed.SeedError("Keycloak readiness timed out")
+
+    monkeypatch.setattr(seed, "wait_until_ready", timeout)
+    monkeypatch.setattr(seed, "seed", lambda **_: pytest.fail("seed must not run after timeout"))
+    assert seed.main(["--wait-seconds", "60"]) == 1
+    assert "readiness timed out" in capsys.readouterr().err
