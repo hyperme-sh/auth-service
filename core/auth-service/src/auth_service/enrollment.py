@@ -4,7 +4,7 @@ May add renter or host for the identified person, then INSERT the
 marketplace users row and those groups. Org admin is not added unless
 the Keycloak token already has it, and is not granted together with
 renter/host — that invite stays POST /api/v1/users.
-Reuses the existing renter group, host organization + host group, and
+Reuses the existing renter group, identity-bound host organization + host group, and
 portal admin role. Membership is an internal users-row write
 (service/repository, not the renter JWT and not POST /api/v1/users).
 Does not enroll a device, mint an enroll token, invent a renter role,
@@ -13,12 +13,13 @@ or add a payment role.
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
 
 import bcrypt
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,7 @@ from controlplane_db.models import (
     ApiKey,
     Group,
     HypermeshDevice,
+    HostOrganizationBinding,
     Organization,
     Role,
     Tenant,
@@ -333,23 +335,58 @@ async def _get_or_create_group(
     return group
 
 
+async def _lock_host_identity(
+    session: AsyncSession, tenant_id: uuid.UUID, subject: str
+) -> None:
+    """Serialize host grants before membership and organization creation.
+
+    Transaction-scoped PostgreSQL locks work across replicas and disappear on
+    rollback/disconnect. Hash collisions only serialize unrelated grants.
+    """
+    digest = hashlib.sha256(
+        b"host-org-binding-v1\0" + tenant_id.bytes + subject.encode("utf-8")
+    ).digest()
+    lock_key = int.from_bytes(digest[:8], "big", signed=True)
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key}
+    )
+
+
 async def _get_or_create_host_org(
-    session: AsyncSession, tenant_id: uuid.UUID
+    session: AsyncSession, tenant_id: uuid.UUID, subject: str
 ) -> Organization:
+    # Caller holds _lock_host_identity for the enclosing transaction. Ownership
+    # uses the verified immutable subject, not mutable email or client org IDs.
     found = await session.execute(
         select(Organization)
-        .where(Organization.tenant_id == tenant_id)
-        .order_by(Organization.created_at.asc())
+        .join(
+            HostOrganizationBinding,
+            (HostOrganizationBinding.organization_id == Organization.id)
+            & (HostOrganizationBinding.tenant_id == Organization.tenant_id),
+        )
+        .where(
+            HostOrganizationBinding.tenant_id == tenant_id,
+            HostOrganizationBinding.keycloak_sub == subject,
+        )
     )
-    org = found.scalars().first()
+    org = found.scalar_one_or_none()
     if org is not None:
         return org
+    org_id = uuid.uuid4()
     org = Organization(
-        id=uuid.uuid4(),
+        id=org_id,
         tenant_id=tenant_id,
-        legal_name=_HOST_ORG_NAME,
+        legal_name=f"{_HOST_ORG_NAME} {org_id}",
     )
     session.add(org)
+    await session.flush()
+    session.add(
+        HostOrganizationBinding(
+            tenant_id=tenant_id,
+            keycloak_sub=subject,
+            organization_id=org_id,
+        )
+    )
     await session.flush()
     return org
 
@@ -463,13 +500,15 @@ async def grant_held_roles(
     is not granted together with renter/host. Default tenant is the
     marketplace tenant ``8f8e8d8c-7b6a-4a59-8c3d-2e1f0a9b8c7d``.
     """
-    if not user.sub or not str(user.sub).strip():
-        raise EnrollmentError("Keycloak subject is required")
+    if not user.sub or not user.sub.strip() or len(user.sub) > 512:
+        raise EnrollmentError("A nonempty Keycloak subject of at most 512 characters is required")
     tenant_id = tenant_id or MARKETPLACE_TENANT_ID
     await _require_tenant(session, tenant_id)
     await set_current_tenant_id_guc(session, tenant_id)
 
     held, refused = held_roles_from_identity(user, requested)
+    if HELD_HOST in held:
+        await _lock_host_identity(session, tenant_id, user.sub)
     wallet = await _bound_wallet(session, user.sub)
     devices_before = await _device_count(session, tenant_id)
 
@@ -500,7 +539,7 @@ async def grant_held_roles(
         )
 
     if HELD_HOST in held and member is not None:
-        org = await _get_or_create_host_org(session, tenant_id)
+        org = await _get_or_create_host_org(session, tenant_id, user.sub)
         host_group = await _get_or_create_group(
             session, tenant_id, GROUP_HOST, group_role.id
         )
