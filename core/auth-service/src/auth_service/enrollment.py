@@ -40,7 +40,6 @@ from api.infrastructure.persistence.tenant_membership import (
 from controlplane_db.models import (
     ApiKey,
     Group,
-    HypermeshDevice,
     HostOrganizationBinding,
     Organization,
     Role,
@@ -478,15 +477,6 @@ async def _ensure_renter_api_key(
     return prefix
 
 
-async def _device_count(session: AsyncSession, tenant_id: uuid.UUID) -> int:
-    q = await session.execute(
-        select(func.count()).select_from(HypermeshDevice).where(
-            HypermeshDevice.tenant_id == tenant_id
-        )
-    )
-    return int(q.scalar_one())
-
-
 async def grant_held_roles(
     session: AsyncSession,
     user: AuthMeResponse,
@@ -510,7 +500,6 @@ async def grant_held_roles(
     if HELD_HOST in held:
         await _lock_host_identity(session, tenant_id, user.sub)
     wallet = await _bound_wallet(session, user.sub)
-    devices_before = await _device_count(session, tenant_id)
 
     member: User | None = None
     if held:
@@ -564,9 +553,8 @@ async def grant_held_roles(
             keycloak_bootstrap_admin=False,
         )
 
-    devices_after = await _device_count(session, tenant_id)
-    if devices_after != devices_before:
-        raise EnrollmentError("host grant must not enroll a device")
+    # Device creation belongs to its own workflow. Do not compare tenant-wide
+    # counts: an unrelated installer may register a device during this grant.
 
     granted = tuple(sorted(held))
     return EnrollmentGrantResult(
