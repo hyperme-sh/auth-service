@@ -35,7 +35,10 @@ from auth_service.enrollment import (
 from auth_service.schemas import AuthMeResponse
 from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
-from controlplane_db.models import ApiKey, Group, HypermeshDevice, Role, User, UserGroupMembership
+from controlplane_db.models import (
+    ApiKey, Group, HypermeshDevice, HostOrganizationBinding, Organization,
+    Role, User, UserGroupMembership,
+)
 from controlplane_db.session import normalize_database_url
 from panopticon_tests.fixtures.postgres import (
     async_db_url,
@@ -514,3 +517,119 @@ async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypat
                 assert "tenant_id" not in (await _claims())
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_host_organizations_are_bound_to_identity_not_oldest_org(db_session, seed):
+    unrelated = Organization(
+        id=uuid.uuid4(), tenant_id=seed.tenant_id, legal_name=f"Unrelated {uuid.uuid4()}"
+    )
+    db_session.add(unrelated)
+    await db_session.flush()
+    suffix = uuid.uuid4().hex
+    alice = AuthMeResponse(sub=f"host-alice-{suffix}", email=f"alice-{suffix}@example.com")
+    bob = AuthMeResponse(sub=f"host-bob-{suffix}", email=f"bob-{suffix}@example.com")
+    first = await grant_held_roles(db_session, alice, requested=[HELD_HOST])
+    second = await grant_held_roles(db_session, bob, requested=[HELD_HOST])
+    again = await grant_held_roles(db_session, alice, requested=[HELD_HOST])
+    assert first.host is not None and second.host is not None and again.host is not None
+    assert first.host.organization_id == again.host.organization_id
+    assert len({first.host.organization_id, second.host.organization_id, unrelated.id}) == 3
+    bindings = (await db_session.execute(
+        select(HostOrganizationBinding).where(
+            HostOrganizationBinding.tenant_id == seed.tenant_id,
+            HostOrganizationBinding.keycloak_sub.in_([alice.sub, bob.sub]),
+        )
+    )).scalars().all()
+    assert {b.keycloak_sub: b.organization_id for b in bindings} == {
+        alice.sub: first.host.organization_id, bob.sub: second.host.organization_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_email_changes_do_not_transfer_host_organization(db_session):
+    suffix = uuid.uuid4().hex
+    alice = AuthMeResponse(sub=f"stable-{suffix}", email=f"before-{suffix}@example.com")
+    first = await grant_held_roles(db_session, alice, requested=[HELD_HOST])
+    renamed = alice.model_copy(update={"email": f"after-{suffix}@example.com"})
+    again = await grant_held_roles(db_session, renamed, requested=[HELD_HOST])
+    # Even a separate verified identity with the old email cannot adopt Alice's
+    # organization through the legacy membership helper's email lookup.
+    other = AuthMeResponse(sub=f"other-{suffix}", email=alice.email)
+    separate = await grant_held_roles(db_session, other, requested=[HELD_HOST])
+    assert first.host and again.host and separate.host
+    assert first.host.organization_id == again.host.organization_id
+    assert separate.host.organization_id != first.host.organization_id
+
+
+@pytest.mark.asyncio
+async def test_same_identity_has_separate_host_organizations_per_tenant(db_session, seed):
+    other_tenant = uuid.uuid4()
+    await db_session.execute(
+        text("INSERT INTO tenants (id, name, is_active) VALUES (:id, :name, true)"),
+        {"id": other_tenant, "name": f"host-other-{other_tenant}"},
+    )
+    suffix = uuid.uuid4().hex
+    person = AuthMeResponse(sub=f"multi-{suffix}", email=f"multi-{suffix}@example.com")
+    first = await grant_held_roles(db_session, person, tenant_id=seed.tenant_id, requested=[HELD_HOST])
+    second = await grant_held_roles(db_session, person, tenant_id=other_tenant, requested=[HELD_HOST])
+    assert first.host and second.host
+    assert first.host.organization_id != second.host.organization_id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_host_grants_create_one_binding(migrated_sync_url, seed):
+    suffix = uuid.uuid4().hex
+    person = AuthMeResponse(sub=f"concurrent-host-{suffix}", email=f"concurrent-host-{suffix}@example.com")
+    engine = create_async_engine(normalize_database_url(async_db_url(migrated_sync_url)), pool_size=6)
+    maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+
+    async def enroll():
+        async with maker() as session:
+            result = await grant_held_roles(
+                session, person, tenant_id=seed.tenant_id, requested=[HELD_HOST]
+            )
+            await session.commit()
+            assert result.host
+            return result.host.organization_id
+
+    try:
+        organizations = await asyncio.gather(*(enroll() for _ in range(6)))
+        assert len(set(organizations)) == 1
+        async with maker() as session:
+            await set_current_tenant_id_guc(session, seed.tenant_id)
+            rows = (await session.execute(select(HostOrganizationBinding).where(
+                HostOrganizationBinding.tenant_id == seed.tenant_id,
+                HostOrganizationBinding.keycloak_sub == person.sub,
+            ))).scalars().all()
+            assert len(rows) == 1
+            assert rows[0].organization_id == organizations[0]
+            members = (await session.execute(select(User).where(
+                User.tenant_id == seed.tenant_id, User.email == person.email,
+            ))).scalars().all()
+            assert len(members) == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_host_binding_and_organization_roll_back_together(migrated_sync_url, seed):
+    suffix = uuid.uuid4().hex
+    person = AuthMeResponse(sub=f"rollback-{suffix}", email=f"rollback-{suffix}@example.com")
+    engine = create_async_engine(normalize_database_url(async_db_url(migrated_sync_url)))
+    maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    try:
+        async with maker() as session:
+            result = await grant_held_roles(session, person, requested=[HELD_HOST])
+            assert result.host
+            discarded = result.host.organization_id
+            await session.rollback()
+        async with maker() as session:
+            await set_current_tenant_id_guc(session, seed.tenant_id)
+            assert await session.get(Organization, discarded) is None
+            assert await session.get(HostOrganizationBinding, (seed.tenant_id, person.sub)) is None
+            result = await grant_held_roles(session, person, requested=[HELD_HOST])
+            assert result.host and result.host.organization_id != discarded
+            await session.commit()
+    finally:
+        await engine.dispose()
