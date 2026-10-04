@@ -40,7 +40,6 @@ from api.infrastructure.persistence.tenant_membership import (
 from controlplane_db.models import (
     ApiKey,
     Group,
-    HostOrganizationBinding,
     Organization,
     Role,
     Tenant,
@@ -356,19 +355,15 @@ async def _get_or_create_host_org(
 ) -> Organization:
     # Caller holds _lock_host_identity for the enclosing transaction. Ownership
     # uses the verified immutable subject, not mutable email or client org IDs.
+    # Temporary cross-owner access: INV-AUTH-HOST-BINDING (ownership manifest).
+    # Preserve enrollment without importing a product into auth-service.
     found = await session.execute(
-        select(Organization)
-        .join(
-            HostOrganizationBinding,
-            (HostOrganizationBinding.organization_id == Organization.id)
-            & (HostOrganizationBinding.tenant_id == Organization.tenant_id),
-        )
-        .where(
-            HostOrganizationBinding.tenant_id == tenant_id,
-            HostOrganizationBinding.keycloak_sub == subject,
-        )
+        text("SELECT organization_id FROM host_organization_bindings "
+             "WHERE tenant_id = :tenant_id AND keycloak_sub = :subject"),
+        {"tenant_id": tenant_id, "subject": subject},
     )
-    org = found.scalar_one_or_none()
+    org_id = found.scalar_one_or_none()
+    org = await session.get(Organization, org_id) if org_id is not None else None
     if org is not None:
         return org
     org_id = uuid.uuid4()
@@ -379,12 +374,11 @@ async def _get_or_create_host_org(
     )
     session.add(org)
     await session.flush()
-    session.add(
-        HostOrganizationBinding(
-            tenant_id=tenant_id,
-            keycloak_sub=subject,
-            organization_id=org_id,
-        )
+    await session.execute(
+        text("INSERT INTO host_organization_bindings "
+             "(tenant_id, keycloak_sub, organization_id) "
+             "VALUES (:tenant_id, :subject, :organization_id)"),
+        {"tenant_id": tenant_id, "subject": subject, "organization_id": org_id},
     )
     await session.flush()
     return org
