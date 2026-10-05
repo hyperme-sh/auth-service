@@ -55,3 +55,15 @@ CurrentTenant = Annotated[uuid.UUID, Depends(get_current_tenant)]
 # Aliases for app code / imports matching common FastAPI naming.
 get_current_user = get_current_auth_user
 CurrentUser = CurrentAuthUser
+
+
+async def host_setup_claims(token: Annotated[str, Depends(bearer_access_token)]) -> dict:
+    from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
+
+    try:
+        claims = await get_keycloak_jwt_validator().validate_host_setup(token)
+    except Exception as exc:
+        raise UnauthorizedException("Invalid host setup identity") from exc
+    if not mfa_satisfied(claims):
+        raise ForbiddenException("MFA is required for this resource")
+    return claims

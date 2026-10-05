@@ -32,7 +32,6 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
             "sub": "sub-1",
             "email": "chris@fyberlabs.com",
             "azp": "controlplane-m2m",
-            "realm_access": {"roles": ["offline_access"]},
             "scope": "openid",
         }
 
@@ -54,6 +53,7 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
         token = r.json()["access_token"]
         claims = try_decode_tenant_session_jwt(token)
         assert claims is not None
+        assert claims["azp"] == "controlplane-m2m"
         assert claims["tenant_id"] == str(tenant_uuid)
         assert claims["https://panopticon.dev/tenant_id"] == str(tenant_uuid)
         assert claims["panopticon_auth"] == "tenant_session"
