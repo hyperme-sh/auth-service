@@ -12,6 +12,8 @@ RUN python3 /tmp/alembic_head.py \
 LABEL com.fyberlabs.alembic-head="${ALEMBIC_HEAD}"
 COPY core/events ./core/events
 COPY core/lib/controlplane-core ./core/lib/controlplane-core
+COPY core/lib/controlplane-identity ./core/lib/controlplane-identity
+COPY core/lib/controlplane-tenancy ./core/lib/controlplane-tenancy
 COPY core/auth-service ./core/auth-service
 # --no-dev skips panopticon-tests so the image does not need core/tests.
 # uv run must use the same flags or it re-resolves the missing workspace member.
