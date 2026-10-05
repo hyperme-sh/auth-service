@@ -240,3 +240,14 @@ async def test_introspection_inactive_returns_401(http_client, monkeypatch):
         "/auth/me", headers={"Authorization": "Bearer dead"}
     )
     assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_marketplace_discovery_uses_configured_tenant(http_client, monkeypatch):
+    import uuid
+    from controlplane_tenancy import marketplace
+    tenant = uuid.UUID("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
+    monkeypatch.setattr(marketplace, "MARKETPLACE_TENANT_ID", tenant)
+    response = await http_client.get("/auth/enrollment/marketplace")
+    assert response.status_code == 200
+    assert response.json() == {"tenant_id": str(tenant)}

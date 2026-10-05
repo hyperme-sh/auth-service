@@ -507,6 +507,13 @@ async def auth_siwe_me(
     )
 
 
+@router.get("/enrollment/marketplace")
+async def enrollment_marketplace() -> dict[str, str]:
+    """Public enrollment target; identity and role checks remain on the grant."""
+    from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
+    return {"tenant_id": str(MARKETPLACE_TENANT_ID)}
+
+
 @router.post(
     "/enrollment/grant",
     response_model=EnrollmentGrantResponse,
