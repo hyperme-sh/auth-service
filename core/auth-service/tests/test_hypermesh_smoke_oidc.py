@@ -189,10 +189,17 @@ async def test_session_rejects_bad_oidc_without_echoing_the_token(
     assert secret not in response.text
 
 
+@pytest.mark.parametrize("custom", [False, True])
 @pytest.mark.asyncio
 async def test_session_mints_renter_tenant_jwt(
-    app, http_client, monkeypatch, event_sink
+    app, http_client, monkeypatch, event_sink, custom
 ) -> None:
+    from api.core.config import settings
+    if custom:
+        monkeypatch.setattr(settings, "smoke_session_email", "example-smoke@example.test")
+        monkeypatch.setattr(settings, "smoke_session_username", "example-smoke")
+        monkeypatch.setattr(settings, "smoke_session_claim", "example_smoke")
+        monkeypatch.setattr(settings, "smoke_oidc_audience", "example-smoke-client")
     monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
     token_ctx = set_db_session(object())  # type: ignore[arg-type]
     try:
@@ -232,20 +239,24 @@ async def test_session_mints_renter_tenant_jwt(
     claims = try_decode_tenant_session_jwt(body["access_token"])
     assert claims is not None
     assert claims["sub"] == str(USER_ID)
-    assert claims["email"] == SMOKE_EMAIL
+    assert claims["email"] == settings.smoke_session_email
     assert claims["panopticon_auth"] == "tenant_session"
     assert claims["realm_access"]["roles"] == ["renter"]
     assert claims["groups"] == ["renter"]
     assert claims["permissions"] == []
     assert claims["scope"] == "openid"
+    assert claims[settings.smoke_session_claim] is True
+    assert claims["smoke_session"] is True
     assert claims["hypermesh_smoke"] is True
-    assert claims["email"] == SMOKE_EMAIL
+    assert claims["email"] == settings.smoke_session_email
     assert "admin" not in claims["realm_access"]["roles"]
     forbidden = ("operator:", "manage:payments", "org:own", "org:manage")
     assert not any(str(item).startswith(forbidden) for item in claims["permissions"])
-    assert event_sink[-1]["payload"]["grant_type"] == "hypermesh_smoke"
+    assert event_sink[-1]["payload"]["grant_type"] == settings.smoke_session_claim
     assert "header.payload.sig" not in response.text
 
+    # A differently deployed auth process must still refuse tenant switching.
+    monkeypatch.setattr(settings, "smoke_session_claim", "different_consumer_marker")
     switched = await http_client.post(
         "/auth/switch-tenant",
         headers={"Authorization": f"Bearer {body['access_token']}"},
@@ -343,3 +354,42 @@ async def test_lifespan_refuses_to_start_on_prod(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(SmokeOidcMisconfigured):
         async with LifespanManager(application):
             pass
+
+
+def test_configured_workflow_is_verified_without_product_defaults(monkeypatch):
+    from api.core.config import settings
+    changes = {
+        "smoke_oidc_audience": "example-smoke", "smoke_oidc_repository": "Example/control",
+        "smoke_oidc_environment": "staging", "smoke_oidc_subject": "repo:Example/control:environment:staging",
+        "smoke_oidc_workflow_path": "Example/control/.github/workflows/smoke.yml",
+        "smoke_oidc_ref": "refs/heads/release",
+    }
+    for name, value in changes.items():
+        monkeypatch.setattr(settings, name, value)
+    claims = {"aud": changes["smoke_oidc_audience"], "repository": changes["smoke_oidc_repository"],
+              "environment": changes["smoke_oidc_environment"], "sub": changes["smoke_oidc_subject"],
+              "ref": changes["smoke_oidc_ref"],
+              "job_workflow_ref": changes["smoke_oidc_workflow_path"] + "@" + changes["smoke_oidc_ref"]}
+    require_smoke_oidc_claims(claims)
+    with pytest.raises(SmokeOidcRejected):
+        require_smoke_oidc_claims(_claims())
+
+
+@pytest.mark.parametrize("marker", ["", " ", "sub", "exp", "permissions", "panopticon_auth", "purpose"])
+def test_smoke_marker_cannot_replace_authorization_claims(marker):
+    from api.core.config import Settings
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Settings(smoke_session_claim=marker)
+
+
+def test_enable_flag_is_configurable_and_requires_literal_one(monkeypatch):
+    from api.core.config import settings
+    monkeypatch.setattr(settings, "smoke_oidc_enable_env", "EXAMPLE_SMOKE_OIDC")
+    monkeypatch.setenv("HYPERMESH_SMOKE_OIDC", "1")
+    monkeypatch.delenv("EXAMPLE_SMOKE_OIDC", raising=False)
+    assert not smoke_oidc_enabled()
+    monkeypatch.setenv("EXAMPLE_SMOKE_OIDC", "true")
+    assert not smoke_oidc_enabled()
+    monkeypatch.setenv("EXAMPLE_SMOKE_OIDC", "1")
+    assert smoke_oidc_enabled()

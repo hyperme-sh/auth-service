@@ -1,18 +1,10 @@
 """Test-plane smoke session. GitHub OIDC in, tenant-session JWT out.
 
-Keycloak admin REST is not on the public auth host (HAProxy answers
-``/admin`` with 404). A workflow cannot create a confidential client
-from Actions. This door is the M2M mint path instead: the smoke job
-presents a GitHub OIDC token for Environment ``test``, and auth-service
-enrolls one marketplace renter and returns a short-lived tenant-session
-JWT. The job then mints and revokes renter keys on the existing
-``/api/v1/api-keys`` routes. Nothing here is stored.
-
-The route stays off unless ``HYPERMESH_SMOKE_OIDC`` is exactly ``1``.
-That value is set on auth-service in ``docker-compose.vm.yaml`` only.
-Startup refuses to boot when the flag is ``1`` and ``KEYCLOAK_ISSUER``
-or its host (or ``KEYCLOAK_HOSTNAME`` / ``KEYCLOAK_HOSTNAME_PUBLIC``)
-has no ``.test.``.
+A deployment declares the smoke identity and GitHub workflow in settings.
+The job enrolls a marketplace renter and receives a short-lived session, then
+mints and revokes renter keys through the existing API. No credential is stored.
+The configured enable flag must be literal 1; startup rejects enabled smoke
+sessions unless the issuer and every declared auth host belong to the test plane.
 """
 
 from __future__ import annotations
@@ -25,19 +17,20 @@ import jwt
 from jwt import InvalidTokenError, PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
+from api.core.config import settings
+
 GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks"
-SMOKE_OIDC_AUDIENCE = "hypermesh-gateway-smoke"
-SMOKE_OIDC_REPOSITORY = "FyberLabs/panopticon"
-SMOKE_OIDC_ENVIRONMENT = "test"
-SMOKE_OIDC_SUBJECT = "repo:FyberLabs/panopticon:environment:test"
-SMOKE_WORKFLOW_PATH = (
-    "FyberLabs/panopticon/.github/workflows/hypermesh-gateway-smoke.yml"
-)
-SMOKE_OIDC_REF = "refs/heads/main"
+
+SMOKE_OIDC_AUDIENCE = settings.smoke_oidc_audience
+SMOKE_OIDC_REPOSITORY = settings.smoke_oidc_repository
+SMOKE_OIDC_ENVIRONMENT = settings.smoke_oidc_environment
+SMOKE_OIDC_SUBJECT = settings.smoke_oidc_subject
+SMOKE_WORKFLOW_PATH = settings.smoke_oidc_workflow_path
+SMOKE_OIDC_REF = settings.smoke_oidc_ref
 SMOKE_JOB_WORKFLOW_REF = f"{SMOKE_WORKFLOW_PATH}@{SMOKE_OIDC_REF}"
-SMOKE_EMAIL = "hypermesh-smoke@test.hyperme.sh"
-SMOKE_KEYCLOAK_SUB = "c0ffee00-5a0e-4000-8000-0000000005a0"
+SMOKE_EMAIL = settings.smoke_session_email
+SMOKE_KEYCLOAK_SUB = settings.smoke_session_subject
 _TEST_MARKER = ".test."
 
 
@@ -54,9 +47,9 @@ class SmokeOidcMisconfigured(RuntimeError):
 
 
 def smoke_oidc_enabled() -> bool:
-    """On only when the process was started with HYPERMESH_SMOKE_OIDC=1."""
+    """On only when the process was started with the configured smoke OIDC enable flag=1."""
 
-    return os.environ.get("HYPERMESH_SMOKE_OIDC", "").strip() == "1"
+    return os.environ.get(settings.smoke_oidc_enable_env, "").strip() == "1"
 
 
 def _issuer() -> str:
@@ -93,6 +86,13 @@ def assert_smoke_oidc_plane() -> None:
 
     if not smoke_oidc_enabled():
         return
+    declared = [settings.smoke_oidc_audience, settings.smoke_oidc_repository,
+                settings.smoke_oidc_environment, settings.smoke_oidc_subject,
+                settings.smoke_oidc_workflow_path, settings.smoke_oidc_ref,
+                settings.smoke_session_email, settings.smoke_session_subject,
+                settings.smoke_session_username, settings.smoke_session_claim]
+    if not all(value.strip() for value in declared):
+        raise SmokeOidcMisconfigured("Smoke OIDC requires a complete identity and workflow declaration")
     issuer = _issuer()
     hosts = _plane_hosts(issuer)
     issuer_ok = _TEST_MARKER in issuer
@@ -100,15 +100,15 @@ def assert_smoke_oidc_plane() -> None:
     if issuer_ok and hosts_ok:
         return
     raise SmokeOidcMisconfigured(
-        "HYPERMESH_SMOKE_OIDC=1 requires a test issuer and host"
+        "Smoke OIDC requires a test issuer and host"
     )
 
 
 def _audience_ok(audience: object) -> bool:
     if isinstance(audience, str):
-        return audience == SMOKE_OIDC_AUDIENCE
+        return audience == settings.smoke_oidc_audience
     if isinstance(audience, list) and all(isinstance(item, str) for item in audience):
-        return audience == [SMOKE_OIDC_AUDIENCE]
+        return audience == [settings.smoke_oidc_audience]
     return False
 
 
@@ -118,7 +118,7 @@ def _job_workflow_ref_ok(value: object) -> bool:
     A feature-branch ref and a ``refs/pull/...`` ref are both rejected.
     """
 
-    return value == SMOKE_JOB_WORKFLOW_REF
+    return value == f"{settings.smoke_oidc_workflow_path}@{settings.smoke_oidc_ref}"
 
 
 def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
@@ -126,7 +126,7 @@ def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
 
     ``job_workflow_ref`` is the workflow file that requested the token.
     It is accepted only as
-    ``FyberLabs/panopticon/.github/workflows/hypermesh-gateway-smoke.yml@refs/heads/main``.
+    the configured workflow and ref.
     The ``ref`` claim must be ``refs/heads/main``. ``workflow_ref`` is not
     accepted in its place. A pull-request subject is not this job.
     """
@@ -134,15 +134,15 @@ def require_smoke_oidc_claims(claims: dict[str, Any]) -> None:
     repository = str(claims.get("repository") or "")
     environment = str(claims.get("environment") or "")
     subject = str(claims.get("sub") or "")
-    if repository != SMOKE_OIDC_REPOSITORY:
+    if repository != settings.smoke_oidc_repository:
         raise SmokeOidcRejected()
-    if environment != SMOKE_OIDC_ENVIRONMENT:
+    if environment != settings.smoke_oidc_environment:
         raise SmokeOidcRejected()
-    if subject != SMOKE_OIDC_SUBJECT:
+    if subject != settings.smoke_oidc_subject:
         raise SmokeOidcRejected()
     if not _job_workflow_ref_ok(claims.get("job_workflow_ref")):
         raise SmokeOidcRejected()
-    if claims.get("ref") != SMOKE_OIDC_REF:
+    if claims.get("ref") != settings.smoke_oidc_ref:
         raise SmokeOidcRejected()
     if not _audience_ok(claims.get("aud")):
         raise SmokeOidcRejected()
@@ -162,7 +162,7 @@ def verify_github_actions_oidc(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=SMOKE_OIDC_AUDIENCE,
+            audience=settings.smoke_oidc_audience,
             issuer=GITHUB_OIDC_ISSUER,
             options={"require": ["exp", "iss", "aud", "sub"]},
         )
