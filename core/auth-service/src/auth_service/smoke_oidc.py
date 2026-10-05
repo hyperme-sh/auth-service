@@ -17,7 +17,7 @@ import jwt
 from jwt import InvalidTokenError, PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
-from api.core.config import settings
+from controlplane_api.config import settings
 
 GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks"
@@ -56,7 +56,7 @@ def _issuer() -> str:
     issuer = os.environ.get("KEYCLOAK_ISSUER", "").strip()
     if issuer:
         return issuer
-    from api.core.config import settings
+    from controlplane_api.config import settings
 
     return (settings.keycloak_issuer or "").strip()
 

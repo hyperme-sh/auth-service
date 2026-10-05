@@ -7,6 +7,7 @@ name = "auth-service"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "controlplane-api",
     "bcrypt>=4.2.0",
     "controlplane-core",
     "eth-account>=0.13.0",
@@ -25,6 +26,7 @@ dev = [
 ]
 
 [tool.uv.sources]
+controlplane-api = { workspace = true }
 controlplane-core = { workspace = true }
 panopticon-tests = { workspace = true }
 

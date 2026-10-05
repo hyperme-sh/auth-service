@@ -5,8 +5,8 @@ from typing import Any
 import jwt
 from jwt import InvalidTokenError
 
-from api.common.exceptions import UnauthorizedException
-from api.core.config import settings
+from controlplane_api.exceptions import UnauthorizedException
+from controlplane_api.config import settings
 from api.infrastructure.security.api_key_exchange_jwt import try_decode_api_key_session_jwt
 from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
 from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_session_jwt

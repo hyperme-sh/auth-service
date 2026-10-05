@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from api.core.config import settings
+from controlplane_api.config import settings
 
 
 def roles_from_claims(claims: dict[str, Any]) -> list[str]:
