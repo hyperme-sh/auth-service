@@ -11,9 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.common.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
-from api.common.exceptions import ForbiddenException
-from api.core.config import settings
+from controlplane_api.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
+from controlplane_api.exceptions import ForbiddenException
+from controlplane_api.config import settings
 from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
 from api.domain.operator.population import (
     hosted_domains_from_claims,

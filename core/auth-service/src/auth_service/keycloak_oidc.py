@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from api.core.config import settings
+from controlplane_api.config import settings
 
 
 def _issuer_base() -> str:

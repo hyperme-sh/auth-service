@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from api.common.exceptions import ForbiddenException, UnauthorizedException
+from controlplane_api.exceptions import ForbiddenException, UnauthorizedException
 from auth_service.claims import mfa_satisfied, tenant_uuid_from_claims
 from auth_service.schemas import AuthMeResponse
 from auth_service.token_validation import validate_access_token

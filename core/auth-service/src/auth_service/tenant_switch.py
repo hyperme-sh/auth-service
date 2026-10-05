@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.domain.enum.permission import Permission
+from controlplane_api.permissions import Permission
 from api.infrastructure.persistence.db_session import get_db_session
 from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
 from controlplane_db.models import Role, Tenant, User
