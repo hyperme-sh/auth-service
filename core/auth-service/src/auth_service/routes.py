@@ -30,7 +30,7 @@ from auth_service.claims import (
     identity_provider_from_claims,
     tenant_uuid_from_claims,
 )
-from auth_service.deps import CurrentAuthUser, CurrentTenant, get_access_token_claims
+from auth_service.deps import CurrentAuthUser, CurrentTenant, get_access_token_claims, host_setup_claims
 from auth_service.keycloak_oidc import (
     build_authorization_url,
     exchange_authorization_code,
@@ -572,3 +572,49 @@ async def auth_me(user: CurrentAuthUser) -> AuthMeResponse:
 )
 async def auth_tenant_probe(tenant_id: CurrentTenant) -> dict:
     return {"tenant_id": str(tenant_id)}
+
+
+@router.get("/host-setup/me", response_model=AuthMeResponse)
+async def host_setup_me(claims: Annotated[dict, Depends(host_setup_claims)]) -> AuthMeResponse:
+    return AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
+
+
+@router.post("/host-setup/enrollment/grant", response_model=EnrollmentGrantResponse)
+async def host_setup_grant(
+    body: EnrollmentGrantRequest, request: Request,
+    claims: Annotated[dict, Depends(host_setup_claims)],
+    session: AsyncSession = Depends(get_db_session),
+) -> EnrollmentGrantResponse:
+    if body.held_roles != ["host"]:
+        raise ForbiddenException("Host setup can request only host membership")
+    user = AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
+    return await auth_enrollment_grant(body, request, user, session)
+
+
+@router.post("/host-setup/session", response_model=TokenBundleResponse)
+async def host_setup_session(
+    body: SwitchTenantRequest, request: Request,
+    claims: Annotated[dict, Depends(host_setup_claims)],
+) -> TokenBundleResponse:
+    from api.infrastructure.security.tenant_session_jwt import mint_host_setup_session
+    from api.domain.operator.bans import ban_book
+
+    header = request.headers.get("X-Tenant-ID")
+    if header and header != str(body.tenant_id):
+        raise ForbiddenException("X-Tenant-ID must match tenant in request body")
+    user = AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
+    grant = await authorize_tenant_switch(user, body.tenant_id)
+    if grant is None:
+        raise ForbiddenException("Not a member of this tenant")
+    if grant.user_id is not None and not ban_book().user_may_enter(body.tenant_id, grant.user_id):
+        raise ForbiddenException("This user is banned from the tenant")
+    token = mint_host_setup_session(claims=claims, tenant_id=body.tenant_id)
+    await get_tenant_event_publisher().publish(
+        tenant_id=body.tenant_id,
+        event_type=AUTH_TOKEN_ISSUED_V1,
+        payload=AuthTokenIssuedPayload(
+            subject=str(claims["sub"]), grant_type="host_setup", client_id="hypermesh-host-setup",
+        ).model_dump(mode="json"),
+    )
+    return TokenBundleResponse(access_token=token, refresh_token=None,
+                               expires_in=TENANT_SESSION_TTL_SECONDS, token_type="Bearer")

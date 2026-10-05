@@ -25,7 +25,7 @@ async def validate_access_token(access_token: str) -> dict[str, Any]:
 
     if settings.auth_token_validation_mode == "introspection":
         body = await introspect_access_token(access_token)
-        if not body.get("active"):
+        if not body.get("active") or body.get("azp") == "hypermesh-host-setup" or body.get("client_id") == "hypermesh-host-setup":
             raise UnauthorizedException("Invalid or inactive access token")
         return introspection_to_claims(body)
 
