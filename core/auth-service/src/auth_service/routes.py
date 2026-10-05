@@ -55,8 +55,6 @@ from auth_service.schemas import (
     WalletBindingResponse,
 )
 from auth_service.smoke_oidc import (
-    SMOKE_EMAIL,
-    SMOKE_KEYCLOAK_SUB,
     SmokeOidcRejected,
     SmokeOidcUnavailable,
     smoke_oidc_enabled,
@@ -231,7 +229,7 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
-    if claims.get("hypermesh_smoke") is True:
+    if claims.get(settings.smoke_session_claim) is True:
         raise ForbiddenException("Smoke session cannot switch tenant")
     raw = request.headers.get("X-Tenant-ID")
     if raw:
@@ -299,20 +297,20 @@ def _bearer_token(request: Request) -> str:
 
 
 @router.post(
-    "/hypermesh-smoke/session",
+    settings.smoke_session_route,
     response_model=SmokeSessionResponse,
     summary="Mint a test-plane smoke renter session from GitHub OIDC",
     description=(
         "Test plane only. Verifies a GitHub Actions OIDC token for "
-        "Environment test, enrolls hypermesh-smoke on the marketplace "
+        "Environment test, enrolls the configured smoke identity on the marketplace "
         "tenant, and returns a short-lived tenant-session JWT. The smoke "
         "job uses that JWT on the existing api-keys and lease routes. "
         "Not a stored credential. Not a Keycloak admin call. "
-        "Off unless HYPERMESH_SMOKE_OIDC=1. Startup refuses that flag "
+        "Off unless the configured enable flag is 1. Startup refuses that flag "
         "when the issuer or host has no .test."
     ),
 )
-async def auth_hypermesh_smoke_session(
+async def auth_smoke_session(
     request: Request,
 ) -> SmokeSessionResponse | JSONResponse:
     # Flag and token checks run before the database. A disabled route stays
@@ -342,9 +340,9 @@ async def auth_hypermesh_smoke_session(
     )
 
     identity = AuthMeResponse(
-        sub=SMOKE_KEYCLOAK_SUB,
-        email=SMOKE_EMAIL,
-        preferred_username="hypermesh-smoke",
+        sub=settings.smoke_session_subject,
+        email=settings.smoke_session_email,
+        preferred_username=settings.smoke_session_username,
         roles=["renter"],
         groups=["renter"],
     )
@@ -364,8 +362,8 @@ async def auth_hypermesh_smoke_session(
         member = await get_tenant_membership_row(
             session,
             MARKETPLACE_TENANT_ID,
-            email=SMOKE_EMAIL,
-            keycloak_sub=SMOKE_KEYCLOAK_SUB,
+            email=settings.smoke_session_email,
+            keycloak_sub=settings.smoke_session_subject,
         )
         if member is None:
             return _smoke_json(
@@ -381,11 +379,11 @@ async def auth_hypermesh_smoke_session(
         access = mint_tenant_session_jwt(
             claims={
                 "sub": str(member.id),
-                "email": SMOKE_EMAIL,
-                "preferred_username": "hypermesh-smoke",
-                "azp": "hypermesh-gateway-smoke",
+                "email": settings.smoke_session_email,
+                "preferred_username": settings.smoke_session_username,
+                "azp": settings.smoke_oidc_audience,
                 "scope": "openid",
-                "hypermesh_smoke": True,
+                settings.smoke_session_claim: True,
                 "realm_access": {"roles": ["renter"]},
                 "groups": ["renter"],
             },
@@ -397,8 +395,8 @@ async def auth_hypermesh_smoke_session(
             event_type=AUTH_TOKEN_ISSUED_V1,
             payload=AuthTokenIssuedPayload(
                 subject=str(member.id),
-                grant_type="hypermesh_smoke",
-                client_id="hypermesh-gateway-smoke",
+                grant_type=settings.smoke_session_claim,
+                client_id=settings.smoke_oidc_audience,
             ).model_dump(mode="json"),
         )
     except EnrollmentError:
@@ -411,7 +409,7 @@ async def auth_hypermesh_smoke_session(
         raise
     except Exception as exc:
         # Class name only. The message can carry a SQL row or a token.
-        logger.exception("hypermesh smoke session failed")
+        logger.exception("smoke session failed")
         return _smoke_json(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "smoke_session_failed",
