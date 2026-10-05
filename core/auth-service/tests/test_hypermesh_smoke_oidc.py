@@ -246,6 +246,8 @@ async def test_session_mints_renter_tenant_jwt(
     assert claims["permissions"] == []
     assert claims["scope"] == "openid"
     assert claims[settings.smoke_session_claim] is True
+    assert claims["smoke_session"] is True
+    assert claims["hypermesh_smoke"] is True
     assert claims["email"] == settings.smoke_session_email
     assert "admin" not in claims["realm_access"]["roles"]
     forbidden = ("operator:", "manage:payments", "org:own", "org:manage")
@@ -253,6 +255,8 @@ async def test_session_mints_renter_tenant_jwt(
     assert event_sink[-1]["payload"]["grant_type"] == settings.smoke_session_claim
     assert "header.payload.sig" not in response.text
 
+    # A differently deployed auth process must still refuse tenant switching.
+    monkeypatch.setattr(settings, "smoke_session_claim", "different_consumer_marker")
     switched = await http_client.post(
         "/auth/switch-tenant",
         headers={"Authorization": f"Bearer {body['access_token']}"},

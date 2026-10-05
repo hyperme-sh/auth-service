@@ -22,6 +22,7 @@ from api.domain.operator.population import (
 from api.infrastructure.security.tenant_session_jwt import (
     TTL_SECONDS as TENANT_SESSION_TTL_SECONDS,
     mint_tenant_session_jwt,
+    is_smoke_session,
 )
 from controlplane_events.payloads import AuthLoginSuccessPayload, AuthTokenIssuedPayload
 
@@ -229,7 +230,7 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
-    if claims.get(settings.smoke_session_claim) is True:
+    if is_smoke_session(claims):
         raise ForbiddenException("Smoke session cannot switch tenant")
     raw = request.headers.get("X-Tenant-ID")
     if raw:
@@ -383,6 +384,7 @@ async def auth_smoke_session(
                 "preferred_username": settings.smoke_session_username,
                 "azp": settings.smoke_oidc_audience,
                 "scope": "openid",
+                "smoke_session": True,
                 settings.smoke_session_claim: True,
                 "realm_access": {"roles": ["renter"]},
                 "groups": ["renter"],
