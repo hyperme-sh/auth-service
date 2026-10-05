@@ -21,9 +21,10 @@ from auth_service.tenant_switch import (
 )
 
 
+@pytest.mark.parametrize("client_id", ["controlplane-m2m", "hypermesh-host-setup"])
 @pytest.mark.asyncio
 async def test_switch_tenant_mints_jwt_with_tenant_claim(
-    app, http_client, tenant_uuid
+    app, http_client, tenant_uuid, client_id
 ):
     from auth_service import deps
 
@@ -31,8 +32,7 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
         return {
             "sub": "sub-1",
             "email": "chris@fyberlabs.com",
-            "azp": "controlplane-m2m",
-            "realm_access": {"roles": ["offline_access"]},
+            "azp": client_id,
             "scope": "openid",
         }
 
@@ -54,6 +54,7 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
         token = r.json()["access_token"]
         claims = try_decode_tenant_session_jwt(token)
         assert claims is not None
+        assert claims["azp"] == client_id
         assert claims["tenant_id"] == str(tenant_uuid)
         assert claims["https://panopticon.dev/tenant_id"] == str(tenant_uuid)
         assert claims["panopticon_auth"] == "tenant_session"

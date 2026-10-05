@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -99,6 +100,7 @@ def test_existing_clients_and_bootstrap_user_remain() -> None:
         "controlplane-api-key",
         "hypermesh-native",
         "s3rch-web",
+        "hypermesh-host-setup",
     }
     users = {u["username"] for u in realm["users"]}
     assert "chris@fyberlabs.com" in users
@@ -698,6 +700,7 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     brokers = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(brokers)
     calls: list[str] = []
+    monkeypatch.setattr(brokers, "ensure_hypermesh_host_setup", lambda _: calls.append("host"))
 
     def boom(_admin: object) -> None:
         calls.append("native")
@@ -713,7 +716,7 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_ok)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "s3rch", "brokers"]
+    assert calls == ["native", "host", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "hypermesh-native client was not applied: session cap rejected" in error
     assert "s3rch-web client was not applied" not in error
@@ -736,7 +739,7 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_bad)
     monkeypatch.setattr(brokers, "configure", brokers_ok)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "s3rch", "brokers"]
+    assert calls == ["native", "host", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "s3rch-web client was not applied: redirect rejected" in error
     assert "hypermesh-native client was not applied" not in error
@@ -747,7 +750,7 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_bad)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "s3rch", "brokers"]
+    assert calls == ["native", "host", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "IdP broker configure failed: token claim missing" in error
     assert "hypermesh-native client was not applied" not in error
@@ -763,9 +766,61 @@ def test_native_client_failure_is_reported_apart_from_brokers(capsys, monkeypatc
     monkeypatch.setattr(brokers, "ensure_s3rch_web", s3rch_ok)
     monkeypatch.setattr(brokers, "configure", brokers_ok)
     assert brokers.apply_realm_updates(object()) == 1
-    assert calls == ["native", "s3rch", "brokers"]
+    assert calls == ["native", "host", "s3rch", "brokers"]
     error = capsys.readouterr().err
     assert "hypermesh-native client was not applied" in error
     assert "connection refused" in error
     assert "s3rch-web client was not applied" not in error
     assert "IdP broker configure failed" not in error
+
+
+def test_host_setup_reconciles_minimal_identity_client(monkeypatch):
+    monkeypatch.syspath_prepend(str(REALM_PATH.parent.parent))
+    import hypermesh_host_setup as host
+    admin = _FakeKeycloak()
+    host.ensure_hypermesh_host_setup(admin)
+    client_uuid = admin.clients[0]["id"]
+    # Simulate a hand edit; refresh must remove added access on existing realms.
+    admin.clients[0]["standardFlowEnabled"] = True
+    admin.clients[0]["attributes"]["hand.edit"] = "yes"
+    admin.assigned[client_uuid]["default"].append({"id": "roles", "name": "roles"})
+    admin.assigned[client_uuid]["optional"].append({"id": "offline", "name": "offline_access"})
+    admin.mappers[client_uuid].append({"id": "extra", "name": "groups"})
+    host.ensure_hypermesh_host_setup(admin)
+    assert len(admin.clients) == 1
+    client = admin.clients[0]
+    assert client["name"] == "Hypermesh host setup"
+    assert client["standardFlowEnabled"] is False
+    assert client["fullScopeAllowed"] is False
+    assert client["attributes"]["hand.edit"] is None
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert client["attributes"]["oauth2.device.authorization.grant.enabled"] == "true"
+    assert {c["name"] for c in admin.assigned[client_uuid]["default"]} == {"basic", "email"}
+    assert admin.assigned[client_uuid]["optional"] == []
+    assert [m["name"] for m in admin.mappers[client_uuid]] == ["host-setup-audience"]
+    assert admin.mappers[client_uuid][0]["config"]["included.client.audience"] == host.CLIENT_ID
+
+
+def test_host_setup_missing_scope_fails_before_mutation(monkeypatch):
+    monkeypatch.syspath_prepend(str(REALM_PATH.parent.parent))
+    import hypermesh_host_setup as host
+    admin = _FakeKeycloak()
+    admin.catalog = [c for c in admin.catalog if c["name"] != "email"]
+    with pytest.raises(host.HostSetupClientError, match="requires basic and email"):
+        host.ensure_hypermesh_host_setup(admin)
+    assert admin.posts == []
+
+
+def test_host_setup_failure_does_not_skip_other_realm_updates(monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(REALM_PATH.parent.parent))
+    import configure_idp_brokers as brokers
+    calls = []
+    def fail(_):
+        raise brokers.HostSetupClientError("missing scope")
+    monkeypatch.setattr(brokers, "ensure_hypermesh_host_setup", fail)
+    monkeypatch.setattr(brokers, "ensure_hypermesh_native", lambda _: calls.append("native"))
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", lambda _: calls.append("s3rch"))
+    monkeypatch.setattr(brokers, "configure", lambda _: calls.append("brokers"))
+    assert brokers.apply_realm_updates(object()) == 1
+    assert calls == ["native", "s3rch", "brokers"]
+    assert "hypermesh-host-setup client was not applied" in capsys.readouterr().err
