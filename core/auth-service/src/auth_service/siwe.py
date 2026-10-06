@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from controlplane_identity.wallet import BaseWalletVerifier, WalletProofError
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_utils import is_hex_address, to_checksum_address
@@ -20,7 +22,19 @@ SIWE_STATEMENT = (
     "Bind this wallet to the identified Panopticon person. This is not a login."
 )
 SIWE_VERSION = "1"
-DEFAULT_CHAIN_ID = 1
+DEFAULT_CHAIN_ID = 84532
+
+
+def configured_chain_id() -> int:
+    default = "8453" if os.environ.get("FASTAPI_ENV") == "production" else "84532"
+    try:
+        chain = int(os.environ.get("AUTH_SIWE_CHAIN_ID", default))
+    except ValueError as exc:
+        raise SiweError("Invalid Base chain configuration") from exc
+    if chain not in {8453, 84532}:
+        raise SiweError("Configure Base 8453 or 84532")
+    return chain
+
 
 _HEADER = re.compile(
     r"^(?P<domain>\S+) wants you to sign in with your Ethereum account:\n"
@@ -86,7 +100,10 @@ def parse_siwe_message(raw: str) -> SiweMessage:
     header = _HEADER.match(text)
     if header is None:
         raise SiweError("SIWE message is not EIP-4361")
-    fields = {m.group(1): m.group(2).strip() for m in _FIELD.finditer(text)}
+    matches = list(_FIELD.finditer(text))
+    fields = {m.group(1): m.group(2).strip() for m in matches}
+    if len(fields) != len(matches):
+        raise SiweError("SIWE fields must be unique")
     required = ("URI", "Version", "Chain ID", "Nonce", "Issued At")
     missing = [name for name in required if name not in fields]
     if missing:
@@ -117,8 +134,7 @@ def recover_siwe_address(message: str, signature: str) -> str:
     if not signature or not str(signature).strip():
         raise SiweError("SIWE signature is required")
     sig = str(signature).strip()
-    if sig.startswith("0x"):
-        sig = sig[2:]
+    sig = sig.removeprefix("0x")
     if len(sig) != 130 or any(c not in "0123456789abcdefABCDEF" for c in sig):
         raise SiweError("SIWE signature is not a hex signature")
     try:
@@ -131,11 +147,13 @@ def recover_siwe_address(message: str, signature: str) -> str:
     return checksum_address(recovered)
 
 
-def verify_siwe_bind(
+async def verify_siwe_bind(
     *,
     message: str,
     signature: str,
     expected_nonce: str,
+    verifier: BaseWalletVerifier,
+    expected_chain_id: int,
     expected_domain: str = SIWE_DOMAIN,
     expected_uri: str = SIWE_URI,
 ) -> SiweMessage:
@@ -146,9 +164,34 @@ def verify_siwe_bind(
         raise SiweError("SIWE domain does not match")
     if parsed.uri != expected_uri:
         raise SiweError("SIWE uri does not match")
-    if parsed.version != SIWE_VERSION:
-        raise SiweError("SIWE version must be 1")
-    recovered = recover_siwe_address(parsed.raw, signature)
-    if recovered.lower() != parsed.address.lower():
-        raise SiweError("SIWE recovered address does not match the message")
+    if parsed.version != SIWE_VERSION or parsed.statement != SIWE_STATEMENT:
+        raise SiweError("SIWE version or purpose does not match")
+    if expected_chain_id not in {8453, 84532} or parsed.chain_id != expected_chain_id:
+        raise SiweError("SIWE chain must match configured Base chain")
+    try:
+        issued = datetime.fromisoformat(parsed.issued_at)
+        age = (datetime.now(UTC) - issued).total_seconds()
+        if not -30 <= age <= 600:
+            raise ValueError("expired or future challenge")
+    except (ValueError, TypeError) as exc:
+        raise SiweError("SIWE issued time is invalid or expired") from exc
+    sig = signature.removeprefix("0x")
+    if (
+        not sig
+        or len(sig) > 32768
+        or len(sig) % 2
+        or any(c not in "0123456789abcdefABCDEF" for c in sig)
+    ):
+        raise SiweError("SIWE signature is not bounded hex data")
+    try:
+        verified = await verifier.verify_personal_signature(
+            address=parsed.address,
+            message=message,
+            signature=bytes.fromhex(sig),
+            chain_id=parsed.chain_id,
+        )
+    except WalletProofError as exc:
+        raise SiweError("SIWE wallet proof could not be verified on Base") from exc
+    if verified != parsed.address:
+        raise SiweError("SIWE verified address does not match the message")
     return parsed

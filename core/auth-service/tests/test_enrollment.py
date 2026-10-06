@@ -56,18 +56,25 @@ _SECRET_KEYS = (
 
 
 def _sign(message: str, key: str) -> str:
-    return Account.from_key(key).sign_message(encode_defunct(text=message)).signature.hex()
+    return (
+        Account.from_key(key).sign_message(encode_defunct(text=message)).signature.hex()
+    )
 
 
-def test_siwe_recovers_signer_onto_identified_person():
+@pytest.mark.asyncio
+async def test_siwe_recovers_signer_onto_identified_person(base_wallet_verifier):
     acct = Account.create()
     nonce = issue_siwe_nonce(
         AuthMeResponse(sub="kc-identified", email="person@example.com"),
         address=acct.address,
     )
     sig = _sign(nonce.message, acct.key.hex())
-    parsed = verify_siwe_bind(
-        message=nonce.message, signature=sig, expected_nonce=nonce.nonce
+    parsed = await verify_siwe_bind(
+        message=nonce.message,
+        signature=sig,
+        expected_nonce=nonce.nonce,
+        verifier=base_wallet_verifier,
+        expected_chain_id=84532,
     )
     assert parsed.address == acct.address
     assert "Bind this wallet" in parsed.statement or parsed.statement
@@ -75,7 +82,10 @@ def test_siwe_recovers_signer_onto_identified_person():
     assert "not a login" in nonce.statement.lower()
 
 
-def test_siwe_rejects_wrong_signature_and_does_not_treat_wallet_as_user():
+@pytest.mark.asyncio
+async def test_siwe_rejects_wrong_signature_and_does_not_treat_wallet_as_user(
+    base_wallet_verifier,
+):
     acct = Account.create()
     other = Account.create()
     nonce = issue_siwe_nonce(
@@ -84,17 +94,21 @@ def test_siwe_rejects_wrong_signature_and_does_not_treat_wallet_as_user():
     )
     bad = _sign(nonce.message, other.key.hex())
     try:
-        verify_siwe_bind(
-            message=nonce.message, signature=bad, expected_nonce=nonce.nonce
+        await verify_siwe_bind(
+            message=nonce.message,
+            signature=bad,
+            expected_nonce=nonce.nonce,
+            verifier=base_wallet_verifier,
+            expected_chain_id=84532,
         )
         raise AssertionError("wrong signer must not bind")
     except SiweError:
         pass
     parsed = parse_siwe_message(nonce.message)
     assert parsed.address == acct.address
-    assert recover_siwe_address(nonce.message, _sign(nonce.message, acct.key.hex())) == (
-        acct.address
-    )
+    assert recover_siwe_address(
+        nonce.message, _sign(nonce.message, acct.key.hex())
+    ) == (acct.address)
 
 
 def test_siwe_build_parse_roundtrip():
@@ -106,7 +120,7 @@ def test_siwe_build_parse_roundtrip():
     parsed = parse_siwe_message(message)
     assert parsed.nonce == "n1"
     assert parsed.version == "1"
-    assert parsed.chain_id == 1
+    assert parsed.chain_id == 84532
 
 
 def test_raw_oidc_renter_has_no_tenant_claim_and_cannot_self_invite():
@@ -288,7 +302,10 @@ def test_pan_test_seed_fixtures_stay_split():
     assert "renter@test.hyperme.sh" in source
     assert "leaser@test.hyperme.sh" in source
     assert "admin@test.hyperme.sh" in source
-    assert "Never one user with all roles" in source or "never one user with all roles" in source
+    assert (
+        "Never one user with all roles" in source
+        or "never one user with all roles" in source
+    )
     assert source.count("realm_roles=(") == 3
     assert 'realm_roles=("renter",)' in source
     assert 'realm_roles=("host",)' in source
@@ -298,7 +315,13 @@ def test_pan_test_seed_fixtures_stay_split():
 
 def test_role_nav_and_realm_locks_untouched():
     role_nav = (
-        REPO_ROOT / "frontend" / "src" / "app" / "dashboard" / "hypermesh" / "app-shell.tsx"
+        REPO_ROOT
+        / "frontend"
+        / "src"
+        / "app"
+        / "dashboard"
+        / "hypermesh"
+        / "app-shell.tsx"
     ).read_text()
     assert "export function RoleNav()" in role_nav
     role = (
