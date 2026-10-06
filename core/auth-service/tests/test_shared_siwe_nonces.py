@@ -95,15 +95,17 @@ async def test_missing_storage_does_not_prevent_oidc_startup(monkeypatch, app):
     from auth_service.deps import get_current_auth_user
 
     app.dependency_overrides[get_current_auth_user] = lambda: PERSON
-    async with LifespanManager(app):
-        async with httpx.AsyncClient(
+    async with (
+        LifespanManager(app),
+        httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="https://auth.test"
-        ) as client:
-            login = await client.post("/auth/login", json={})
-            assert login.status_code == 200, login.text
-            assert login.json()["authorization_url"]
-            challenge = await client.post("/auth/siwe/nonce", json={"address": ADDRESS})
-            assert challenge.status_code == 503
+        ) as client,
+    ):
+        login = await client.post("/auth/login", json={})
+        assert login.status_code == 200, login.text
+        assert login.json()["authorization_url"]
+        challenge = await client.post("/auth/siwe/nonce", json={"address": ADDRESS})
+        assert challenge.status_code == 503
 
 
 @pytest.mark.asyncio
