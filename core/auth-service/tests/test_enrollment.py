@@ -61,10 +61,13 @@ def _sign(message: str, key: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_siwe_recovers_signer_onto_identified_person(base_wallet_verifier):
+async def test_siwe_recovers_signer_onto_identified_person(
+    base_wallet_verifier, nonce_store
+):
     acct = Account.create()
-    nonce = issue_siwe_nonce(
+    nonce = await issue_siwe_nonce(
         AuthMeResponse(sub="kc-identified", email="person@example.com"),
+        store=nonce_store,
         address=acct.address,
     )
     sig = _sign(nonce.message, acct.key.hex())
@@ -84,11 +87,13 @@ async def test_siwe_recovers_signer_onto_identified_person(base_wallet_verifier)
 @pytest.mark.asyncio
 async def test_siwe_rejects_wrong_signature_and_does_not_treat_wallet_as_user(
     base_wallet_verifier,
+    nonce_store,
 ):
     acct = Account.create()
     other = Account.create()
-    nonce = issue_siwe_nonce(
+    nonce = await issue_siwe_nonce(
         AuthMeResponse(sub="kc-identified", email="person@example.com"),
+        store=nonce_store,
         address=acct.address,
     )
     bad = _sign(nonce.message, other.key.hex())

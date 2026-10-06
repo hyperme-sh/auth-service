@@ -10,6 +10,7 @@ dependencies = [
     "controlplane-api",
     "controlplane-identity",
     "httpx>=0.28.1",
+    "redis>=5.0.0",
     "bcrypt>=4.2.0",
     "controlplane-core",
     "eth-account>=0.13.0",

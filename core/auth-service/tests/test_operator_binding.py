@@ -20,8 +20,8 @@ def test_exact_identity_grants_only_in_marketplace(identity):
     assert 'operator:program' in binding.permissions(identity, binding.MARKETPLACE_TENANT_ID, binding.ROLE, [])
     assert 'operator:console' in binding.permissions(identity, binding.MARKETPLACE_TENANT_ID, 'renter', [])
 
-@pytest.mark.parametrize('key,value', [('entra_tenant_id',str(uuid.uuid4())),
-    ('entra_object_id',str(uuid.uuid4())), ('entra_object_id',None),
+@pytest.mark.parametrize('key,value', [('entra_tenant_id',"11111111-1111-4111-8111-111111111111"),
+    ('entra_object_id',"11111111-1111-4111-8111-111111111111"), ('entra_object_id',None),
     ('login_provider','google'), ('login_provider',None),
     ('iss','https://auth.test.hyperme.sh/realms/controlplane'),
     ('purpose','host-setup'), ('panopticon_auth','tenant_session')])

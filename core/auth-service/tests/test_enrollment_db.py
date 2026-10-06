@@ -131,15 +131,16 @@ def _assert_no_printed_secrets(payload: dict) -> None:
 
 
 @pytest.mark.asyncio
-async def test_siwe_binds_wallet_onto_identified_user(db_session, base_wallet_verifier):
+async def test_siwe_binds_wallet_onto_identified_user(db_session, base_wallet_verifier, nonce_store):
     acct = Account.create()
     person = AuthMeResponse(sub="kc-bind-1", email="bind@example.com")
-    nonce = issue_siwe_nonce(person, address=acct.address)
+    nonce = await issue_siwe_nonce(person, address=acct.address, store=nonce_store)
     bound = await bind_wallet(
         db_session,
         person,
         message=nonce.message,
         signature=_sign(nonce.message, acct.key.hex()),
+        store=nonce_store,
     )
     assert bound.wallet_address == acct.address
     assert bound.keycloak_sub == "kc-bind-1"
@@ -434,7 +435,8 @@ async def test_concurrent_enrollment_creates_one_tenant_role(migrated_sync_url, 
 
 
 @pytest.mark.asyncio
-async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier):
+async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier, siwe_redis_url):
+    monkeypatch.setenv("AUTH_SIWE_REDIS_URL", siwe_redis_url)
     from api.core import config as api_config
     from asgi_lifespan import LifespanManager
     import httpx

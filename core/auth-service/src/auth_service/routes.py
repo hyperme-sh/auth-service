@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from controlplane_api.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
 from controlplane_api.exceptions import ForbiddenException
 from controlplane_api.config import settings
-from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
+from api.infrastructure.messaging.tenant_event_publisher import (
+    get_tenant_event_publisher,
+)
 from api.domain.operator.population import (
     hosted_domains_from_claims,
     tenant_session_permissions,
@@ -31,7 +33,12 @@ from auth_service.claims import (
     identity_provider_from_claims,
     tenant_uuid_from_claims,
 )
-from auth_service.deps import CurrentAuthUser, CurrentTenant, get_access_token_claims, host_setup_claims
+from auth_service.deps import (
+    CurrentAuthUser,
+    CurrentTenant,
+    get_access_token_claims,
+    host_setup_claims,
+)
 from auth_service.keycloak_oidc import (
     build_authorization_url,
     exchange_authorization_code,
@@ -62,6 +69,7 @@ from auth_service.smoke_oidc import (
     verify_github_actions_oidc,
 )
 from auth_service.siwe import SiweError
+from auth_service.siwe_nonces import SiweNonceStore, SiweStoreUnavailable
 from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.token_validation import unsafe_subject_from_token
 from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
@@ -89,7 +97,11 @@ def _unsafe_payload(access_token: str) -> dict:
     try:
         return jwt.decode(
             access_token,
-            options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
+            options={
+                "verify_signature": False,
+                "verify_aud": False,
+                "verify_exp": False,
+            },
         )
     except Exception:
         return {}
@@ -101,7 +113,9 @@ def _unsafe_payload(access_token: str) -> dict:
     summary="Start OIDC login",
     description="Returns Keycloak authorization URL; optional identity_provider_hint selects broker (Google, Entra, GitHub, …).",
 )
-async def auth_login(body: LoginStartRequest = LoginStartRequest()) -> LoginStartResponse:
+async def auth_login(
+    body: LoginStartRequest = LoginStartRequest(),
+) -> LoginStartResponse:
     state = secrets.token_urlsafe(32)
     url = build_authorization_url(
         state=state,
@@ -439,6 +453,13 @@ async def auth_smoke_session(
     )
 
 
+def siwe_nonce_store(request: Request) -> SiweNonceStore:
+    store = getattr(request.app.state, "siwe_nonce_store", None)
+    if store is None:
+        raise HTTPException(503, "SIWE nonce storage is not configured")
+    return store
+
+
 @router.post(
     "/siwe/nonce",
     response_model=SiweNonceResponse,
@@ -452,9 +473,14 @@ async def auth_smoke_session(
 async def auth_siwe_nonce(
     body: SiweNonceRequest,
     user: CurrentAuthUser,
+    store: SiweNonceStore = Depends(siwe_nonce_store),
 ) -> SiweNonceResponse:
     try:
-        issued = issue_siwe_nonce(user, address=body.address, chain_id=body.chain_id)
+        issued = await issue_siwe_nonce(
+            user, address=body.address, chain_id=body.chain_id, store=store
+        )
+    except SiweStoreUnavailable:
+        raise HTTPException(503, "SIWE nonce storage temporarily unavailable") from None
     except SiweError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return SiweNonceResponse(
@@ -482,12 +508,15 @@ async def auth_siwe_nonce(
 async def auth_siwe_bind(
     body: SiweBindRequest,
     user: CurrentAuthUser,
+    store: SiweNonceStore = Depends(siwe_nonce_store),
     session: AsyncSession = Depends(get_db_session),
 ) -> WalletBindingResponse:
     try:
         bound = await bind_wallet(
-            session, user, message=body.message, signature=body.signature
+            session, user, message=body.message, signature=body.signature, store=store
         )
+    except SiweStoreUnavailable:
+        raise HTTPException(503, "SIWE nonce storage temporarily unavailable") from None
     except SiweError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return WalletBindingResponse(
@@ -523,6 +552,7 @@ async def auth_siwe_me(
 async def enrollment_marketplace() -> dict[str, str]:
     """Public enrollment target; identity and role checks remain on the grant."""
     from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
+
     return {"tenant_id": str(MARKETPLACE_TENANT_ID)}
 
 
@@ -594,13 +624,16 @@ async def auth_tenant_probe(tenant_id: CurrentTenant) -> dict:
 
 
 @router.get("/host-setup/me", response_model=AuthMeResponse)
-async def host_setup_me(claims: Annotated[dict, Depends(host_setup_claims)]) -> AuthMeResponse:
+async def host_setup_me(
+    claims: Annotated[dict, Depends(host_setup_claims)],
+) -> AuthMeResponse:
     return AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
 
 
 @router.post("/host-setup/enrollment/grant", response_model=EnrollmentGrantResponse)
 async def host_setup_grant(
-    body: EnrollmentGrantRequest, request: Request,
+    body: EnrollmentGrantRequest,
+    request: Request,
     claims: Annotated[dict, Depends(host_setup_claims)],
     session: AsyncSession = Depends(get_db_session),
 ) -> EnrollmentGrantResponse:
@@ -612,7 +645,8 @@ async def host_setup_grant(
 
 @router.post("/host-setup/session", response_model=TokenBundleResponse)
 async def host_setup_session(
-    body: SwitchTenantRequest, request: Request,
+    body: SwitchTenantRequest,
+    request: Request,
     claims: Annotated[dict, Depends(host_setup_claims)],
 ) -> TokenBundleResponse:
     from api.infrastructure.security.tenant_session_jwt import mint_host_setup_session
@@ -625,15 +659,23 @@ async def host_setup_session(
     grant = await authorize_tenant_switch(user, body.tenant_id)
     if grant is None:
         raise ForbiddenException("Not a member of this tenant")
-    if grant.user_id is not None and not ban_book().user_may_enter(body.tenant_id, grant.user_id):
+    if grant.user_id is not None and not ban_book().user_may_enter(
+        body.tenant_id, grant.user_id
+    ):
         raise ForbiddenException("This user is banned from the tenant")
     token = mint_host_setup_session(claims=claims, tenant_id=body.tenant_id)
     await get_tenant_event_publisher().publish(
         tenant_id=body.tenant_id,
         event_type=AUTH_TOKEN_ISSUED_V1,
         payload=AuthTokenIssuedPayload(
-            subject=str(claims["sub"]), grant_type="host_setup", client_id="hypermesh-host-setup",
+            subject=str(claims["sub"]),
+            grant_type="host_setup",
+            client_id="hypermesh-host-setup",
         ).model_dump(mode="json"),
     )
-    return TokenBundleResponse(access_token=token, refresh_token=None,
-                               expires_in=TENANT_SESSION_TTL_SECONDS, token_type="Bearer")
+    return TokenBundleResponse(
+        access_token=token,
+        refresh_token=None,
+        expires_in=TENANT_SESSION_TTL_SECONDS,
+        token_type="Bearer",
+    )

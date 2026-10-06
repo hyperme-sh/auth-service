@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import os
 import secrets
-import time
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 import httpx
@@ -28,9 +27,7 @@ from auth_service.siwe import (
     configured_chain_id,
     verify_siwe_bind,
 )
-
-_NONCE_TTL_SECONDS = 600
-_nonces: dict[str, tuple[SiweNonce, float]] = {}
+from auth_service.siwe_nonces import SiweNonceStore, SiweStoreUnavailable
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,10 +50,11 @@ class WalletBinding:
     bound_at: datetime
 
 
-def issue_siwe_nonce(
+async def issue_siwe_nonce(
     user: AuthMeResponse,
     *,
     address: str,
+    store: SiweNonceStore,
     chain_id: int | None = None,
     now: datetime | None = None,
 ) -> SiweNonce:
@@ -87,18 +85,8 @@ def issue_siwe_nonce(
         message=message,
     )
 
-    _nonces[user.sub] = (challenge, time.time() + _NONCE_TTL_SECONDS)
+    await store.put(user.sub, asdict(challenge))
     return challenge
-
-
-def consume_nonce(keycloak_sub: str) -> SiweNonce:
-    row = _nonces.pop(keycloak_sub, None)
-    if row is None:
-        raise SiweError("SIWE nonce is missing; request a new nonce")
-    nonce, exp = row
-    if time.time() > exp:
-        raise SiweError("SIWE nonce expired; request a new nonce")
-    return nonce
 
 
 @asynccontextmanager
@@ -131,10 +119,14 @@ async def bind_wallet(
     *,
     message: str,
     signature: str,
+    store: SiweNonceStore,
 ) -> WalletBinding:
     if not user.sub or not str(user.sub).strip():
         raise SiweError("Keycloak subject is required to bind a wallet")
-    challenge = consume_nonce(user.sub)
+    try:
+        challenge = SiweNonce(**await store.consume(user.sub))
+    except TypeError as exc:
+        raise SiweStoreUnavailable("SIWE nonce storage returned invalid data") from exc
     if message != challenge.message:
         raise SiweError("SIWE message must match the server-issued challenge")
     async with wallet_verifier() as verifier:

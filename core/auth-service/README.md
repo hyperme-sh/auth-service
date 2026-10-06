@@ -29,11 +29,24 @@ For ERC-6492 proofs, configure both `AUTH_SIWE_6492_VALIDATOR_ADDRESS` and
 operator-reviewed universal validator supporting deployed and counterfactual
 wallet simulation. Missing or mismatched configuration rejects these proofs.
 This service does not deploy a validator. Real Base/validator acceptance and the
-payment-service payout-proof consumer remain WP-CRY-01 follow-up work.
+wallet-session binding where applicable remain WP-CRY-01 follow-up work.
 
-The existing nonce registry is process-local: restarts discard challenges and
-multiple replicas require sticky routing or a shared nonce store before rollout.
-This change does not claim distributed nonce storage or wallet login/session issuance.
+SIWE challenges now use shared Redis rather than a process-local registry. Set
+`AUTH_SIWE_REDIS_URL` (or the existing `REDIS_URL` fallback) to a deployment-scoped,
+authenticated Redis 6.2+ store with the deployment's required durability. Both
+Compose definitions forward the optional override. All replicas must use the same
+store; sticky routing is unnecessary. Keys hash the identified subject and retain
+one outstanding challenge per person. Reissuing replaces that challenge. Redis
+expires it after ten minutes; atomic `GETDEL` permits exactly one consumption,
+including failed proofs. No signature is stored. Storage operations and client
+connection/read timeouts are bounded to five seconds.
+
+Missing storage leaves OIDC startup/login available but SIWE nonce/bind routes
+return 503. Redis outages also return 503 without a local fallback. A consumed
+challenge cannot be retried after a verification or database failure; request a
+new challenge. Runtime closes Redis clients on normal shutdown and exceptions.
+Wallet binding remains attached to the identified Keycloak person; this change
+does not mint wallet login/session credentials or alter the 0.2.0 HTTP contract.
 
 The Base-only nonce and binding behavior intentionally advances this service's
 HTTP contract to 0.2.0. The shared source contract train stays 0.11.0; control-plane
