@@ -322,7 +322,7 @@ def test_portal_grant_and_realm_security_contracts():
     grants = (REPO_ROOT / "frontend" / "src" / "lib" / "portal-grants.ts").read_text()
     assert 'from "@/lib/portal-grants"' in role
     assert "export function portalGrantsFromControls(" in grants
-    assert "sessionRoleFromControls" not in role
+    assert "sessionRoleFromControls" not in role + grants
     assert 'admin: Boolean(controls?.org_admin) || names.includes("admin")' in grants
     assert "if (portalGrantsFromControls(controls).admin) return false;" in role
     assert "if (grants.admin) return false;" in role
