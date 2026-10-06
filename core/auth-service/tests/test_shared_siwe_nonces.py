@@ -86,11 +86,24 @@ async def test_outage_never_creates_or_consumes_local_fallback():
 
 
 @pytest.mark.asyncio
-async def test_missing_storage_does_not_prevent_oidc_startup(monkeypatch):
+async def test_missing_storage_does_not_prevent_oidc_startup(monkeypatch, app):
     monkeypatch.delenv("AUTH_SIWE_REDIS_URL", raising=False)
     monkeypatch.delenv("REDIS_URL", raising=False)
     async with nonce_runtime() as store:
         assert store is None
+    from asgi_lifespan import LifespanManager
+    from auth_service.deps import get_current_auth_user
+
+    app.dependency_overrides[get_current_auth_user] = lambda: PERSON
+    async with LifespanManager(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://auth.test"
+        ) as client:
+            login = await client.post("/auth/login", json={})
+            assert login.status_code == 200, login.text
+            assert login.json()["authorization_url"]
+            challenge = await client.post("/auth/siwe/nonce", json={"address": ADDRESS})
+            assert challenge.status_code == 503
 
 
 @pytest.mark.asyncio
