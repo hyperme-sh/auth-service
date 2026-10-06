@@ -1,4 +1,5 @@
 """Explicit test-plane bootstrap of the Keycloak-seeded network operator."""
+import logging
 import os
 import uuid
 
@@ -13,27 +14,36 @@ from api.domain.operator.population import SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
 
 EMAIL = "admin@test.hyperme.sh"
 ROLE = "test-network-operator"
+logger = logging.getLogger(__name__)
+
+
+def eligibility_failures(claims: dict, tenant_id: uuid.UUID) -> list[str]:
+    issuer = (settings.keycloak_issuer or "").rstrip("/")
+    checks = {
+        "bootstrap_enabled": os.environ.get("PANOPTICON_TEST_OPERATOR_BOOTSTRAP") == "1",
+        "test_issuer": issuer == "https://auth.test.hyperme.sh/realms/controlplane",
+        "token_issuer": claims.get("iss", "").rstrip("/") == issuer,
+        "marketplace_tenant": tenant_id == MARKETPLACE_TENANT_ID,
+        "seed_email": claims.get("email") == EMAIL,
+        "verified_email": claims.get("email_verified") is True,
+        "subject": isinstance(claims.get("sub"), str) and bool(claims["sub"].strip()),
+        "admin_role": "admin" in (claims.get("realm_access") or {}).get("roles", []),
+        "ordinary_oidc": not claims.get("panopticon_auth") and not claims.get("purpose"),
+    }
+    return [name for name, passed in checks.items() if not passed]
 
 
 def eligible(claims: dict, tenant_id: uuid.UUID) -> bool:
-    issuer = (settings.keycloak_issuer or "").rstrip("/")
-    return bool(
-        os.environ.get("PANOPTICON_TEST_OPERATOR_BOOTSTRAP") == "1"
-        and issuer == "https://auth.test.hyperme.sh/realms/controlplane"
-        and claims.get("iss", "").rstrip("/") == issuer
-        and tenant_id == MARKETPLACE_TENANT_ID
-        and claims.get("email") == EMAIL
-        and claims.get("email_verified") is True
-        and claims.get("preferred_username") == "admin"
-        and isinstance(claims.get("sub"), str) and claims["sub"].strip()
-        and "admin" in (claims.get("realm_access") or {}).get("roles", [])
-        and not claims.get("panopticon_auth") and not claims.get("purpose")
-    )
+    return not eligibility_failures(claims, tenant_id)
 
 
 async def provision_test_operator(claims: dict, tenant_id: uuid.UUID, session=None) -> None:
     # Caller supplies claims already validated by the ordinary OIDC dependency.
-    if not eligible(claims, tenant_id):
+    failures = eligibility_failures(claims, tenant_id)
+    if failures:
+        if claims.get("email") == EMAIL:
+            # Names of checks only: no token, subject, password or claim values.
+            logger.warning("test operator bootstrap skipped checks=%s", ",".join(failures))
         return
     await provision_operator(claims, tenant_id, email=EMAIL, role_name=ROLE,
                              permissions=SEEDED_TEST_ADMIN_OPERATOR_CLAIMS, session=session)

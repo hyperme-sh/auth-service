@@ -640,7 +640,8 @@ async def test_host_binding_and_organization_roll_back_together(migrated_sync_ur
         await engine.dispose()
 
 @pytest.mark.asyncio
-async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, monkeypatch):
+@pytest.mark.parametrize("username", ["admin", "admin@test.hyperme.sh", "renamed-account", None])
+async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, monkeypatch, username):
     from auth_service.test_operator_seed import provision_test_operator, EMAIL, ROLE
     from controlplane_api.config import settings
     from api.domain.operator.population import SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
@@ -649,7 +650,9 @@ async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, 
     issuer = "https://auth.test.hyperme.sh/realms/controlplane"
     monkeypatch.setattr(settings, "keycloak_issuer", issuer)
     claims = {"iss":issuer,"email":EMAIL,"email_verified":True,
-              "preferred_username":"admin","sub":"operator-seed-test", "realm_access":{"roles":["admin"]}}
+              "preferred_username":username,"sub":"operator-seed-test", "realm_access":{"roles":["admin"]}}
+    if username is None:
+        claims.pop("preferred_username")
     # Isolate from other enrollment tests that deliberately create admin rows.
     from sqlalchemy import delete
     await db_session.execute(delete(User).where(User.tenant_id==seed.tenant_id, User.email==EMAIL))
