@@ -7,9 +7,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-from eth_account import Account
-from eth_account.messages import encode_defunct
-
 from api.common.portal_controls import evaluate_portal_controls
 from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
 from api.infrastructure.security.tenant_session_jwt import (
@@ -40,6 +37,8 @@ from auth_service.siwe import (
     verify_siwe_bind,
 )
 from auth_service.wallet_bind import issue_siwe_nonce
+from eth_account import Account
+from eth_account.messages import encode_defunct
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 _SECRET_KEYS = (
