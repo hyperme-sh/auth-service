@@ -313,23 +313,17 @@ def test_pan_test_seed_fixtures_stay_split():
     assert 'realm_roles=("renter", "host", "admin")' not in source
 
 
-def test_role_nav_and_realm_locks_untouched():
-    role_nav = (
-        REPO_ROOT
-        / "frontend"
-        / "src"
-        / "app"
-        / "dashboard"
-        / "hypermesh"
-        / "app-shell.tsx"
-    ).read_text()
-    assert "export function RoleNav()" in role_nav
+def test_portal_grant_and_realm_security_contracts():
+    # Navigation placement is a frontend concern. Keep the authorization and
+    # realm restrictions independent of component names and exports.
     role = (
         REPO_ROOT / "frontend" / "src" / "app" / "dashboard" / "hypermesh" / "role.ts"
     ).read_text()
-    assert "export function portalGrantsFromControls(" in role
+    grants = (REPO_ROOT / "frontend" / "src" / "lib" / "portal-grants.ts").read_text()
+    assert 'from "@/lib/portal-grants"' in role
+    assert "export function portalGrantsFromControls(" in grants
     assert "sessionRoleFromControls" not in role
-    assert 'admin: Boolean(controls?.org_admin) || names.includes("admin")' in role
+    assert 'admin: Boolean(controls?.org_admin) || names.includes("admin")' in grants
     assert "if (portalGrantsFromControls(controls).admin) return false;" in role
     assert "if (grants.admin) return false;" in role
     assert "return !grants.admin && grants.host;" in role
