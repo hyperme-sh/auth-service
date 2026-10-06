@@ -78,7 +78,7 @@ def create_app(
         lifespan=lifespan,
         title="Panopticon Auth Service",
         description="Keycloak OIDC: login, callback, refresh, JWT validation, RLS session middleware.",
-        version="0.1.0",
+        version="0.2.0",
     )
 
     @app.exception_handler(UnauthorizedException)

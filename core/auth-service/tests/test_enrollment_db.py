@@ -131,7 +131,7 @@ def _assert_no_printed_secrets(payload: dict) -> None:
 
 
 @pytest.mark.asyncio
-async def test_siwe_binds_wallet_onto_identified_user(db_session):
+async def test_siwe_binds_wallet_onto_identified_user(db_session, base_wallet_verifier):
     acct = Account.create()
     person = AuthMeResponse(sub="kc-bind-1", email="bind@example.com")
     nonce = issue_siwe_nonce(person, address=acct.address)
@@ -434,7 +434,7 @@ async def test_concurrent_enrollment_creates_one_tenant_role(migrated_sync_url, 
 
 
 @pytest.mark.asyncio
-async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch):
+async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier):
     from api.core import config as api_config
     from asgi_lifespan import LifespanManager
     import httpx
@@ -482,7 +482,7 @@ async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypat
                 nonce = await client.post(
                     "/auth/siwe/nonce",
                     headers={"Authorization": "Bearer test"},
-                    json={"address": acct.address, "chain_id": 1},
+                    json={"address": acct.address, "chain_id": 84532},
                 )
                 assert nonce.status_code == 200, nonce.text
                 message = nonce.json()["message"]

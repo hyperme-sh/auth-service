@@ -72,3 +72,38 @@ def _published_payloads_follow_wire_contracts(monkeypatch):
         validate_event_envelope(ControlPlaneEventEnvelope(service='contract-test', **kwargs))
         return await original(self, **kwargs)
     monkeypatch.setattr(NoOpTenantEventPublisher, 'publish', checked)
+
+
+@pytest.fixture
+async def base_wallet_verifier(monkeypatch):
+    """Use the real shared verifier with deterministic Base RPC replies."""
+    import json
+    from contextlib import asynccontextmanager
+
+    import httpx
+    from auth_service import wallet_bind
+    from controlplane_identity.wallet import BaseWalletVerifier
+
+    monkeypatch.setenv("AUTH_SIWE_CHAIN_ID", "84532")
+
+    def respond(request):
+        method = json.loads(request.content)["method"]
+        result = {
+            "eth_chainId": "0x14a34",
+            "eth_blockNumber": "0x123",
+            "eth_getCode": "0x",
+        }[method]
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": result})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        verifier = BaseWalletVerifier(
+            chain_id=84532, rpc_url="https://base.test", client=client
+        )
+
+        @asynccontextmanager
+        async def factory():
+            yield verifier
+
+        monkeypatch.setattr(wallet_bind, "wallet_verifier", factory)
+        yield verifier
+    wallet_bind._nonces.clear()

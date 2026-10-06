@@ -40,8 +40,10 @@ class SwitchTenantRequest(BaseModel):
 
 
 class SiweNonceRequest(BaseModel):
-    address: str = Field(description="EIP-55 or hex wallet the identified person will sign.")
-    chain_id: int = Field(default=1, ge=1)
+    address: str = Field(
+        description="EIP-55 or hex wallet the identified person will sign."
+    )
+    chain_id: int | None = Field(default=None, ge=1, strict=True)
 
 
 class SiweNonceResponse(BaseModel):
@@ -56,8 +58,13 @@ class SiweNonceResponse(BaseModel):
 
 
 class SiweBindRequest(BaseModel):
-    message: str = Field(description="EIP-4361 SIWE message. Signature is verified, not stored.")
-    signature: str = Field(description="personal_sign of message. Never persisted.")
+    message: str = Field(
+        max_length=16384,
+        description="EIP-4361 SIWE message. Signature is verified, not stored.",
+    )
+    signature: str = Field(
+        max_length=32770, description="personal_sign of message. Never persisted."
+    )
 
 
 class WalletBindingResponse(BaseModel):
