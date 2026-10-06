@@ -90,3 +90,14 @@ def test_realm_import_copies_org_claims_and_token_attributes() -> None:
     claim_names = {item["name"] for item in frontend["protocolMappers"]}
     assert {"idp_provider", "idp_org", "idp_login", "idp_account", "idp_wids"} <= claim_names
     assert "enterprise" not in claim_names
+
+
+def test_entra_identity_is_session_bound_in_import_and_reconciliation():
+    broker = next(m for m in idp.claim_copy_mappers() if m['name'] == 'microsoft-session-identity')
+    assert broker['identityProviderMapper'] == 'oidc-user-session-note-idp-mapper'
+    assert {item['key'] for item in json.loads(broker['config']['claims'])} == {'tid','oid'}
+    assert broker in json.loads(REALM_PATH.read_text())['identityProviderMappers']
+    mappings = {m['name']:m for m in idp.token_claim_mappers()}
+    for name, note in [('login_provider','identity_provider'), ('entra_tenant_id','tid'), ('entra_object_id','oid')]:
+        assert mappings[name]['protocolMapper'] == 'oidc-usersessionmodel-note-mapper'
+        assert mappings[name]['config']['user.session.note'] == note

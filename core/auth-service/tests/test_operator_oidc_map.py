@@ -32,7 +32,7 @@ def _configure(monkeypatch, *, domain: str, group_map: str = GROUP_MAP, user_map
     monkeypatch.setattr(api_config.settings, "operator_oidc_user_map", user_map)
 
 
-def test_seeded_admin_has_four_operator_claims_and_not_org_owner() -> None:
+def test_seeded_admin_email_alone_has_no_operator_authority() -> None:
     assert SEEDED_TEST_ADMIN_EMAIL == "admin@test.hyperme.sh"
     assert SEEDED_TEST_ADMIN_OPERATOR_CLAIMS == (
         "operator:console",
@@ -46,7 +46,7 @@ def test_seeded_admin_has_four_operator_claims_and_not_org_owner() -> None:
         groups=(),
     )
     for claim in SEEDED_TEST_ADMIN_OPERATOR_CLAIMS:
-        assert claim in perms
+        assert claim not in perms
     assert "org:own" not in perms
     assert "org:manage" not in perms
 

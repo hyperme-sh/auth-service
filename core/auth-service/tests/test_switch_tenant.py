@@ -88,7 +88,7 @@ async def test_switch_tenant_seeded_admin_jwt_carries_operator_claims(
     async def allow(*_a, **_k):
         return TenantSwitchGrant(
             role_name="admin",
-            permissions=("host:manage_tenants",),
+            permissions=("host:manage_tenants", *SEEDED_TEST_ADMIN_OPERATOR_CLAIMS),
         )
 
     app.dependency_overrides[deps.get_access_token_claims] = fake_claims
@@ -269,7 +269,7 @@ async def test_authorize_member_and_host_and_unknown(tenant_uuid):
     member = type(
         "U",
         (),
-        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid},
+        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid, "is_active": True},
     )()
     tenant_admin = type("R", (), {"name": "admin", "permissions": []})()
     platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None})()

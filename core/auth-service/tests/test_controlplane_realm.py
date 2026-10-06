@@ -415,7 +415,7 @@ def test_hypermesh_native_upsert_is_idempotent() -> None:
         "/clients/native-1/optional-client-scopes/microprofile-jwt",
         "/clients/native-1/optional-client-scopes/offline",
     }
-    assert len(admin.mapper_posts) == 6
+    assert len(admin.mapper_posts) == 9
     assert admin.mapper_deletes == []
 
     default_names = {item["name"] for item in admin.assigned["native-1"]["default"]}
@@ -604,7 +604,7 @@ def test_s3rch_web_upsert_is_idempotent() -> None:
         "/clients/native-1/optional-client-scopes/microprofile-jwt",
         "/clients/native-1/optional-client-scopes/offline",
     }
-    assert len(admin.mapper_posts) == 5
+    assert len(admin.mapper_posts) == 8
     names = {item["name"] for item in admin.mappers["native-1"]}
     assert names == {item["name"] for item in module.declared_protocol_mappers()}
     assert "groups" not in names

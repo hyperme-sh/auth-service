@@ -2,7 +2,7 @@
 import os
 import uuid
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from controlplane_api.config import settings
 from controlplane_api.exceptions import ForbiddenException
 from controlplane_db.models import Role, Tenant, User
@@ -35,29 +35,40 @@ async def provision_test_operator(claims: dict, tenant_id: uuid.UUID, session=No
     # Caller supplies claims already validated by the ordinary OIDC dependency.
     if not eligible(claims, tenant_id):
         return
+    await provision_operator(claims, tenant_id, email=EMAIL, role_name=ROLE,
+                             permissions=SEEDED_TEST_ADMIN_OPERATOR_CLAIMS, session=session)
+
+
+async def provision_operator(claims, tenant_id, *, email, role_name, permissions, session=None):
     db = session or get_db_session()
     await set_current_tenant_id_guc(db, tenant_id)
-    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"test-operator:{tenant_id}"})
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"operator:{tenant_id}"})
     tenant = await db.scalar(select(Tenant).where(Tenant.id == tenant_id))
     if tenant is None or not tenant.is_active:
-        raise ForbiddenException("Configured test marketplace is unavailable")
-    member = await db.scalar(select(User).where(User.tenant_id == tenant_id, func.lower(User.email) == EMAIL))
+        raise ForbiddenException("Configured marketplace is unavailable")
+    members = list((await db.scalars(select(User).where(
+        User.tenant_id == tenant_id,
+        or_(func.lower(User.email) == email, User.keycloak_sub == claims["sub"])
+    ))).all())
+    if len(members) > 1:
+        raise ForbiddenException("Operator membership requires administrator reconciliation")
+    member = members[0] if members else None
     if member is not None:
         # Never revive a revoked account, rebind an identity, or elevate an
         # existing lower-privilege membership as a side effect of login.
         if member.deleted_at is not None or not member.is_active or member.keycloak_sub != claims["sub"]:
-            raise ForbiddenException("Test operator membership requires administrator reconciliation")
+            raise ForbiddenException("Operator membership requires administrator reconciliation")
         return
-    role = await db.scalar(select(Role).where(Role.tenant_id == tenant_id, Role.name == ROLE))
+    role = await db.scalar(select(Role).where(Role.tenant_id == tenant_id, Role.name == role_name))
     if role is None:
-        role = Role(id=uuid.uuid4(), tenant_id=tenant_id, name=ROLE,
-                    description="Explicitly provisioned test network operator",
-                    permissions=list(SEEDED_TEST_ADMIN_OPERATOR_CLAIMS))
+        role = Role(id=uuid.uuid4(), tenant_id=tenant_id, name=role_name,
+                    description="Explicitly provisioned network operator",
+                    permissions=list(permissions))
         db.add(role)
         await db.flush()
-    elif set(role.permissions) != set(SEEDED_TEST_ADMIN_OPERATOR_CLAIMS):
-        raise ForbiddenException("Test operator role requires administrator reconciliation")
-    db.add(User(id=uuid.uuid4(), tenant_id=tenant_id, email=EMAIL,
-                keycloak_sub=claims["sub"], first_name="Test", last_name="Operator",
+    elif set(role.permissions) != set(permissions):
+        raise ForbiddenException("Operator role requires administrator reconciliation")
+    db.add(User(id=uuid.uuid4(), tenant_id=tenant_id, email=email,
+                keycloak_sub=claims["sub"], first_name="Network", last_name="Operator",
                 gender="other", is_active=True, role_id=role.id, password=None))
     await db.flush()

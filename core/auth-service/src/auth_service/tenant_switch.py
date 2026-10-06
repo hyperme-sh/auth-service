@@ -117,7 +117,11 @@ async def authorize_tenant_switch(
         db, email=email, sub=sub, platform=False, tenant_id=tenant_id
     )
     if member is not None:
+        if not member.is_active:
+            return None
         role = await _role_for(db, member)
+        if role and role.name in {"test-network-operator", "entra-network-operator"} and member.keycloak_sub != sub:
+            return None
         return TenantSwitchGrant(
             role_name=(role.name if role else "admin"),
             permissions=_role_permissions(role),

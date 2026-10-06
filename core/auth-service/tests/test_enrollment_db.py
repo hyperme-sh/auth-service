@@ -666,3 +666,22 @@ async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, 
     await db_session.flush()
     with pytest.raises(ForbiddenException):
         await provision_test_operator(claims,seed.tenant_id,db_session)
+
+@pytest.mark.asyncio
+async def test_production_operator_membership_does_not_store_authority(db_session, seed, monkeypatch):
+    from auth_service import operator_binding as binding
+    monkeypatch.setattr(binding.settings, 'keycloak_issuer', binding.PRODUCTION_ISSUER)
+    tenant, object_id = str(uuid.uuid4()), str(uuid.uuid4())
+    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_TENANT_ID', tenant)
+    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_OBJECT_ID', object_id)
+    claims = dict(iss=binding.PRODUCTION_ISSUER, sub='entra-'+uuid.uuid4().hex,
+                  email=uuid.uuid4().hex+'@fyberlabs.com', login_provider='microsoft',
+                  entra_tenant_id=tenant, entra_object_id=object_id)
+    await binding.provision(claims,seed.tenant_id,db_session)
+    await binding.provision(claims,seed.tenant_id,db_session)
+    grant=await authorize_tenant_switch(AuthMeResponse(sub=claims['sub'],email=claims['email']),seed.tenant_id,db_session)
+    assert grant.role_name == binding.ROLE
+    assert grant.permissions == ()
+    assert 'operator:program' in binding.permissions(claims,seed.tenant_id,grant.role_name,grant.permissions)
+    assert not binding.permissions({**claims,'login_provider':'google'},seed.tenant_id,grant.role_name,grant.permissions)
+    assert await authorize_tenant_switch(AuthMeResponse(sub='other',email=claims['email']),seed.tenant_id,db_session) is None
