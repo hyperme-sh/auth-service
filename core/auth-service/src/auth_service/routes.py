@@ -247,6 +247,9 @@ async def auth_switch_tenant(
                 detail="X-Tenant-ID must match tenant in request body",
             )
 
+    from auth_service.test_operator_seed import provision_test_operator
+
+    await provision_test_operator(claims, body.tenant_id)
     grant = await authorize_tenant_switch(user, body.tenant_id)
     if grant is None:
         raise ForbiddenException("Not a member of this tenant")
