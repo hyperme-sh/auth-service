@@ -28,7 +28,13 @@ DEFAULT_CHAIN_ID = 84532
 def configured_chain_id() -> int:
     default = "8453" if os.environ.get("FASTAPI_ENV") == "production" else "84532"
     try:
-        chain = int(os.environ.get("AUTH_SIWE_CHAIN_ID", default))
+        canonical = os.environ.get("USDC_CHAIN_ID")
+        legacy = os.environ.get("AUTH_SIWE_CHAIN_ID")
+        if canonical and legacy and int(canonical) != int(legacy):
+            raise SiweError("SIWE chain must match USDC chain")
+        chain = int(canonical or legacy or default)
+    except SiweError:
+        raise
     except ValueError as exc:
         raise SiweError("Invalid Base chain configuration") from exc
     if chain not in {8453, 84532}:
