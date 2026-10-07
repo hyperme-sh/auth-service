@@ -34,7 +34,7 @@ def create_app(
     enable_db_middleware: bool = True,
 ) -> FastAPI:
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def service_lifespan(app: FastAPI):
         configure_logging()
         assert_smoke_oidc_plane()
         engine = None
@@ -68,11 +68,24 @@ def create_app(
         else:
             await install_tenant_event_publisher(service_name=settings.service_name)
 
-        yield
+        try:
+            yield
+        finally:
+            await shutdown_tenant_event_publisher()
+            if engine is not None:
+                await engine.dispose()
 
-        await shutdown_tenant_event_publisher()
-        if engine is not None:
-            await engine.dispose()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        from auth_service.siwe_nonces import nonce_runtime
+
+        async with nonce_runtime() as store:
+            app.state.siwe_nonce_store = store
+            try:
+                async with service_lifespan(app):
+                    yield
+            finally:
+                app.state.siwe_nonce_store = None
 
     app = FastAPI(
         lifespan=lifespan,

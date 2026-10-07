@@ -1,7 +1,6 @@
 """SIWE bindings consume exact, expiring, subject-owned Base challenges."""
 
 import json
-import time
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
@@ -23,29 +22,39 @@ def sign(message):
 
 
 @pytest.mark.parametrize("chain", [232, 1, 8453])
-def test_nonce_refuses_wrong_chain(chain, monkeypatch):
+async def test_nonce_refuses_wrong_chain(chain, monkeypatch, nonce_store):
     monkeypatch.setenv("AUTH_SIWE_CHAIN_ID", "84532")
     with pytest.raises(SiweError, match="Base chain"):
-        wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address, chain_id=chain)
+        await wallet_bind.issue_siwe_nonce(
+            PERSON, store=nonce_store, address=ACCOUNT.address, chain_id=chain
+        )
 
 
-def test_nonce_default_uses_server_chain(monkeypatch):
+async def test_nonce_default_uses_server_chain(monkeypatch, nonce_store):
     monkeypatch.setenv("AUTH_SIWE_CHAIN_ID", "8453")
     assert SiweNonceRequest(address=ACCOUNT.address).chain_id is None
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     assert challenge.chain_id == 8453 and challenge.nonce.isalnum()
 
 
 @pytest.mark.asyncio
 async def test_bind_consumes_nonce_and_persists_verified_address(
-    base_wallet_verifier, monkeypatch
+    base_wallet_verifier, monkeypatch, nonce_store
 ):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     persist = AsyncMock(return_value="bound")
     monkeypatch.setattr(wallet_bind, "upsert_wallet_binding", persist)
     assert (
         await wallet_bind.bind_wallet(
-            None, PERSON, message=challenge.message, signature=sign(challenge.message)
+            None,
+            PERSON,
+            store=nonce_store,
+            message=challenge.message,
+            signature=sign(challenge.message),
         )
         == "bound"
     )
@@ -56,7 +65,11 @@ async def test_bind_consumes_nonce_and_persists_verified_address(
     }
     with pytest.raises(SiweError, match="missing"):
         await wallet_bind.bind_wallet(
-            None, PERSON, message=challenge.message, signature=sign(challenge.message)
+            None,
+            PERSON,
+            store=nonce_store,
+            message=challenge.message,
+            signature=sign(challenge.message),
         )
     assert persist.await_count == 1
 
@@ -66,9 +79,11 @@ async def test_bind_consumes_nonce_and_persists_verified_address(
     "change", ["address", "chain", "statement", "duplicate", "whitespace"]
 )
 async def test_modified_challenge_never_persists(
-    change, base_wallet_verifier, monkeypatch
+    change, base_wallet_verifier, monkeypatch, nonce_store
 ):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     altered = {
         "address": challenge.message.replace(ACCOUNT.address, Account.create().address),
         "chain": challenge.message.replace("Chain ID: 84532", "Chain ID: 232"),
@@ -82,25 +97,34 @@ async def test_modified_challenge_never_persists(
     monkeypatch.setattr(wallet_bind, "upsert_wallet_binding", persist)
     with pytest.raises(SiweError, match="server-issued"):
         await wallet_bind.bind_wallet(
-            None, PERSON, message=altered, signature=sign(altered)
+            None, PERSON, store=nonce_store, message=altered, signature=sign(altered)
         )
     persist.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_subject_and_expiry_checks(base_wallet_verifier, monkeypatch):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+async def test_subject_and_expiry_checks(
+    base_wallet_verifier, monkeypatch, nonce_store
+):
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     with pytest.raises(SiweError, match="missing"):
         await wallet_bind.bind_wallet(
             None,
             AuthMeResponse(sub="other-person"),
+            store=nonce_store,
             message=challenge.message,
             signature=sign(challenge.message),
         )
-    monkeypatch.setattr(wallet_bind.time, "time", lambda: time.time_ns() / 1e9 + 601)
+    await nonce_store.redis.expire(nonce_store.key(PERSON.sub), 0)
     with pytest.raises(SiweError, match="expired"):
         await wallet_bind.bind_wallet(
-            None, PERSON, message=challenge.message, signature=sign(challenge.message)
+            None,
+            PERSON,
+            store=nonce_store,
+            message=challenge.message,
+            signature=sign(challenge.message),
         )
 
 
@@ -115,9 +139,11 @@ async def test_subject_and_expiry_checks(base_wallet_verifier, monkeypatch):
     ],
 )
 async def test_direct_siwe_verification_rejects_invalid_context(
-    altered, base_wallet_verifier
+    altered, base_wallet_verifier, nonce_store
 ):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     prefix = altered.split(":", 1)[0] + ":"
     message = "\n".join(
         altered if line.startswith(prefix) else line
@@ -136,7 +162,7 @@ async def test_direct_siwe_verification_rejects_invalid_context(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("valid", [True, False])
 async def test_contract_wallet_binds_only_after_base_1271_acceptance(
-    valid, monkeypatch
+    valid, monkeypatch, nonce_store
 ):
     monkeypatch.setenv("AUTH_SIWE_CHAIN_ID", "84532")
     calls = []
@@ -166,11 +192,17 @@ async def test_contract_wallet_binds_only_after_base_1271_acceptance(
         monkeypatch.setattr(wallet_bind, "wallet_verifier", factory)
         persist = AsyncMock(return_value="bound")
         monkeypatch.setattr(wallet_bind, "upsert_wallet_binding", persist)
-        challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+        challenge = await wallet_bind.issue_siwe_nonce(
+            PERSON, store=nonce_store, address=ACCOUNT.address
+        )
         if valid:
             assert (
                 await wallet_bind.bind_wallet(
-                    None, PERSON, message=challenge.message, signature="0xaabb"
+                    None,
+                    PERSON,
+                    store=nonce_store,
+                    message=challenge.message,
+                    signature="0xaabb",
                 )
                 == "bound"
             )
@@ -178,7 +210,11 @@ async def test_contract_wallet_binds_only_after_base_1271_acceptance(
         else:
             with pytest.raises(SiweError):
                 await wallet_bind.bind_wallet(
-                    None, PERSON, message=challenge.message, signature="0xaabb"
+                    None,
+                    PERSON,
+                    store=nonce_store,
+                    message=challenge.message,
+                    signature="0xaabb",
                 )
             persist.assert_not_awaited()
         assert calls[-1]["params"][0]["to"] == ACCOUNT.address
@@ -206,8 +242,12 @@ def test_chain_defaults_and_invalid_configuration(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_failed_proof_also_consumes_nonce(base_wallet_verifier, monkeypatch):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+async def test_failed_proof_also_consumes_nonce(
+    base_wallet_verifier, monkeypatch, nonce_store
+):
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     persist = AsyncMock()
     monkeypatch.setattr(wallet_bind, "upsert_wallet_binding", persist)
     wrong = (
@@ -217,19 +257,25 @@ async def test_failed_proof_also_consumes_nonce(base_wallet_verifier, monkeypatc
     )
     with pytest.raises(SiweError):
         await wallet_bind.bind_wallet(
-            None, PERSON, message=challenge.message, signature=wrong
+            None, PERSON, store=nonce_store, message=challenge.message, signature=wrong
         )
     with pytest.raises(SiweError, match="missing"):
         await wallet_bind.bind_wallet(
-            None, PERSON, message=challenge.message, signature=sign(challenge.message)
+            None,
+            PERSON,
+            store=nonce_store,
+            message=challenge.message,
+            signature=sign(challenge.message),
         )
     persist.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("field", ["domain", "uri", "nonce", "duplicate"])
-async def test_siwe_context_fields_rejected(field, base_wallet_verifier):
-    challenge = wallet_bind.issue_siwe_nonce(PERSON, address=ACCOUNT.address)
+async def test_siwe_context_fields_rejected(field, base_wallet_verifier, nonce_store):
+    challenge = await wallet_bind.issue_siwe_nonce(
+        PERSON, store=nonce_store, address=ACCOUNT.address
+    )
     changed = {
         "domain": challenge.message.replace(challenge.domain, "attacker.example", 1),
         "uri": challenge.message.replace(

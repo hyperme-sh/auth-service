@@ -29,11 +29,37 @@ For ERC-6492 proofs, configure both `AUTH_SIWE_6492_VALIDATOR_ADDRESS` and
 operator-reviewed universal validator supporting deployed and counterfactual
 wallet simulation. Missing or mismatched configuration rejects these proofs.
 This service does not deploy a validator. Real Base/validator acceptance and the
-payment-service payout-proof consumer remain WP-CRY-01 follow-up work.
+wallet-session binding where applicable remain WP-CRY-01 follow-up work.
 
-The existing nonce registry is process-local: restarts discard challenges and
-multiple replicas require sticky routing or a shared nonce store before rollout.
-This change does not claim distributed nonce storage or wallet login/session issuance.
+SIWE challenges now use shared Redis rather than a process-local registry. Set
+`AUTH_SIWE_REDIS_URL` (or the existing `REDIS_URL` fallback) to a deployment-scoped,
+authenticated Redis 6.2+ store with the deployment's required durability. Both
+Compose definitions forward the optional override. All replicas must use the same
+store; sticky routing is unnecessary. Keys hash the identified subject and retain
+one outstanding challenge per person. Reissuing replaces that challenge. Redis
+expires it after ten minutes; atomic `GETDEL` permits exactly one consumption,
+including failed proofs. No signature is stored. Storage operations and client
+connection/read timeouts are bounded to five seconds.
+
+The VM Compose fallback uses the test plane's local Celery Redis DB 0. Before
+production activation, set `AUTH_SIWE_REDIS_URL` explicitly to an authenticated,
+access-restricted store and size it to retain live challenges (for example, use
+`noeviction`). A separate DB index or key prefix organizes data but does not
+replace authentication or access isolation. Evicted challenges fail closed as
+missing/expired; a rejected write returns 503. Monitor memory pressure and storage
+errors so users can reliably complete the ten-minute flow.
+
+Redeployment from the former process-local registry discards its outstanding
+challenges; users request a fresh nonce. No challenge migration is required.
+Per-subject issuance rate limiting remains an optional hardening follow-up;
+currently each authenticated issuance writes Redis and replaces the prior nonce.
+
+Missing storage leaves OIDC startup/login available but SIWE nonce/bind routes
+return 503. Redis outages also return 503 without a local fallback. A consumed
+challenge cannot be retried after a verification or database failure; request a
+new challenge. Runtime closes Redis clients on normal shutdown and exceptions.
+Wallet binding remains attached to the identified Keycloak person; this change
+does not mint wallet login/session credentials or alter the 0.2.0 HTTP contract.
 
 The Base-only nonce and binding behavior intentionally advances this service's
 HTTP contract to 0.2.0. The shared source contract train stays 0.11.0; control-plane

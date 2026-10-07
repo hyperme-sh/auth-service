@@ -106,4 +106,22 @@ async def base_wallet_verifier(monkeypatch):
 
         monkeypatch.setattr(wallet_bind, "wallet_verifier", factory)
         yield verifier
-    wallet_bind._nonces.clear()
+
+
+
+@pytest.fixture(scope="session")
+def siwe_redis_url():
+    from testcontainers.redis import RedisContainer
+
+    with RedisContainer("redis:7-alpine") as container:
+        yield f"redis://{container.get_container_host_ip()}:{container.get_exposed_port(6379)}/0"
+
+
+@pytest.fixture
+async def nonce_store(siwe_redis_url):
+    from redis.asyncio import Redis
+    from auth_service.siwe_nonces import SiweNonceStore
+
+    async with Redis.from_url(siwe_redis_url, socket_timeout=5) as redis:
+        await redis.flushdb()
+        yield SiweNonceStore(redis)
