@@ -77,6 +77,9 @@ def postgres_container(require_docker: None):
 def migrated_sync_url(postgres_container) -> str:
     url = normalize_sync_sqlalchemy_url(postgres_container.get_connection_url())
     run_alembic_upgrade(url)
+    from controlplane_db import migrations
+    migrations.stamp_baselines(url)
+    migrations.upgrade(url)
     return url
 
 
@@ -690,3 +693,33 @@ async def test_production_operator_membership_does_not_store_authority(db_sessio
     assert 'operator:program' in binding.permissions(claims,seed.tenant_id,grant.role_name,grant.permissions)
     assert not binding.permissions({**claims,'login_provider':'google'},seed.tenant_id,grant.role_name,grant.permissions)
     assert await authorize_tenant_switch(AuthMeResponse(sub='other',email=claims['email']),seed.tenant_id,db_session) is None
+
+@pytest.mark.asyncio
+async def test_operator_bootstrap_preserves_existing_platform_identity(db_session, seed):
+    from auth_service.test_operator_seed import provision_operator, SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
+    from auth_service.tenant_switch import authorize_tenant_switch
+
+    subject = f"operator-{uuid.uuid4()}"
+    email = f"{subject}@example.com"
+    platform = User(id=uuid.uuid4(), tenant_id=None, email=email,
+                    keycloak_sub=subject, first_name="Existing", last_name="Account",
+                    gender="other", is_active=True)
+    db_session.add(platform)
+    await db_session.flush()
+    for _ in range(2):
+        await provision_operator(
+            {"sub": subject}, seed.tenant_id, email=email,
+            role_name="test-network-operator", permissions=SEEDED_TEST_ADMIN_OPERATOR_CLAIMS,
+            session=db_session,
+        )
+    rows = (await db_session.execute(
+        select(User).where(User.keycloak_sub == subject)
+    )).scalars().all()
+    assert len(rows) == 2
+    assert any(row.id == platform.id and row.tenant_id is None for row in rows)
+    grant = await authorize_tenant_switch(
+        AuthMeResponse(sub=subject, email=email), seed.tenant_id, session=db_session
+    )
+    assert grant is not None
+    assert grant.role_name == "test-network-operator"
+    assert set(grant.permissions) == set(SEEDED_TEST_ADMIN_OPERATOR_CLAIMS)
