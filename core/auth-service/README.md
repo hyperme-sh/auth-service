@@ -41,6 +41,19 @@ expires it after ten minutes; atomic `GETDEL` permits exactly one consumption,
 including failed proofs. No signature is stored. Storage operations and client
 connection/read timeouts are bounded to five seconds.
 
+The VM Compose fallback uses the test plane's local Celery Redis DB 0. Before
+production activation, set `AUTH_SIWE_REDIS_URL` explicitly to an authenticated,
+access-restricted store and size it to retain live challenges (for example, use
+`noeviction`). A separate DB index or key prefix organizes data but does not
+replace authentication or access isolation. Evicted challenges fail closed as
+missing/expired; a rejected write returns 503. Monitor memory pressure and storage
+errors so users can reliably complete the ten-minute flow.
+
+Redeployment from the former process-local registry discards its outstanding
+challenges; users request a fresh nonce. No challenge migration is required.
+Per-subject issuance rate limiting remains an optional hardening follow-up;
+currently each authenticated issuance writes Redis and replaces the prior nonce.
+
 Missing storage leaves OIDC startup/login available but SIWE nonce/bind routes
 return 503. Redis outages also return 503 without a local fallback. A consumed
 challenge cannot be retried after a verification or database failure; request a
