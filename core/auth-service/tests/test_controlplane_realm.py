@@ -824,3 +824,41 @@ def test_host_setup_failure_does_not_skip_other_realm_updates(monkeypatch, capsy
     assert brokers.apply_realm_updates(object()) == 1
     assert calls == ["native", "s3rch", "brokers"]
     assert "hypermesh-host-setup client was not applied" in capsys.readouterr().err
+
+
+def test_portal_logout_redirects_converge_without_losing_client_settings(monkeypatch):
+    monkeypatch.syspath_prepend(str(REALM_PATH.parent.parent))
+    import configure_idp_brokers as brokers
+
+    class Admin:
+        def __init__(self):
+            self.client = {"id": "frontend", "clientId": "controlplane-frontend",
+                           "attributes": {"pkce.code.challenge.method": "S256"},
+                           "redirectUris": ["https://portal.test.hyperme.sh/*"]}
+            self.writes = 0
+
+        def get(self, path):
+            if path.startswith("/clients?"):
+                return [self.client]
+            if path == "/clients/frontend":
+                return self.client
+            if path.endswith("/protocol-mappers/models"):
+                return []
+            raise AssertionError(path)
+
+        def put(self, path, payload):
+            assert path == "/clients/frontend"
+            self.client = payload
+            self.writes += 1
+
+        def post(self, path, payload):
+            assert path.endswith("/protocol-mappers/models")
+
+    admin = Admin()
+    brokers.ensure_token_claims(admin)
+    brokers.ensure_token_claims(admin)
+    assert admin.writes == 1
+    assert admin.client["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert admin.client["redirectUris"] == ["https://portal.test.hyperme.sh/*"]
+    imported = next(c for c in _realm()["clients"] if c["clientId"] == "controlplane-frontend")
+    assert admin.client["attributes"]["post.logout.redirect.uris"] == imported["attributes"]["post.logout.redirect.uris"]
