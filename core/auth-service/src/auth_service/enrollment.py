@@ -13,6 +13,7 @@ or add a payment role.
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -39,7 +40,6 @@ from api.infrastructure.persistence.tenant_membership import (
 from controlplane_db.models import (
     ApiKey,
     Group,
-    Organization,
     Role,
     Tenant,
     User,
@@ -48,7 +48,7 @@ from controlplane_db.models import (
 )
 
 from auth_service.schemas import AuthMeResponse
-from host_binding_store import bind_organization, lock_identity, organization_id
+from auth_service.host_binding_client import host_binding_client
 
 HELD_RENTER = "renter"
 HELD_HOST = "host"
@@ -78,7 +78,6 @@ FORBIDDEN_GRANT_ALIASES = frozenset(
 # Existing tenant role used as the group FK. Not a new renter role.
 _GROUP_ROLE_NAME = "user"
 _ORG_ADMIN_ROLE_NAME = "admin"
-_HOST_ORG_NAME = "Host"
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,34 +335,16 @@ async def _get_or_create_group(
 async def _lock_host_identity(
     session: AsyncSession, tenant_id: uuid.UUID, subject: str
 ) -> None:
-    """Serialize host grants before membership and organization creation.
+    """Serialize auth grant mutations after owner organization resolution.
 
     Transaction-scoped PostgreSQL locks work across replicas and disappear on
     rollback/disconnect. Hash collisions only serialize unrelated grants.
     """
-    await lock_identity(session, tenant_id, subject)
-
-
-async def _get_or_create_host_org(
-    session: AsyncSession, tenant_id: uuid.UUID, subject: str
-) -> Organization:
-    # Caller holds _lock_host_identity for the enclosing transaction. Ownership
-    # uses the verified immutable subject, not mutable email or client org IDs.
-    org_id = await organization_id(session, tenant_id, subject)
-    org = await session.get(Organization, org_id) if org_id is not None else None
-    if org is not None:
-        return org
-    org_id = uuid.uuid4()
-    org = Organization(
-        id=org_id,
-        tenant_id=tenant_id,
-        legal_name=f"{_HOST_ORG_NAME} {org_id}",
-    )
-    session.add(org)
-    await session.flush()
-    await bind_organization(session, tenant_id, subject, org_id)
-    await session.flush()
-    return org
+    digest = hashlib.sha256(
+        b"host-org-binding-v1\0" + tenant_id.bytes + subject.encode("utf-8")
+    ).digest()
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"),
+        {"key": int.from_bytes(digest[:8], "big", signed=True)})
 
 
 async def _ensure_membership_user(
@@ -473,7 +454,12 @@ async def grant_held_roles(
     await set_current_tenant_id_guc(session, tenant_id)
 
     held, refused = held_roles_from_identity(user, requested)
+    host_org_id = None
     if HELD_HOST in held:
+        _email_norm(user)  # Reject invalid identity before reserving owner metadata.
+        # Resolve before taking the local grant lock: owner uses the same key in
+        # its own transaction. Never wait on owner HTTP while holding that lock.
+        host_org_id = await host_binding_client().resolve(tenant_id, user.sub)
         await _lock_host_identity(session, tenant_id, user.sub)
     wallet = await _bound_wallet(session, user.sub)
 
@@ -504,13 +490,12 @@ async def grant_held_roles(
         )
 
     if HELD_HOST in held and member is not None:
-        org = await _get_or_create_host_org(session, tenant_id, user.sub)
         host_group = await _get_or_create_group(
             session, tenant_id, GROUP_HOST, group_role.id
         )
         await _ensure_group_member(session, tenant_id, member.id, host_group.id)
         host_grant = HostGrant(
-            organization_id=org.id,
+            organization_id=host_org_id,
             group=GROUP_HOST,
             device_enrolled=False,
         )

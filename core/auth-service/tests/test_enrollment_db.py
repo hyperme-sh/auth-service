@@ -116,6 +116,22 @@ async def db_session(migrated_sync_url: str, seed: Seed):
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def host_owner_http(monkeypatch):
+    import httpx
+    from auth_service import enrollment
+    from auth_service.host_binding_client import HttpHostBindingClient
+    token = "owner-test-token-" + "x" * 40
+    def owner(request):
+        payload = json.loads(request.content)
+        assert request.headers["X-Tenant-ID"] == payload["tenant_id"]
+        assert request.headers["X-Internal-Token"] == token
+        org = uuid.uuid5(uuid.NAMESPACE_URL, "test-owner:" + payload["tenant_id"] + ":" + payload["subject"])
+        return httpx.Response(200, json=payload | {"organization_id": str(org)})
+    client = HttpHostBindingClient("https://host-owner.test", token, httpx.MockTransport(owner))
+    monkeypatch.setattr(enrollment, "host_binding_client", lambda: client)
+
+
 def _sign(message: str, key: str) -> str:
     return Account.from_key(key).sign_message(encode_defunct(text=message)).signature.hex()
 
@@ -542,14 +558,7 @@ async def test_host_organizations_are_bound_to_identity_not_oldest_org(db_sessio
     assert first.host is not None and second.host is not None and again.host is not None
     assert first.host.organization_id == again.host.organization_id
     assert len({first.host.organization_id, second.host.organization_id, unrelated.id}) == 3
-    bindings = (await db_session.execute(
-        text("SELECT keycloak_sub, organization_id FROM host_organization_bindings "
-             "WHERE tenant_id = :tenant_id AND keycloak_sub IN (:alice, :bob)"),
-        {"tenant_id": seed.tenant_id, "alice": alice.sub, "bob": bob.sub},
-    )).all()
-    assert {b.keycloak_sub: b.organization_id for b in bindings} == {
-        alice.sub: first.host.organization_id, bob.sub: second.host.organization_id,
-    }
+
 
 
 @pytest.mark.asyncio
@@ -604,12 +613,6 @@ async def test_concurrent_host_grants_create_one_binding(migrated_sync_url, seed
         assert len(set(organizations)) == 1
         async with maker() as session:
             await set_current_tenant_id_guc(session, seed.tenant_id)
-            rows = (await session.execute(text("SELECT organization_id FROM host_organization_bindings "
-                "WHERE tenant_id = :tenant_id AND keycloak_sub = :subject"),
-                {"tenant_id": seed.tenant_id, "subject": person.sub},
-            )).all()
-            assert len(rows) == 1
-            assert rows[0].organization_id == organizations[0]
             members = (await session.execute(select(User).where(
                 User.tenant_id == seed.tenant_id, User.email == person.email,
             ))).scalars().all()
@@ -619,7 +622,7 @@ async def test_concurrent_host_grants_create_one_binding(migrated_sync_url, seed
 
 
 @pytest.mark.asyncio
-async def test_host_binding_and_organization_roll_back_together(migrated_sync_url, seed):
+async def test_host_authority_rolls_back_and_retry_reuses_owner_reservation(migrated_sync_url, seed):
     suffix = uuid.uuid4().hex
     person = AuthMeResponse(sub=f"rollback-{suffix}", email=f"rollback-{suffix}@example.com")
     engine = create_async_engine(normalize_database_url(async_db_url(migrated_sync_url)))
@@ -632,14 +635,10 @@ async def test_host_binding_and_organization_roll_back_together(migrated_sync_ur
             await session.rollback()
         async with maker() as session:
             await set_current_tenant_id_guc(session, seed.tenant_id)
-            assert await session.get(Organization, discarded) is None
-            assert (await session.execute(
-                text("SELECT organization_id FROM host_organization_bindings "
-                     "WHERE tenant_id = :tenant_id AND keycloak_sub = :subject"),
-                {"tenant_id": seed.tenant_id, "subject": person.sub},
-            )).scalar_one_or_none() is None
+            assert (await session.execute(select(User).where(
+                User.tenant_id == seed.tenant_id, User.keycloak_sub == person.sub))).scalar_one_or_none() is None
             result = await grant_held_roles(session, person, requested=[HELD_HOST])
-            assert result.host and result.host.organization_id != discarded
+            assert result.host and result.host.organization_id == discarded
             await session.commit()
     finally:
         await engine.dispose()
