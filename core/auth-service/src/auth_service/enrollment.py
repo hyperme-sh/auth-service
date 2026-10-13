@@ -13,7 +13,6 @@ or add a payment role.
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -49,6 +48,7 @@ from controlplane_db.models import (
 )
 
 from auth_service.schemas import AuthMeResponse
+from host_binding_store import bind_organization, lock_identity, organization_id
 
 HELD_RENTER = "renter"
 HELD_HOST = "host"
@@ -341,13 +341,7 @@ async def _lock_host_identity(
     Transaction-scoped PostgreSQL locks work across replicas and disappear on
     rollback/disconnect. Hash collisions only serialize unrelated grants.
     """
-    digest = hashlib.sha256(
-        b"host-org-binding-v1\0" + tenant_id.bytes + subject.encode("utf-8")
-    ).digest()
-    lock_key = int.from_bytes(digest[:8], "big", signed=True)
-    await session.execute(
-        text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key}
-    )
+    await lock_identity(session, tenant_id, subject)
 
 
 async def _get_or_create_host_org(
@@ -355,14 +349,7 @@ async def _get_or_create_host_org(
 ) -> Organization:
     # Caller holds _lock_host_identity for the enclosing transaction. Ownership
     # uses the verified immutable subject, not mutable email or client org IDs.
-    # Temporary cross-owner access: INV-AUTH-HOST-BINDING (ownership manifest).
-    # Preserve enrollment without importing a product into auth-service.
-    found = await session.execute(
-        text("SELECT organization_id FROM host_organization_bindings "
-             "WHERE tenant_id = :tenant_id AND keycloak_sub = :subject"),
-        {"tenant_id": tenant_id, "subject": subject},
-    )
-    org_id = found.scalar_one_or_none()
+    org_id = await organization_id(session, tenant_id, subject)
     org = await session.get(Organization, org_id) if org_id is not None else None
     if org is not None:
         return org
@@ -374,12 +361,7 @@ async def _get_or_create_host_org(
     )
     session.add(org)
     await session.flush()
-    await session.execute(
-        text("INSERT INTO host_organization_bindings "
-             "(tenant_id, keycloak_sub, organization_id) "
-             "VALUES (:tenant_id, :subject, :organization_id)"),
-        {"tenant_id": tenant_id, "subject": subject, "organization_id": org_id},
-    )
+    await bind_organization(session, tenant_id, subject, org_id)
     await session.flush()
     return org
 
