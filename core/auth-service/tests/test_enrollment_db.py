@@ -79,6 +79,7 @@ def migrated_sync_url(postgres_container) -> str:
     run_alembic_upgrade(url)
     from controlplane_db import migrations
     migrations.stamp_baselines(url)
+    migrations.prepare_event_source_index(url)
     migrations.upgrade(url)
     return url
 
