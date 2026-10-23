@@ -148,3 +148,67 @@ async def test_endpoint_rechecks_exact_member_and_active_issuer(http_client):
     assert response.status_code == 200
     member.assert_awaited_once_with(uuid.UUID(TENANT), "owner")
     assert response.json()["source"] == "auth_connect_session_v1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "upstream,expected",
+    [
+        (ValueError("PRIVATE_BROKEN_JSON"), 503),
+        (None, 503),
+        ([], 503),
+        ({}, 503),
+        ({"active": "true"}, 503),
+        ({"active": 1}, 503),
+        ({"active": True}, 503),
+        ({"active": True, "sub": "owner", "client_id": None}, 503),
+        (
+            {
+                "active": True,
+                "sub": "owner",
+                "client_id": "controlplane-frontend",
+                "sid": [],
+            },
+            503,
+        ),
+        ({"active": False}, 403),
+    ],
+)
+async def test_introspection_outages_are_distinct_from_explicit_denial(
+    http_client, upstream, expected
+):
+    import time
+
+    tenant, origin, _ = claims()
+    now = int(time.time())
+    origin.update(exp=now + 300, iat=now, auth_time=now - 30)
+    validator = type("Validator", (), {"validate": AsyncMock(return_value=origin)})()
+    introspection = (
+        AsyncMock(side_effect=upstream)
+        if isinstance(upstream, Exception)
+        else AsyncMock(return_value=upstream)
+    )
+    with (
+        patch(
+            "auth_service.connect_session.try_decode_tenant_session_jwt",
+            return_value=tenant,
+        ),
+        patch(
+            "auth_service.connect_session.get_keycloak_jwt_validator",
+            return_value=validator,
+        ),
+        patch("auth_service.connect_session.introspect_access_token", introspection),
+        patch("auth_service.connect_session.current_member", AsyncMock()) as member,
+    ):
+        response = await http_client.get(
+            "/auth/connect-session-context",
+            headers={
+                "Authorization": "Bearer private-tenant",
+                "X-Auth-Session-Token": "private-original",
+                "X-Tenant-ID": TENANT,
+            },
+        )
+    assert response.status_code == expected
+    assert response.headers["cache-control"] == "no-store"
+    assert "PRIVATE_" not in response.text and "private-" not in response.text
+    member.assert_not_awaited()

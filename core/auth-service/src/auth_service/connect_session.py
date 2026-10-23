@@ -36,6 +36,26 @@ class SessionDenied(ValueError):
     pass
 
 
+class SessionUnavailable(RuntimeError):
+    """The issuer did not supply a usable decision; never revoke from this."""
+
+
+def introspection_shape(active):
+    if not isinstance(active, dict) or type(active.get("active")) is not bool:
+        raise SessionUnavailable()
+    # RFC 7662 inactive responses may contain only this explicit boolean.
+    if active["active"] is False:
+        return
+    if any(
+        not isinstance(active.get(key), str) or not active[key]
+        for key in ("sub", "client_id")
+    ):
+        raise SessionUnavailable()
+    for key in ("sid", "session_state"):
+        if key in active and (not isinstance(active[key], str) or not active[key]):
+            raise SessionUnavailable()
+
+
 def credential(value):
     if (
         not isinstance(value, str)
@@ -144,7 +164,12 @@ async def connect_session_context(request: Request):
         async with httpx.AsyncClient(
             timeout=5, trust_env=False, follow_redirects=False
         ) as client:
-            active = await introspect_access_token(original, client=client)
+            try:
+                active = await introspect_access_token(original, client=client)
+            except (ValueError, TypeError):
+                # Malformed HTTP-200 JSON is an outage, not an identity denial.
+                raise SessionUnavailable() from None
+        introspection_shape(active)
         facts = verified_facts(tenant, origin, active)
         facts["member_id"] = await current_member(tid, facts["subject"])
         return JSONResponse(facts, headers=headers)
@@ -154,7 +179,13 @@ async def connect_session_context(request: Request):
             status_code=403,
             headers=headers,
         )
-    except (httpx.HTTPError, TimeoutError, jwt.PyJWKClientError, SQLAlchemyError):
+    except (
+        SessionUnavailable,
+        httpx.HTTPError,
+        TimeoutError,
+        jwt.PyJWKClientError,
+        SQLAlchemyError,
+    ):
         return JSONResponse(
             {"detail": "Session verification unavailable"},
             status_code=503,
