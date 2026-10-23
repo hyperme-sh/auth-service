@@ -74,7 +74,10 @@ from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.token_validation import unsafe_subject_from_token
 from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
 
+from auth_service.connect_session import router as connect_session_router
+
 router = APIRouter(tags=["auth"])
+router.include_router(connect_session_router)
 logger = logging.getLogger(__name__)
 
 

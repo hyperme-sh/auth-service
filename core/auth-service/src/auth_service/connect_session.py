@@ -1,0 +1,162 @@
+"""Private payout issuer facts from two independently verified credentials.
+
+The tenant token supplies tenant authority, never MFA. The original browser
+OIDC credential supplies signed authentication time and factor evidence. It is
+introspected on every request; neither credential is retained or returned.
+"""
+
+import hashlib
+import json
+import time
+import uuid
+from datetime import UTC, datetime
+
+import httpx
+import jwt
+from api.infrastructure.persistence.db_session import get_db_session
+from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
+from api.infrastructure.security.tenant_session_jwt import (
+    is_smoke_session,
+    try_decode_tenant_session_jwt,
+)
+from controlplane_api.config import settings
+from controlplane_tenancy.tenant_guc import set_current_tenant_id_guc
+from controlplane_tenancy.tenant_membership import get_tenant_membership_row
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+
+from auth_service.keycloak_oidc import introspect_access_token
+
+router = APIRouter()
+BROWSER_CLIENT = "controlplane-frontend"
+
+
+class SessionDenied(ValueError):
+    pass
+
+
+def credential(value):
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 32768
+        or any(ord(c) <= 32 or ord(c) >= 127 for c in value)
+    ):
+        raise SessionDenied()
+    return value
+
+
+def verified_facts(tenant, origin, active, *, now=None):
+    """Only called after signature verification; strict types resist claim coercion."""
+    now = int(time.time()) if now is None else now
+    if not all(isinstance(value, dict) for value in (tenant, origin, active)):
+        raise SessionDenied()
+    if (
+        tenant.get("panopticon_auth") != "tenant_session"
+        or is_smoke_session(tenant)
+        or tenant.get("azp") != BROWSER_CLIENT
+        or origin.get("azp") != BROWSER_CLIENT
+        or origin.get("iss") != settings.keycloak_issuer.rstrip("/")
+        or not isinstance(origin.get("sub"), str)
+        or not origin["sub"]
+        or origin["sub"] != tenant.get("sub")
+        or active.get("active") is not True
+        or active.get("sub") != origin["sub"]
+        or active.get("client_id") != BROWSER_CLIENT
+    ):
+        raise SessionDenied()
+    sid = origin.get("sid") or origin.get("session_state")
+    if not isinstance(sid, str) or not 1 <= len(sid) <= 512:
+        raise SessionDenied()
+    # Introspection is bound to this exact token by the issuer request. Refuse
+    # contradictory session identity if the issuer includes it in its response.
+    for key in ("sid", "session_state"):
+        if key in active and active[key] != sid:
+            raise SessionDenied()
+    for key in ("exp", "iat", "auth_time"):
+        if type(origin.get(key)) is not int:
+            raise SessionDenied()
+    if not 0 < origin["auth_time"] <= origin["iat"] <= now < origin["exp"]:
+        raise SessionDenied()
+    # This contract requires a reviewed Keycloak LoA-2 password + OTP flow.
+    # No substring matches, refresh timestamps, tenant-token AMR or caller claims.
+    methods = origin.get("amr")
+    mfa = (
+        origin.get("acr") == "2"
+        and isinstance(methods, list)
+        and all(isinstance(m, str) for m in methods)
+        and "pwd" in methods
+        and bool({"otp", "totp"}.intersection(methods))
+    )
+    tenant_id = uuid.UUID(tenant["tenant_id"])
+    ref = hashlib.sha256(
+        json.dumps(
+            [origin["iss"], origin["sub"], sid, origin["auth_time"]],
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return {
+        "source": "auth_connect_session_v1",
+        "tenant_id": str(tenant_id),
+        "subject": origin["sub"],
+        "session_ref": ref,
+        "second_factor_at": datetime.fromtimestamp(origin["auth_time"], UTC).isoformat()
+        if mfa
+        else None,
+        "observed_at": datetime.fromtimestamp(now, UTC).isoformat(),
+        "expires_at": datetime.fromtimestamp(origin["exp"], UTC).isoformat(),
+    }
+
+
+async def current_member(tenant_id, subject):
+    db = get_db_session()
+    await set_current_tenant_id_guc(db, tenant_id)
+    member = await get_tenant_membership_row(db, tenant_id, keycloak_sub=subject)
+    if (
+        member is None
+        or member.keycloak_sub != subject
+        or not member.is_active
+        or member.deleted_at is not None
+    ):
+        raise SessionDenied()
+    from api.domain.operator.bans import ban_book
+
+    if not ban_book().user_may_enter(tenant_id, member.id):
+        raise SessionDenied()
+    return str(member.id)
+
+
+@router.get("/connect-session-context", include_in_schema=False)
+async def connect_session_context(request: Request):
+    headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+    try:
+        authorization = request.headers.get("authorization", "")
+        if not authorization.startswith("Bearer "):
+            raise SessionDenied()
+        tenant = try_decode_tenant_session_jwt(credential(authorization[7:]))
+        if not tenant:
+            raise SessionDenied()
+        tid = uuid.UUID(tenant["tenant_id"])
+        if uuid.UUID(request.headers.get("x-tenant-id", "")) != tid:
+            raise SessionDenied()
+        original = credential(request.headers.get("x-auth-session-token"))
+        origin = await get_keycloak_jwt_validator().validate(original)
+        async with httpx.AsyncClient(
+            timeout=5, trust_env=False, follow_redirects=False
+        ) as client:
+            active = await introspect_access_token(original, client=client)
+        facts = verified_facts(tenant, origin, active)
+        facts["member_id"] = await current_member(tid, facts["subject"])
+        return JSONResponse(facts, headers=headers)
+    except (jwt.InvalidTokenError, SessionDenied, ValueError, KeyError, TypeError):
+        return JSONResponse(
+            {"detail": "Verified browser session required"},
+            status_code=403,
+            headers=headers,
+        )
+    except (httpx.HTTPError, TimeoutError, jwt.PyJWKClientError, SQLAlchemyError):
+        return JSONResponse(
+            {"detail": "Session verification unavailable"},
+            status_code=503,
+            headers=headers,
+        )
