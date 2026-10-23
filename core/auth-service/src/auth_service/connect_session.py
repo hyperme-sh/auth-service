@@ -84,23 +84,21 @@ def confidential_introspection_credentials():
     return client_id, secret
 
 
-def verified_facts(tenant, origin, active, *, now=None):
-    """Only called after signature verification; strict types resist claim coercion."""
+def verified_issuer_facts(origin, active, *, now=None):
+    """Signed, introspected browser identity; independent of tenant/host roles."""
     now = int(time.time()) if now is None else now
-    if not all(isinstance(value, dict) for value in (tenant, origin, active)):
-        raise SessionDenied()
     if (
-        tenant.get("panopticon_auth") != "tenant_session"
-        or is_smoke_session(tenant)
-        or tenant.get("azp") != BROWSER_CLIENT
-        or origin.get("azp") != BROWSER_CLIENT
-        or origin.get("iss") != settings.keycloak_issuer.rstrip("/")
-        or not isinstance(origin.get("sub"), str)
-        or not origin["sub"]
-        or origin["sub"] != tenant.get("sub")
-        or active.get("active") is not True
-        or active.get("sub") != origin["sub"]
-        or active.get("client_id") != BROWSER_CLIENT
+        not isinstance(origin, dict)
+        or not isinstance(active, dict)
+        or (
+            origin.get("azp") != BROWSER_CLIENT
+            or origin.get("iss") != settings.keycloak_issuer.rstrip("/")
+            or not isinstance(origin.get("sub"), str)
+            or not origin["sub"]
+            or active.get("active") is not True
+            or active.get("sub") != origin["sub"]
+            or active.get("client_id") != BROWSER_CLIENT
+        )
     ):
         raise SessionDenied()
     sid = origin.get("sid") or origin.get("session_state")
@@ -128,7 +126,6 @@ def verified_facts(tenant, origin, active, *, now=None):
         and "pwd" in methods
         and bool({"otp", "totp"}.intersection(methods))
     )
-    tenant_id = uuid.UUID(tenant["tenant_id"])
     ref = hashlib.sha256(
         json.dumps(
             [origin["iss"], origin["sub"], sid, origin["auth_time"]],
@@ -136,9 +133,7 @@ def verified_facts(tenant, origin, active, *, now=None):
         ).encode()
     ).hexdigest()
     return {
-        "source": "auth_connect_session_v2",
         "max_session_age_seconds": MAX_CONNECT_SESSION_AGE_SECONDS,
-        "tenant_id": str(tenant_id),
         "subject": origin["sub"],
         "session_ref": ref,
         "second_factor_at": datetime.fromtimestamp(origin["auth_time"], UTC).isoformat()
@@ -147,6 +142,64 @@ def verified_facts(tenant, origin, active, *, now=None):
         "observed_at": datetime.fromtimestamp(now, UTC).isoformat(),
         "expires_at": datetime.fromtimestamp(origin["exp"], UTC).isoformat(),
     }
+
+
+def verified_facts(tenant, origin, active, *, now=None):
+    if (
+        not isinstance(tenant, dict)
+        or not isinstance(origin, dict)
+        or (
+            tenant.get("panopticon_auth") != "tenant_session"
+            or is_smoke_session(tenant)
+            or tenant.get("azp") != BROWSER_CLIENT
+            or tenant.get("sub") != origin.get("sub")
+        )
+    ):
+        raise SessionDenied()
+    return verified_issuer_facts(origin, active, now=now) | {
+        "source": "auth_connect_session_v2",
+        "tenant_id": str(uuid.UUID(tenant["tenant_id"])),
+    }
+
+
+@router.get("/connect-session-end-context", include_in_schema=False)
+async def connect_session_end_context(request: Request):
+    """Only ending this verified issuer session: no tenant/owner grants are issued."""
+    headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+    try:
+        original = credential(request.headers.get("x-auth-session-token"))
+        origin = await get_keycloak_jwt_validator().validate(original)
+        client_id, client_secret = confidential_introspection_credentials()
+        async with httpx.AsyncClient(
+            timeout=5, trust_env=False, follow_redirects=False
+        ) as client:
+            try:
+                active = await introspect_access_token(
+                    original,
+                    client=client,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                )
+            except (ValueError, TypeError):
+                raise SessionUnavailable() from None
+        introspection_shape(active)
+        facts = verified_issuer_facts(origin, active)
+        facts.pop("second_factor_at")
+        return JSONResponse(
+            facts | {"source": "auth_connect_session_end_v1"}, headers=headers
+        )
+    except (jwt.InvalidTokenError, SessionDenied, ValueError, KeyError, TypeError):
+        return JSONResponse(
+            {"detail": "Verified browser session required"},
+            status_code=403,
+            headers=headers,
+        )
+    except (SessionUnavailable, httpx.HTTPError, TimeoutError, jwt.PyJWKClientError):
+        return JSONResponse(
+            {"detail": "Session verification unavailable"},
+            status_code=503,
+            headers=headers,
+        )
 
 
 async def current_member(tenant_id, subject):

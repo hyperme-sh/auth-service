@@ -366,3 +366,46 @@ def test_absolute_connect_session_age_cannot_be_extended_by_refresh():
     with pytest.raises(SessionDenied):
         verified_facts(tenant, origin, active, now=now)
     assert verified_facts(tenant, origin, active, now=now - 1)["session_ref"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("valid", [True, False])
+async def test_end_context_authenticates_original_session_without_any_tenant_or_host(
+    http_client, valid
+):
+    import time
+
+    _, origin, active = claims()
+    stamp = int(time.time())
+    origin.update(exp=stamp + 300, iat=stamp, auth_time=stamp - 30)
+    if not valid:
+        active = {"active": False}
+    validator = type("Validator", (), {"validate": AsyncMock(return_value=origin)})()
+    with (
+        patch(
+            "auth_service.connect_session.get_keycloak_jwt_validator",
+            return_value=validator,
+        ),
+        patch(
+            "auth_service.connect_session.introspect_access_token",
+            AsyncMock(return_value=active),
+        ),
+        patch(
+            "auth_service.connect_session.current_member",
+            AsyncMock(side_effect=AssertionError("must not read tenant membership")),
+        ) as member,
+    ):
+        response = await http_client.get(
+            "/auth/connect-session-end-context",
+            headers={"X-Auth-Session-Token": "original"},
+        )
+    assert response.status_code == (200 if valid else 403)
+    member.assert_not_called()
+    if valid:
+        body = response.json()
+        assert (
+            body["source"] == "auth_connect_session_end_v1"
+            and len(body["session_ref"]) == 64
+        )
+        assert not {"tenant_id", "member_id", "second_factor_at"}.intersection(body)
+        assert response.headers["cache-control"] == "no-store"
