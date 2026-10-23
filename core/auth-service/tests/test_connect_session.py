@@ -11,6 +11,16 @@ from controlplane_api.config import settings
 TENANT = str(uuid.uuid4())
 
 
+@pytest.fixture(autouse=True)
+def confidential_client(monkeypatch):
+    monkeypatch.setenv(
+        "AUTH_CONNECT_INTROSPECTION_CLIENT_ID", "auth-connect-introspection"
+    )
+    monkeypatch.setenv(
+        "AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET", "test-private-introspection-secret"
+    )
+
+
 def claims():
     return (
         {
@@ -212,3 +222,136 @@ async def test_introspection_outages_are_distinct_from_explicit_denial(
     assert response.headers["cache-control"] == "no-store"
     assert "PRIVATE_" not in response.text and "private-" not in response.text
     member.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_introspection_uses_confidential_caller_but_observes_browser_client():
+    from urllib.parse import parse_qs
+
+    import httpx
+    from auth_service.connect_session import confidential_introspection_credentials
+    from auth_service.keycloak_oidc import introspect_access_token
+
+    caller, secret = confidential_introspection_credentials()
+
+    def handler(request):
+        form = parse_qs(request.content.decode())
+        assert form["client_id"] == ["auth-connect-introspection"]
+        assert form["client_secret"] == ["test-private-introspection-secret"]
+        assert form["token"] == ["original-browser-token"]
+        return httpx.Response(
+            200,
+            json={"active": True, "sub": "owner", "client_id": "controlplane-frontend"},
+        )
+
+    with patch(
+        "auth_service.keycloak_oidc._issuer_base",
+        return_value="https://issuer.test/realms/test",
+    ):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await introspect_access_token(
+                "original-browser-token",
+                client=client,
+                client_id=caller,
+                client_secret=secret,
+            )
+    assert result["client_id"] == "controlplane-frontend"
+
+
+@pytest.mark.parametrize(
+    "client_id,secret",
+    [
+        (None, "secret"),
+        ("auth-connect-introspection", None),
+        ("controlplane-frontend", "secret"),
+    ],
+)
+def test_missing_or_public_introspection_configuration_refuses(
+    monkeypatch, client_id, secret
+):
+    from auth_service.connect_session import (
+        SessionUnavailable,
+        confidential_introspection_credentials,
+    )
+
+    monkeypatch.delenv("AUTH_CONNECT_INTROSPECTION_CLIENT_ID", raising=False)
+    monkeypatch.delenv("AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET", raising=False)
+    if client_id is not None:
+        monkeypatch.setenv("AUTH_CONNECT_INTROSPECTION_CLIENT_ID", client_id)
+    if secret is not None:
+        monkeypatch.setenv("AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET", secret)
+    with pytest.raises(SessionUnavailable):
+        confidential_introspection_credentials()
+
+
+@pytest.mark.asyncio
+async def test_only_verified_membership_revocation_has_durable_revocation_code(
+    http_client,
+):
+    import time
+
+    from auth_service.connect_session import MembershipRevoked
+
+    tenant, origin, active = claims()
+    now = int(time.time())
+    origin.update(exp=now + 300, iat=now, auth_time=now - 30)
+    validator = type("Validator", (), {"validate": AsyncMock(return_value=origin)})()
+    with (
+        patch(
+            "auth_service.connect_session.try_decode_tenant_session_jwt",
+            return_value=tenant,
+        ),
+        patch(
+            "auth_service.connect_session.get_keycloak_jwt_validator",
+            return_value=validator,
+        ),
+        patch(
+            "auth_service.connect_session.introspect_access_token",
+            AsyncMock(return_value=active),
+        ),
+        patch(
+            "auth_service.connect_session.current_member",
+            AsyncMock(side_effect=MembershipRevoked()),
+        ),
+    ):
+        response = await http_client.get(
+            "/auth/connect-session-context",
+            headers={
+                "Authorization": "Bearer tenant",
+                "X-Auth-Session-Token": "original",
+                "X-Tenant-ID": TENANT,
+            },
+        )
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_revoked"
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_checked_in_introspection_client_is_confidential_and_has_no_login_flows():
+    import json
+    from pathlib import Path
+
+    realm = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "infra/keycloak/import/controlplane-realm.json"
+        ).read_text()
+    )
+    client = next(
+        c for c in realm["clients"] if c["clientId"] == "auth-connect-introspection"
+    )
+    assert client["publicClient"] is False
+    assert client["clientAuthenticatorType"] == "client-secret"
+    assert all(
+        client[k] is False
+        for k in (
+            "standardFlowEnabled",
+            "implicitFlowEnabled",
+            "directAccessGrantsEnabled",
+            "serviceAccountsEnabled",
+            "fullScopeAllowed",
+        )
+    )
+    assert (
+        "secret" not in client
+    )  # Keycloak generates it; no reusable secret is checked in.

@@ -4,7 +4,6 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-
 from controlplane_api.config import settings
 
 
@@ -93,12 +92,18 @@ async def introspect_access_token(
     access_token: str,
     *,
     client: httpx.AsyncClient | None = None,
+    client_id: str | None = None,
+    client_secret: str | None = None,
 ) -> dict[str, Any]:
+    if (client_id is None) != (client_secret is None):
+        raise ValueError("Introspection credentials must be supplied together")
     data = {
         "token": access_token,
         "token_type_hint": "access_token",
-        "client_id": settings.keycloak_client_id,
-        "client_secret": settings.keycloak_client_secret,
+        "client_id": settings.keycloak_client_id if client_id is None else client_id,
+        "client_secret": settings.keycloak_client_secret
+        if client_secret is None
+        else client_secret,
     }
     close = client is None
     c = client or httpx.AsyncClient(timeout=30.0)

@@ -7,6 +7,7 @@ introspected on every request; neither credential is retained or returned.
 
 import hashlib
 import json
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -34,6 +35,10 @@ BROWSER_CLIENT = "controlplane-frontend"
 
 class SessionDenied(ValueError):
     pass
+
+
+class MembershipRevoked(SessionDenied):
+    """Only raised after both credentials were verified and live membership denied."""
 
 
 class SessionUnavailable(RuntimeError):
@@ -64,6 +69,18 @@ def credential(value):
     ):
         raise SessionDenied()
     return value
+
+
+def confidential_introspection_credentials():
+    # Payout authentication must never reuse the public browser client.
+    try:
+        client_id = credential(os.getenv("AUTH_CONNECT_INTROSPECTION_CLIENT_ID"))
+        secret = credential(os.getenv("AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET"))
+    except SessionDenied:
+        raise SessionUnavailable() from None
+    if client_id == BROWSER_CLIENT:
+        raise SessionUnavailable()
+    return client_id, secret
 
 
 def verified_facts(tenant, origin, active, *, now=None):
@@ -138,11 +155,11 @@ async def current_member(tenant_id, subject):
         or not member.is_active
         or member.deleted_at is not None
     ):
-        raise SessionDenied()
+        raise MembershipRevoked()
     from api.domain.operator.bans import ban_book
 
     if not ban_book().user_may_enter(tenant_id, member.id):
-        raise SessionDenied()
+        raise MembershipRevoked()
     return str(member.id)
 
 
@@ -161,11 +178,17 @@ async def connect_session_context(request: Request):
             raise SessionDenied()
         original = credential(request.headers.get("x-auth-session-token"))
         origin = await get_keycloak_jwt_validator().validate(original)
+        client_id, client_secret = confidential_introspection_credentials()
         async with httpx.AsyncClient(
             timeout=5, trust_env=False, follow_redirects=False
         ) as client:
             try:
-                active = await introspect_access_token(original, client=client)
+                active = await introspect_access_token(
+                    original,
+                    client=client,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                )
             except (ValueError, TypeError):
                 # Malformed HTTP-200 JSON is an outage, not an identity denial.
                 raise SessionUnavailable() from None
@@ -173,6 +196,15 @@ async def connect_session_context(request: Request):
         facts = verified_facts(tenant, origin, active)
         facts["member_id"] = await current_member(tid, facts["subject"])
         return JSONResponse(facts, headers=headers)
+    except MembershipRevoked:
+        return JSONResponse(
+            {
+                "detail": "Verified active tenant member required",
+                "code": "membership_revoked",
+            },
+            status_code=403,
+            headers=headers,
+        )
     except (jwt.InvalidTokenError, SessionDenied, ValueError, KeyError, TypeError):
         return JSONResponse(
             {"detail": "Verified browser session required"},

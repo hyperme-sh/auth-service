@@ -93,6 +93,7 @@ def test_existing_clients_and_bootstrap_user_remain() -> None:
     realm = _realm()
     client_ids = {c["clientId"] for c in realm["clients"]}
     assert client_ids == {
+        "auth-connect-introspection",
         "controlplane-frontend",
         "controlplane-mobile",
         "controlplane-device",
