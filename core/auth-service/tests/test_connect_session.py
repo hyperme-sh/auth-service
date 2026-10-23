@@ -157,7 +157,7 @@ async def test_endpoint_rechecks_exact_member_and_active_issuer(http_client):
         )
     assert response.status_code == 200
     member.assert_awaited_once_with(uuid.UUID(TENANT), "owner")
-    assert response.json()["source"] == "auth_connect_session_v1"
+    assert response.json()["source"] == "auth_connect_session_v2"
 
 
 @pytest.mark.asyncio
@@ -355,3 +355,14 @@ def test_checked_in_introspection_client_is_confidential_and_has_no_login_flows(
     assert (
         "secret" not in client
     )  # Keycloak generates it; no reusable secret is checked in.
+
+
+def test_absolute_connect_session_age_cannot_be_extended_by_refresh():
+    from auth_service.connect_session import MAX_CONNECT_SESSION_AGE_SECONDS
+
+    tenant, origin, active = claims()
+    now = origin["auth_time"] + MAX_CONNECT_SESSION_AGE_SECONDS
+    origin.update(iat=now - 1, exp=now + 300)
+    with pytest.raises(SessionDenied):
+        verified_facts(tenant, origin, active, now=now)
+    assert verified_facts(tenant, origin, active, now=now - 1)["session_ref"]

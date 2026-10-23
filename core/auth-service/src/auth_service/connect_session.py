@@ -31,6 +31,7 @@ from auth_service.keycloak_oidc import introspect_access_token
 
 router = APIRouter()
 BROWSER_CLIENT = "controlplane-frontend"
+MAX_CONNECT_SESSION_AGE_SECONDS = 86400
 
 
 class SessionDenied(ValueError):
@@ -115,6 +116,8 @@ def verified_facts(tenant, origin, active, *, now=None):
             raise SessionDenied()
     if not 0 < origin["auth_time"] <= origin["iat"] <= now < origin["exp"]:
         raise SessionDenied()
+    if now - origin["auth_time"] >= MAX_CONNECT_SESSION_AGE_SECONDS:
+        raise SessionDenied()
     # This contract requires a reviewed Keycloak LoA-2 password + OTP flow.
     # No substring matches, refresh timestamps, tenant-token AMR or caller claims.
     methods = origin.get("amr")
@@ -133,7 +136,8 @@ def verified_facts(tenant, origin, active, *, now=None):
         ).encode()
     ).hexdigest()
     return {
-        "source": "auth_connect_session_v1",
+        "source": "auth_connect_session_v2",
+        "max_session_age_seconds": MAX_CONNECT_SESSION_AGE_SECONDS,
         "tenant_id": str(tenant_id),
         "subject": origin["sub"],
         "session_ref": ref,
