@@ -153,7 +153,7 @@ def configured(server, monkeypatch):
     return base, admin, secret, seed
 
 
-def login(configured, username, acr, *, bad_otp=False):
+def login(configured, username, acr, *, bad_otp=False, delay_at=None):
     base, _, secret, seed = configured
     verifier = secrets.token_urlsafe(48)
     challenge = (
@@ -189,6 +189,8 @@ def login(configured, username, acr, *, bad_otp=False):
         )
         challenged = 'id="otp"' in response.text
         if challenged:
+            if delay_at == "otp":
+                time.sleep(1.1)  # Cross a Keycloak epoch-second boundary.
             form = Form()
             form.feed(response.text)
             assert form.action
@@ -206,6 +208,8 @@ def login(configured, username, acr, *, bad_otp=False):
         location = urljoin(base, response.headers["location"])
         assert location.startswith("http://localhost:3000/callback?")
         code = parse_qs(urlparse(location).query)["code"][0]
+        if delay_at == "exchange":
+            time.sleep(1.1)  # The callback can take longer than one second.
         response = c.post(
             base + "/realms/controlplane/protocol/openid-connect/token",
             data={
@@ -246,6 +250,24 @@ def test_real_password_and_otp_claims_and_introspection(configured, acr):
     assert claims["acr"] == "2" and set(claims["amr"]) == {"pwd", "otp"}
     facts = verified_issuer_facts(claims, active)
     assert facts["second_factor_at"] is not None
+
+
+@pytest.mark.parametrize("delay_at", ["otp", "exchange"])
+def test_real_mfa_references_survive_browser_delays(configured, delay_at):
+    claims, active, challenged = login(configured, "with-otp", "2", delay_at=delay_at)
+    assert challenged
+    assert claims["acr"] == "2" and set(claims["amr"]) == {"pwd", "otp"}
+    assert verified_issuer_facts(claims, active)["second_factor_at"] is not None
+    _base, admin, _, _ = configured
+    for execution in issuer.executions(admin, issuer.FLOW):
+        if execution.get("providerId") in {
+            "auth-username-password-form",
+            "auth-otp-form",
+        }:
+            config = admin.get(
+                "/authentication/config/" + execution["authenticationConfig"]
+            )["config"]
+            assert config["default.reference.maxAge"] == "300"
 
 
 def test_password_only_cannot_supply_verified_second_factor(configured):
