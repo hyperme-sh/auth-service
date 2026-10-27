@@ -863,3 +863,25 @@ def test_portal_logout_redirects_converge_without_losing_client_settings(monkeyp
     assert admin.client["redirectUris"] == ["https://portal.test.hyperme.sh/*"]
     imported = next(c for c in _realm()["clients"] if c["clientId"] == "controlplane-frontend")
     assert admin.client["attributes"]["post.logout.redirect.uris"] == imported["attributes"]["post.logout.redirect.uris"]
+
+
+def test_native_issuer_updater_is_opt_in_and_test_only(monkeypatch, capsys):
+    import sys
+    from types import SimpleNamespace
+    import configure_idp_brokers as brokers
+    calls = []
+    monkeypatch.setattr(brokers, "ensure_hypermesh_native", lambda _: None)
+    monkeypatch.setattr(brokers, "ensure_hypermesh_host_setup", lambda _: None)
+    monkeypatch.setattr(brokers, "ensure_s3rch_web", lambda _: None)
+    monkeypatch.setattr(brokers, "configure", lambda _: None)
+    monkeypatch.setitem(sys.modules, "connect_issuer", SimpleNamespace(configure=lambda admin,secret:calls.append(secret)))
+    monkeypatch.delenv("PAYMENT_CONNECT_NATIVE_ISSUER_ENABLED", raising=False)
+    assert brokers.apply_realm_updates(object()) == 0 and calls == []
+    monkeypatch.setenv("PAYMENT_CONNECT_NATIVE_ISSUER_ENABLED", "true")
+    monkeypatch.delenv("KC_TEST_REGISTRATION", raising=False)
+    assert brokers.apply_realm_updates(object()) == 1 and calls == []
+    monkeypatch.setenv("KC_TEST_REGISTRATION", "1")
+    monkeypatch.setenv("AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET", "secret-must-not-be-logged")
+    assert brokers.apply_realm_updates(object()) == 0
+    assert calls == ["secret-must-not-be-logged"]
+    assert "secret-must-not-be-logged" not in str(capsys.readouterr())
