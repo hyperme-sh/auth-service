@@ -68,17 +68,40 @@ def server():
         container.reload()
         port = container.attrs["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
         base = "http://127.0.0.1:" + port
-        with httpx.Client(trust_env=False) as c:
-            deadline = time.monotonic() + 90
+        # Quarkus augmentation can exceed 90s on the shared two-CPU runner.
+        # Keep a bounded cold-start allowance without slowing healthy starts or
+        # skipping the real MFA assertions. Never print bootstrap credentials.
+        started = time.monotonic()
+        deadline = started + 180
+        with httpx.Client(trust_env=False, timeout=2) as c:
             while True:
+                container.reload()
+                state = container.attrs["State"]
+                if state.get("Status") != "running":
+                    pytest.fail(
+                        "Disposable Keycloak exited before readiness "
+                        f"(status={state.get('Status')}, exit={state.get('ExitCode')}, "
+                        f"oom={state.get('OOMKilled')})",
+                        pytrace=False,
+                    )
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    pytest.fail(
+                        "Disposable Keycloak startup exceeded 180s "
+                        f"(status={state.get('Status')}, oom={state.get('OOMKilled')})",
+                        pytrace=False,
+                    )
                 try:
-                    if c.get(base + "/realms/master").status_code == 200:
+                    if (
+                        c.get(
+                            base + "/realms/master", timeout=min(2, remaining)
+                        ).status_code
+                        == 200
+                    ):
                         break
                 except httpx.HTTPError:
                     pass
-                if time.monotonic() > deadline:
-                    pytest.fail("Disposable Keycloak did not start")
-                time.sleep(1)
+                time.sleep(min(1, max(0, deadline - time.monotonic())))
         yield base, password
     finally:
         container.remove(force=True, v=True)
