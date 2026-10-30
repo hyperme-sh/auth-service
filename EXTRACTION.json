@@ -1,0 +1,16 @@
+{
+  "repository": "FyberLabs/auth-service",
+  "source_repository": "FyberLabs/panopticon",
+  "source_revision": "2d92d13f38d491c298631b9b9296979c1fbadd19",
+  "selected_paths": [
+    "core/auth-service"
+  ],
+  "filtered_history_head": "84947ee4809dc7f093c20157d412745f685c722e",
+  "retained_files": 46,
+  "inventory_sha256": "ea6ce1ff8370f0ecb58e83f4f9970f257ff75fc26e291adb40958a2ec1a496ca",
+  "blob_and_mode_equality_verified": true,
+  "rename_predecessors_followed": false,
+  "standalone_release_verified": false,
+  "cutover_verified": false,
+  "actions_enabled": false
+}
