@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "auth-service"
+version = "0.2.0"
+requires-python = ">=3.13"
+dependencies = [
+    "controlplane-api",
+    "controlplane-identity",
+    "httpx>=0.28.1",
+    "redis>=5.0.0",
+    "bcrypt>=4.2.0",
+    "controlplane-core",
+    "eth-account>=0.13.0",
+    "eth-utils>=5.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1.0",
+    "httpx>=0.28.0",
+    "panopticon-tests",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.2.0",
+    "respx>=0.22.0",
+    "testcontainers>=4.9.0",
+]
+
+[tool.uv.sources]
+controlplane-api = { workspace = true }
+controlplane-identity = { workspace = true }
+controlplane-core = { workspace = true }
+panopticon-tests = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/auth_service"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/auth_service"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Workspace packages: pytest resolves paths relative to this pyproject.toml.
+pythonpath = [
+    "src",
+    "../lib/controlplane-core/src",
+    "../lib/controlplane-db/src",
+    "../events/src",
+    "../tests/src",
+]
+testpaths = ["tests"]
