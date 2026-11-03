@@ -269,10 +269,10 @@ async def test_authorize_member_and_host_and_unknown(tenant_uuid):
     member = type(
         "U",
         (),
-        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid, "is_active": True},
+        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid, "is_active": True, "keycloak_sub": "kc-sub"},
     )()
     tenant_admin = type("R", (), {"name": "admin", "permissions": []})()
-    platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None})()
+    platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None, "is_active": True, "keycloak_sub": "kc-sub"})()
     host_role = type(
         "R",
         (),

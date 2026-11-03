@@ -69,6 +69,8 @@ async def _user_by_email_or_sub(
             stmt = stmt.where(User.tenant_id == tenant_id)
         row = (await session.execute(stmt)).scalar_one_or_none()
         if row is not None:
+            if row.keycloak_sub and row.keycloak_sub != sub:
+                return None
             return row
     if sub:
         stmt = select(User).where(
@@ -132,7 +134,7 @@ async def authorize_tenant_switch(
     platform_user = await _user_by_email_or_sub(
         db, email=email, sub=sub, platform=True
     )
-    if platform_user is None:
+    if platform_user is None or not platform_user.is_active:
         return None
     role = await _role_for(db, platform_user)
     if _role_has_host_manage(role):

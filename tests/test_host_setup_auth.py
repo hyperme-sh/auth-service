@@ -1,3 +1,4 @@
+from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
 """Setup identity cannot become a general tenant credential."""
 import time
 from types import SimpleNamespace
@@ -105,7 +106,7 @@ async def test_host_membership_grant_drops_other_identity_authority(http_client,
     monkeypatch.setattr(routes, "grant_held_roles", grant)
     response = await http_client.post("/auth/host-setup/enrollment/grant",
         headers={"Authorization": "Bearer " + issue(realm_access={"roles": ["admin"]}, groups=["admin"])},
-        json={"tenant_id": str(tenant_uuid), "held_roles": ["host"]})
+        json={"tenant_id": str(MARKETPLACE_TENANT_ID), "held_roles": ["host"]})
     assert response.status_code == 200, response.text
     assert response.json()["granted"] == ["host"]
     user = grant.await_args.args[1]

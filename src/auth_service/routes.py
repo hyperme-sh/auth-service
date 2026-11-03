@@ -285,11 +285,8 @@ async def auth_switch_tenant(
         groups=groups_from_claims(claims),
         hosted_domains=hosted_domains_from_claims(claims),
     )
-    incoming = claims.get("permissions")
-    if isinstance(incoming, list):
-        proposed.extend(str(p) for p in incoming)
     access = mint_tenant_session_jwt(
-        claims={**claims, "permissions": []},
+        claims={**claims, "permissions": [], "realm_access": {"roles": []}},
         tenant_id=body.tenant_id,
         extra_roles=[grant.role_name],
         extra_permissions=operator_binding.permissions(
@@ -581,6 +578,11 @@ async def auth_enrollment_grant(
     user: CurrentAuthUser,
     session: AsyncSession = Depends(get_db_session),
 ) -> EnrollmentGrantResponse:
+    from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
+
+    if body.tenant_id != MARKETPLACE_TENANT_ID:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            detail="Public enrollment is limited to the marketplace tenant")
     raw = request.headers.get("X-Tenant-ID")
     if raw:
         try:
