@@ -566,7 +566,7 @@ async def enrollment_marketplace() -> dict[str, str]:
         "renter JWT). Not POST /api/v1/users self-join. Not POST /api/v1/tenants/. "
         "May add renter or host for the identified person, then INSERT the "
         "marketplace users row and those groups. Org admin is not added unless "
-        "the Keycloak token already has it, and is not granted together with "
+        "a target-tenant-bound token already has it, and is not granted together with "
         "renter/host (invite stays POST /api/v1/users). "
         "No new events. No printed tokens."
     ),

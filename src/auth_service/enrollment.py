@@ -2,7 +2,7 @@
 
 May add renter or host for the identified person, then INSERT the
 marketplace users row and those groups. Org admin is not added unless
-the Keycloak token already has it, and is not granted together with
+a target-tenant-bound token already has it, and is not granted together with
 renter/host — that invite stays POST /api/v1/users.
 Reuses the existing renter group, identity-bound host organization + host group, and
 portal admin role. Membership is an internal users-row write
@@ -174,12 +174,14 @@ def _token_held_roles(user: AuthMeResponse) -> set[str]:
 def held_roles_from_identity(
     user: AuthMeResponse,
     requested: list[str] | None = None,
+    *,
+    tenant_id: uuid.UUID = MARKETPLACE_TENANT_ID,
 ) -> tuple[frozenset[str], tuple[str, ...]]:
     """Choose renter/host for the identified person; org admin stays invite-only.
 
     A new Keycloak user is not in the renter group. Enrollment may add
     renter or host, then INSERT the marketplace users row and those
-    groups. Org admin is not added unless the token already has it, and
+    groups. Org admin requires a target-tenant-bound token that already has it, and
     is never granted in the same job as renter/host. Invite stays
     POST /api/v1/users (can_invite_members).
     """
@@ -204,7 +206,11 @@ def held_roles_from_identity(
             refused.append(name)
             continue
         if name == HELD_ORG_ADMIN:
-            if asked_renter_or_host or HELD_ORG_ADMIN not in token_held:
+            if (
+                asked_renter_or_host
+                or HELD_ORG_ADMIN not in token_held
+                or user.tenant_id != tenant_id
+            ):
                 refused.append(name)
             else:
                 granted.add(HELD_ORG_ADMIN)
@@ -453,7 +459,7 @@ async def grant_held_roles(
     await _require_tenant(session, tenant_id)
     await set_current_tenant_id_guc(session, tenant_id)
 
-    held, refused = held_roles_from_identity(user, requested)
+    held, refused = held_roles_from_identity(user, requested, tenant_id=tenant_id)
     host_org_id = None
     if HELD_HOST in held:
         _email_norm(user)  # Reject invalid identity before reserving owner metadata.

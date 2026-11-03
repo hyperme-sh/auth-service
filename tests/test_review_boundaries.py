@@ -73,3 +73,32 @@ async def test_membership_without_resolved_role_cannot_switch(has_role_id):
             AuthMeResponse(sub='caller',email='caller@example.com'),tid,
             session=_FakeSession(values))
     assert grant is None
+
+@pytest.mark.parametrize('scope', ['foreign', 'unscoped', 'marketplace'])
+@pytest.mark.parametrize('role', ['admin', 'org_admin'])
+def test_org_admin_enrollment_requires_target_tenant_authority(scope, role):
+    from auth_service.enrollment import held_roles_from_identity
+    from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
+    tenant_id = {'foreign': uuid.uuid4(), 'unscoped': None,
+                 'marketplace': MARKETPLACE_TENANT_ID}[scope]
+    user = AuthMeResponse(sub='caller', tenant_id=tenant_id, roles=[role])
+    granted, refused = held_roles_from_identity(user, ['org_admin'])
+    assert ('org_admin' in granted) == (scope == 'marketplace')
+    assert ('org_admin' in refused) == (scope != 'marketplace')
+
+@pytest.mark.asyncio
+async def test_foreign_admin_enrollment_does_not_write_membership(monkeypatch):
+    from auth_service import enrollment
+    from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
+    monkeypatch.setattr(enrollment, '_bound_wallet', AsyncMock(return_value=None))
+    monkeypatch.setattr(enrollment, '_get_or_create_role', AsyncMock())
+    monkeypatch.setattr(enrollment, '_require_tenant', AsyncMock())
+    monkeypatch.setattr(enrollment, 'set_current_tenant_id_guc', AsyncMock())
+    member = AsyncMock()
+    monkeypatch.setattr(enrollment, '_ensure_membership_user', member)
+    result = await enrollment.grant_held_roles(
+        AsyncMock(), AuthMeResponse(sub='caller', tenant_id=uuid.uuid4(), roles=['admin']),
+        tenant_id=MARKETPLACE_TENANT_ID, requested=['org_admin'])
+    assert result.granted == ()
+    assert result.refused == ('org_admin',)
+    member.assert_not_awaited()
