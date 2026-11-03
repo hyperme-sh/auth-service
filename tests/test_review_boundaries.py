@@ -60,3 +60,16 @@ async def test_marketplace_enrollment_remains_available(monkeypatch):
     response=await routes.auth_enrollment_grant(EnrollmentGrantRequest(tenant_id=MARKETPLACE_TENANT_ID,held_roles=['renter']),Request({'type':'http','headers':[]}),AuthMeResponse(sub='caller'),AsyncMock())
     assert response.granted == ['renter'] or response.granted == ('renter',)
     assert grant.await_args.kwargs['tenant_id']==MARKETPLACE_TENANT_ID
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('has_role_id', [False, True])
+async def test_membership_without_resolved_role_cannot_switch(has_role_id):
+    tid=uuid.uuid4()
+    member=SimpleNamespace(keycloak_sub='caller',is_active=True,tenant_id=tid,
+                           role_id=uuid.uuid4() if has_role_id else None)
+    values=[tid,member]+([None] if has_role_id else [])
+    with patch.object(tenant_switch,'set_current_tenant_id_guc',new=AsyncMock()):
+        grant=await tenant_switch.authorize_tenant_switch(
+            AuthMeResponse(sub='caller',email='caller@example.com'),tid,
+            session=_FakeSession(values))
+    assert grant is None

@@ -122,10 +122,12 @@ async def authorize_tenant_switch(
         if not member.is_active:
             return None
         role = await _role_for(db, member)
+        if role is None:
+            return None
         if role and role.name in {"test-network-operator", "entra-network-operator"} and member.keycloak_sub != sub:
             return None
         return TenantSwitchGrant(
-            role_name=(role.name if role else "admin"),
+            role_name=role.name,
             permissions=_role_permissions(role),
             user_id=getattr(member, "id", None),
         )
@@ -139,7 +141,7 @@ async def authorize_tenant_switch(
     role = await _role_for(db, platform_user)
     if _role_has_host_manage(role):
         return TenantSwitchGrant(
-            role_name=(role.name if role else "admin"),
+            role_name=role.name,
             permissions=_role_permissions(role),
             user_id=getattr(platform_user, "id", None),
         )
