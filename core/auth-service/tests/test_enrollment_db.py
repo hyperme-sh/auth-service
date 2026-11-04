@@ -44,7 +44,7 @@ from controlplane_db.models import (
     UserGroupMembership,
 )
 from controlplane_db.session import normalize_database_url
-from panopticon_tests.fixtures.postgres import (
+from spanopticon_tests.fixtures.postgres import (
     async_db_url,
     normalize_sync_sqlalchemy_url,
     run_alembic_upgrade,

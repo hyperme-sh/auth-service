@@ -129,7 +129,7 @@ class AuthMeResponse(BaseModel):
     roles: list[str] = Field(default_factory=list)
     groups: list[str] = Field(
         default_factory=list,
-        description="Keycloak / token groups. Same membership tree as (s)panopticon groups.",
+        description="Keycloak / token groups. Same membership tree as spanopticon groups.",
     )
     scopes: list[str] = Field(default_factory=list)
     idp_provider: str | None = None

@@ -89,7 +89,7 @@ def create_app(
 
     app = FastAPI(
         lifespan=lifespan,
-        title="(s)panopticon Auth Service",
+        title="spanopticon Auth Service",
         description="Keycloak OIDC: login, callback, refresh, JWT validation, RLS session middleware.",
         version="0.2.0",
     )
