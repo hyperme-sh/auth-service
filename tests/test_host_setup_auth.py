@@ -1,7 +1,7 @@
-from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
 """Setup identity cannot become a general tenant credential."""
 import time
 from types import SimpleNamespace
+from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
 from unittest.mock import AsyncMock
 
 import jwt
@@ -16,7 +16,6 @@ from api.infrastructure.security.tenant_session_jwt import (
     try_decode_host_setup_session, try_decode_tenant_session_jwt,
 )
 from auth_service import routes
-from auth_service.tenant_switch import TenantSwitchGrant
 
 CLIENT = "hypermesh-host-setup"
 
@@ -57,8 +56,9 @@ async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_i
     _, issue = oidc
     token = issue(permissions=["HOST_MANAGE_TENANTS"], realm_access={"roles": ["admin"]})
     headers = {"Authorization": "Bearer " + token}
-    grant = AsyncMock(return_value=TenantSwitchGrant(role_name="admin", permissions=["HOST_MANAGE_TENANTS"]))
-    monkeypatch.setattr(routes, "authorize_tenant_switch", grant)
+    grant = AsyncMock(return_value=SimpleNamespace(id="member"))
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", grant)
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
     assert (await http_client.get("/auth/host-setup/me", headers=headers)).status_code == 200
     response = await http_client.post("/auth/host-setup/session", headers=headers, json={"tenant_id": str(tenant_uuid)})
     assert response.status_code == 200, response.text
@@ -82,7 +82,8 @@ async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_i
 async def test_setup_session_requires_membership_and_matching_tenant(http_client, tenant_uuid, oidc, monkeypatch):
     _, issue = oidc
     grant = AsyncMock(return_value=None)
-    monkeypatch.setattr(routes, "authorize_tenant_switch", grant)
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", grant)
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
     headers = {"Authorization": "Bearer " + issue()}
     assert (await http_client.post("/auth/host-setup/session", headers=headers, json={"tenant_id": str(tenant_uuid)})).status_code == 403
     grant.assert_awaited_once()
@@ -112,6 +113,20 @@ async def test_host_membership_grant_drops_other_identity_authority(http_client,
     user = grant.await_args.args[1]
     assert user.sub == "owner" and user.roles == [] and user.groups == []
     assert grant.await_args.kwargs["requested"] == ["host"]
+
+
+@pytest.mark.parametrize("with_header", [False, True])
+async def test_setup_grant_cannot_self_enroll_in_foreign_tenant(http_client, tenant_uuid, oidc, monkeypatch, with_header):
+    _, issue = oidc
+    grant = AsyncMock()
+    monkeypatch.setattr(routes, "grant_held_roles", grant)
+    headers = {"Authorization": "Bearer " + issue()}
+    if with_header:
+        headers["X-Tenant-ID"] = str(tenant_uuid)
+    response = await http_client.post("/auth/host-setup/enrollment/grant", headers=headers,
+        json={"tenant_id": str(tenant_uuid), "held_roles": ["host"]})
+    assert response.status_code == 403, response.text
+    grant.assert_not_awaited()
 
 
 @pytest.mark.parametrize("change", [{"purpose": "service"}, {"aud": "account"}, {"exp": 1}, {"iss": "other"}])
@@ -145,7 +160,8 @@ async def test_banned_member_cannot_exchange_setup_session(http_client, tenant_u
     import uuid
     from api.domain.operator import bans
     _, issue = oidc
-    monkeypatch.setattr(routes, "authorize_tenant_switch", AsyncMock(return_value=TenantSwitchGrant(role_name="admin", user_id=uuid.uuid4())))
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())))
+    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
     monkeypatch.setattr(bans, "ban_book", lambda: SimpleNamespace(user_may_enter=lambda *_: False))
     response = await http_client.post("/auth/host-setup/session", headers={"Authorization": "Bearer " + issue()},
         json={"tenant_id": str(tenant_uuid)})

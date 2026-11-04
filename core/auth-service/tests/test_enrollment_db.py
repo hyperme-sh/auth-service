@@ -723,3 +723,56 @@ async def test_operator_bootstrap_preserves_existing_platform_identity(db_sessio
     assert grant is not None
     assert grant.role_name == "test-network-operator"
     assert set(grant.permissions) == set(SEEDED_TEST_ADMIN_OPERATOR_CLAIMS)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("boundary", ["host", "inactive", "closed", "unbound", "other-subject", "other-tenant", "renter"])
+async def test_native_setup_uses_bound_active_host_group_without_inventing_tenant_role(
+    db_session, seed, app, boundary,
+):
+    from datetime import UTC, datetime
+    from starlette.requests import Request
+    from api.common.exceptions import ForbiddenException
+    from api.infrastructure.security.tenant_session_jwt import try_decode_host_setup_session
+    from auth_service.routes import host_setup_session
+    from auth_service.schemas import SwitchTenantRequest
+
+    subject = "native-host-" + uuid.uuid4().hex
+    person = AuthMeResponse(sub=subject, email=subject + "@example.com")
+    member = User(id=uuid.uuid4(), tenant_id=seed.tenant_id, keycloak_sub=subject,
+        email=person.email, first_name="Native", last_name="Host", gender="unspecified",
+        is_active=True, role_id=None)
+    db_session.add(member)
+    await db_session.flush()
+    granted = await grant_held_roles(db_session, person,
+        requested=[HELD_RENTER if boundary == "renter" else HELD_HOST])
+    assert not granted.refused
+    assert member.role_id is None
+    # The general tenant-switch contract must continue to reject incomplete roles.
+    assert await authorize_tenant_switch(person, seed.tenant_id, session=db_session) is None
+    tenant_id = seed.tenant_id
+    if boundary == "inactive":
+        member.is_active = False
+    elif boundary == "closed":
+        member.deleted_at = datetime.now(UTC)
+    elif boundary == "unbound":
+        member.keycloak_sub = None
+    elif boundary == "other-subject":
+        subject = "different-" + subject
+    elif boundary == "other-tenant":
+        tenant_id = uuid.uuid4()
+    await db_session.flush()
+    call = host_setup_session(SwitchTenantRequest(tenant_id=tenant_id),
+        Request({"type": "http", "headers": []}),
+        {"sub": subject, "email": person.email, "azp": "hypermesh-host-setup"}, db_session)
+    if boundary != "host":
+        with pytest.raises(ForbiddenException):
+            await call
+    else:
+        result = await call
+        claims = try_decode_host_setup_session(result.access_token)
+        assert claims["sub"] == subject
+        assert claims["tenant_id"] == str(seed.tenant_id)
+        assert claims["purpose"] == "host_setup"
+        assert "permissions" not in claims
+    assert member.role_id is None
