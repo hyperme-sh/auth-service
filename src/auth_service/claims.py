@@ -134,7 +134,7 @@ def tenant_uuid_from_claims(claims: dict[str, Any]) -> uuid.UUID | None:
 
 
 def mfa_satisfied(claims: dict[str, Any]) -> bool:
-    if claims.get("panopticon_auth") in ("api_key", "tenant_session"):
+    if claims.get("spanopticon_auth") in ("api_key", "tenant_session"):
         return True
     if not settings.oidc_require_mfa:
         return True

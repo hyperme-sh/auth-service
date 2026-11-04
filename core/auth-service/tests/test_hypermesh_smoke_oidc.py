@@ -99,7 +99,7 @@ def test_claims_pin_repo_environment_workflow_and_audience() -> None:
             _claims(sub="repo:FyberLabs/panopticon:pull_request")
         )
     with pytest.raises(SmokeOidcRejected):
-        require_smoke_oidc_claims(_claims(repository="other/panopticon"))
+        require_smoke_oidc_claims(_claims(repository="other/spanopticon"))
     with pytest.raises(SmokeOidcRejected):
         require_smoke_oidc_claims(_claims(environment="production"))
     with pytest.raises(SmokeOidcRejected):
@@ -240,7 +240,7 @@ async def test_session_mints_renter_tenant_jwt(
     assert claims is not None
     assert claims["sub"] == str(USER_ID)
     assert claims["email"] == settings.smoke_session_email
-    assert claims["panopticon_auth"] == "tenant_session"
+    assert claims["spanopticon_auth"] == "tenant_session"
     assert claims["realm_access"]["roles"] == ["renter"]
     assert claims["groups"] == ["renter"]
     assert claims["permissions"] == []
@@ -375,7 +375,7 @@ def test_configured_workflow_is_verified_without_product_defaults(monkeypatch):
         require_smoke_oidc_claims(_claims())
 
 
-@pytest.mark.parametrize("marker", ["", " ", "sub", "exp", "permissions", "panopticon_auth", "purpose"])
+@pytest.mark.parametrize("marker", ["", " ", "sub", "exp", "permissions", "spanopticon_auth", "purpose"])
 def test_smoke_marker_cannot_replace_authorization_claims(marker):
     from api.core.config import Settings
     from pydantic import ValidationError

@@ -149,7 +149,7 @@ def verified_facts(tenant, origin, active, *, now=None):
         not isinstance(tenant, dict)
         or not isinstance(origin, dict)
         or (
-            tenant.get("panopticon_auth") != "tenant_session"
+            tenant.get("spanopticon_auth") != "tenant_session"
             or is_smoke_session(tenant)
             or tenant.get("azp") != BROWSER_CLIENT
             or tenant.get("sub") != origin.get("sub")

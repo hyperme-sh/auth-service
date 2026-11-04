@@ -8,8 +8,8 @@ OBJECT = '21dc06a7-b56b-4b1c-bd23-46e1394cf9a7'
 @pytest.fixture
 def identity(monkeypatch):
     monkeypatch.setattr(binding.settings, 'keycloak_issuer', binding.PRODUCTION_ISSUER)
-    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_TENANT_ID', TENANT)
-    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_OBJECT_ID', OBJECT)
+    monkeypatch.setenv('SPANOPTICON_OPERATOR_ENTRA_TENANT_ID', TENANT)
+    monkeypatch.setenv('SPANOPTICON_OPERATOR_ENTRA_OBJECT_ID', OBJECT)
     return dict(iss=binding.PRODUCTION_ISSUER, sub='kc-user', email='chris@fyberlabs.com',
                 login_provider='microsoft', entra_tenant_id=TENANT, entra_object_id=OBJECT)
 
@@ -24,7 +24,7 @@ def test_exact_identity_grants_only_in_marketplace(identity):
     ('entra_object_id',"11111111-1111-4111-8111-111111111111"), ('entra_object_id',None),
     ('login_provider','google'), ('login_provider',None),
     ('iss','https://auth.test.hyperme.sh/realms/controlplane'),
-    ('purpose','host-setup'), ('panopticon_auth','tenant_session')])
+    ('purpose','host-setup'), ('spanopticon_auth','tenant_session')])
 def test_wrong_identity_cannot_reuse_role_or_mapped_permissions(identity,key,value):
     claims = {**identity,key:value}
     assert not binding.eligible(claims,binding.MARKETPLACE_TENANT_ID)
@@ -32,7 +32,7 @@ def test_wrong_identity_cannot_reuse_role_or_mapped_permissions(identity,key,val
                                ['operator:console','operator:program','org:own']) == ['org:own']
 
 def test_missing_config_disables_access(identity,monkeypatch):
-    monkeypatch.delenv('PANOPTICON_OPERATOR_ENTRA_OBJECT_ID')
+    monkeypatch.delenv('SPANOPTICON_OPERATOR_ENTRA_OBJECT_ID')
     assert not binding.eligible(identity,binding.MARKETPLACE_TENANT_ID)
 
 def test_persistent_attributes_are_not_identity_proof(identity):

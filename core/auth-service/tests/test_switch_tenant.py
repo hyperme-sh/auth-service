@@ -55,8 +55,8 @@ async def test_switch_tenant_mints_jwt_with_tenant_claim(
         assert claims is not None
         assert claims["azp"] == "controlplane-m2m"
         assert claims["tenant_id"] == str(tenant_uuid)
-        assert claims["https://panopticon.dev/tenant_id"] == str(tenant_uuid)
-        assert claims["panopticon_auth"] == "tenant_session"
+        assert claims["https://spanopticon.dev/tenant_id"] == str(tenant_uuid)
+        assert claims["spanopticon_auth"] == "tenant_session"
         assert "admin" in claims["realm_access"]["roles"]
         assert claims.get("purpose") is None
         assert try_decode_api_key_session_jwt(token) is None

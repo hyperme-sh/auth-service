@@ -25,7 +25,7 @@ async def test_disabled_platform_account_has_no_grant():
 @pytest.mark.asyncio
 async def test_switch_drops_source_tenant_permissions_and_roles(app,http_client,tenant_uuid):
     async def claims():
-        return {'sub':'caller','email':'caller@example.com','panopticon_auth':'tenant_session','tenant_id':str(uuid.uuid4()),'permissions':['full:access','host:manage_tenants'],'realm_access':{'roles':['admin']},'groups':[]}
+        return {'sub':'caller','email':'caller@example.com','spanopticon_auth':'tenant_session','tenant_id':str(uuid.uuid4()),'permissions':['full:access','host:manage_tenants'],'realm_access':{'roles':['admin']},'groups':[]}
     app.dependency_overrides[deps.get_access_token_claims]=claims
     try:
         with patch.object(routes,'authorize_tenant_switch',new=AsyncMock(return_value=tenant_switch.TenantSwitchGrant(role_name='guest',permissions=('user:view_only',)))):

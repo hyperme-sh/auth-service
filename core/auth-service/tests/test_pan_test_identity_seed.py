@@ -42,8 +42,8 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
     assert renter.email == "renter@test.hyperme.sh"
     assert renter.groups == ("renter",)
     assert renter.realm_roles == ("renter",)
-    assert renter.kv_secret == "panopticon-test-renter-password"
-    assert renter.password_env == "PANOPTICON_TEST_RENTER_PASSWORD"
+    assert renter.kv_secret == "spanopticon-test-renter-password"
+    assert renter.password_env == "SPANOPTICON_TEST_RENTER_PASSWORD"
 
     leaser = by_user["leaser"]
     assert leaser.email == "leaser@test.hyperme.sh"
@@ -51,7 +51,7 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
     assert leaser.realm_roles == ("host",)
     assert "leaser" not in leaser.groups
     assert "leaser" not in leaser.realm_roles
-    assert leaser.kv_secret == "panopticon-test-leaser-password"
+    assert leaser.kv_secret == "spanopticon-test-leaser-password"
 
     admin = by_user["admin"]
     assert admin.email == "admin@test.hyperme.sh"
@@ -65,7 +65,7 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
     assert leaser.operator_claims == ()
     assert "renter" not in admin.realm_roles
     assert "host" not in admin.realm_roles
-    assert admin.kv_secret == "panopticon-test-portal-admin-password"
+    assert admin.kv_secret == "spanopticon-test-portal-admin-password"
     assert admin.kv_secret != seed.BOOTSTRAP_KV_PASSWORD
     assert admin.kv_secret != seed.API_ADMIN_KV_PASSWORD
 
@@ -73,20 +73,20 @@ def test_catalog_is_three_split_users_with_existing_grant_names() -> None:
 def test_require_passwords_fails_closed_on_empty_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("PANOPTICON_TEST_RENTER_PASSWORD", raising=False)
-    monkeypatch.setenv("PANOPTICON_TEST_LEASER_PASSWORD", "unused")
-    monkeypatch.setenv("PANOPTICON_TEST_PORTAL_ADMIN_PASSWORD", "unused")
-    with pytest.raises(seed.SeedError, match="PANOPTICON_TEST_RENTER_PASSWORD"):
+    monkeypatch.delenv("SPANOPTICON_TEST_RENTER_PASSWORD", raising=False)
+    monkeypatch.setenv("SPANOPTICON_TEST_LEASER_PASSWORD", "unused")
+    monkeypatch.setenv("SPANOPTICON_TEST_PORTAL_ADMIN_PASSWORD", "unused")
+    with pytest.raises(seed.SeedError, match="SPANOPTICON_TEST_RENTER_PASSWORD"):
         seed.require_passwords()
 
 
 def test_require_passwords_fails_closed_on_whitespace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PANOPTICON_TEST_RENTER_PASSWORD", "  ")
-    monkeypatch.setenv("PANOPTICON_TEST_LEASER_PASSWORD", "unused")
-    monkeypatch.setenv("PANOPTICON_TEST_PORTAL_ADMIN_PASSWORD", "unused")
-    with pytest.raises(seed.SeedError, match="PANOPTICON_TEST_RENTER_PASSWORD"):
+    monkeypatch.setenv("SPANOPTICON_TEST_RENTER_PASSWORD", "  ")
+    monkeypatch.setenv("SPANOPTICON_TEST_LEASER_PASSWORD", "unused")
+    monkeypatch.setenv("SPANOPTICON_TEST_PORTAL_ADMIN_PASSWORD", "unused")
+    with pytest.raises(seed.SeedError, match="SPANOPTICON_TEST_RENTER_PASSWORD"):
         seed.require_passwords()
 
 
@@ -335,7 +335,7 @@ def test_deploy_wait_timeout_is_bounded_and_sanitized(monkeypatch):
 
 
 def test_deploy_missing_password_fails_before_wait(monkeypatch, capsys):
-    monkeypatch.delenv("PANOPTICON_TEST_RENTER_PASSWORD", raising=False)
+    monkeypatch.delenv("SPANOPTICON_TEST_RENTER_PASSWORD", raising=False)
     monkeypatch.setattr(seed, "wait_until_ready", lambda *_: pytest.fail("must validate credentials first"))
     assert seed.main(["--wait-seconds", "60"]) == 1
     assert "seed failed" in capsys.readouterr().err

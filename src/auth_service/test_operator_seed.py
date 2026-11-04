@@ -23,7 +23,7 @@ def eligibility_failures(claims: dict, tenant_id: uuid.UUID) -> list[str]:
     realm_access = claims.get("realm_access")
     roles = realm_access.get("roles") if isinstance(realm_access, dict) else None
     checks = {
-        "bootstrap_enabled": os.environ.get("PANOPTICON_TEST_OPERATOR_BOOTSTRAP") == "1",
+        "bootstrap_enabled": os.environ.get("SPANOPTICON_TEST_OPERATOR_BOOTSTRAP") == "1",
         "test_issuer": issuer == "https://auth.test.hyperme.sh/realms/controlplane",
         "token_issuer": isinstance(token_issuer, str) and token_issuer.rstrip("/") == issuer,
         "marketplace_tenant": tenant_id == MARKETPLACE_TENANT_ID,
@@ -31,7 +31,7 @@ def eligibility_failures(claims: dict, tenant_id: uuid.UUID) -> list[str]:
         "verified_email": claims.get("email_verified") is True,
         "subject": isinstance(claims.get("sub"), str) and bool(claims["sub"].strip()),
         "admin_role": isinstance(roles, list) and "admin" in roles,
-        "ordinary_oidc": not claims.get("panopticon_auth") and not claims.get("purpose"),
+        "ordinary_oidc": not claims.get("spanopticon_auth") and not claims.get("purpose"),
     }
     return [name for name, passed in checks.items() if not passed]
 

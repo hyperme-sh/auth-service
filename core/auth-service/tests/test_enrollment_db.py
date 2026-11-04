@@ -651,7 +651,7 @@ async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, 
     from controlplane_api.config import settings
     from api.domain.operator.population import SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
     from controlplane_api.exceptions import ForbiddenException
-    monkeypatch.setenv("PANOPTICON_TEST_OPERATOR_BOOTSTRAP", "1")
+    monkeypatch.setenv("SPANOPTICON_TEST_OPERATOR_BOOTSTRAP", "1")
     issuer = "https://auth.test.hyperme.sh/realms/controlplane"
     monkeypatch.setattr(settings, "keycloak_issuer", issuer)
     claims = {"iss":issuer,"email":EMAIL,"email_verified":True,
@@ -680,8 +680,8 @@ async def test_production_operator_membership_does_not_store_authority(db_sessio
     from auth_service import operator_binding as binding
     monkeypatch.setattr(binding.settings, 'keycloak_issuer', binding.PRODUCTION_ISSUER)
     tenant, object_id = str(uuid.uuid4()), str(uuid.uuid4())
-    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_TENANT_ID', tenant)
-    monkeypatch.setenv('PANOPTICON_OPERATOR_ENTRA_OBJECT_ID', object_id)
+    monkeypatch.setenv('SPANOPTICON_OPERATOR_ENTRA_TENANT_ID', tenant)
+    monkeypatch.setenv('SPANOPTICON_OPERATOR_ENTRA_OBJECT_ID', object_id)
     claims = dict(iss=binding.PRODUCTION_ISSUER, sub='entra-'+uuid.uuid4().hex,
                   email=uuid.uuid4().hex+'@fyberlabs.com', login_provider='microsoft',
                   entra_tenant_id=tenant, entra_object_id=object_id)

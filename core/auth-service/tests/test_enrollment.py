@@ -363,9 +363,9 @@ async def test_checkout_contract_raw_oidc_403s_tenant_session_does_not(
     )
     decoded = try_decode_tenant_session_jwt(session)
     assert decoded is not None
-    assert decoded["panopticon_auth"] == "tenant_session"
+    assert decoded["spanopticon_auth"] == "tenant_session"
     assert decoded["tenant_id"] == str(tenant_id)
-    assert decoded["https://panopticon.dev/tenant_id"] == str(tenant_id)
+    assert decoded["https://spanopticon.dev/tenant_id"] == str(tenant_id)
     assert decoded.get("purpose") is None
 
     switched = await http_client.get(
