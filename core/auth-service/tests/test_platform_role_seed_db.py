@@ -21,7 +21,7 @@ from api.infrastructure.persistence.seeder import seed_platform_roles
 from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
 from controlplane_db.models import Group, Role
 from controlplane_db.session import normalize_database_url
-from panopticon_tests.fixtures.postgres import (
+from spanopticon_tests.fixtures.postgres import (
     async_db_url,
     normalize_sync_sqlalchemy_url,
     run_alembic_upgrade,

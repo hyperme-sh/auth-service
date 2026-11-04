@@ -21,7 +21,7 @@ dependencies = [
 dev = [
     "asgi-lifespan>=2.1.0",
     "httpx>=0.28.0",
-    "panopticon-tests",
+    "spanopticon-tests",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.2.0",
     "respx>=0.22.0",
@@ -32,7 +32,7 @@ dev = [
 controlplane-api = { workspace = true }
 controlplane-identity = { workspace = true }
 controlplane-core = { workspace = true }
-panopticon-tests = { workspace = true }
+spanopticon-tests = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src/auth_service"]

@@ -19,7 +19,7 @@ COPY core/user-service/contracts ./core/user-service/contracts
 COPY core/lib/controlplane-identity ./core/lib/controlplane-identity
 COPY core/lib/controlplane-tenancy ./core/lib/controlplane-tenancy
 COPY core/auth-service ./core/auth-service
-# --no-dev skips panopticon-tests so the image does not need core/tests.
+# --no-dev skips spanopticon-tests so the image does not need core/tests.
 # Runtime uses the built virtualenv directly; no workspace resolution at startup.
 ARG CONTROLPLANE_SERVICEBUS=0
 RUN uv sync --frozen --no-dev --package auth-service \
