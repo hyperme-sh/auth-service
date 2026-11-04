@@ -29,3 +29,15 @@ The main-only shared-runner workflow requires DEPENDENCY_READ_TOKEN with content
 on the seven dependency repositories only. Actions remains disabled pending scoped
 access and shared-runner qualification. Checkout does not persist credentials; Git
 headers are restricted to each dependency URL. No publishing/deployment occurs.
+
+## Native host setup membership
+
+The dedicated setup-session exchange requires an active subject-bound host
+membership, including the durable tenant host group, and applies tenant bans.
+A legacy host without a direct role can receive only the narrow host-setup
+session; generic tenant switching still requires its resolved role. Email,
+platform-manager permissions and a renter-only membership do not substitute for
+this host binding. The new HTTP regressions run in standalone package checks.
+The real-Postgres enrollment boundaries remain under the retained
+`core/auth-service/tests/test_enrollment_db.py` integration reference and require
+separate owner-fixture execution. No live provider or deployment is exercised.

@@ -653,20 +653,26 @@ async def host_setup_session(
     body: SwitchTenantRequest,
     request: Request,
     claims: Annotated[dict, Depends(host_setup_claims)],
+    session: AsyncSession = Depends(get_db_session),
 ) -> TokenBundleResponse:
     from api.infrastructure.security.tenant_session_jwt import mint_host_setup_session
     from api.domain.operator.bans import ban_book
+    from api.infrastructure.persistence.tenant_membership import get_active_tenant_role_member
+    from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
 
     header = request.headers.get("X-Tenant-ID")
     if header and header != str(body.tenant_id):
         raise ForbiddenException("X-Tenant-ID must match tenant in request body")
-    user = AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
-    grant = await authorize_tenant_switch(user, body.tenant_id)
-    if grant is None:
-        raise ForbiddenException("Not a member of this tenant")
-    if grant.user_id is not None and not ban_book().user_may_enter(
-        body.tenant_id, grant.user_id
-    ):
+    # Setup authority is narrower than a general tenant session. A durable host
+    # group is sufficient even when this legacy member has no direct role.
+    # Match the opaque subject, never an email or a platform-manager fallback.
+    await set_current_tenant_id_guc(session, body.tenant_id)
+    member = await get_active_tenant_role_member(
+        session, body.tenant_id, keycloak_sub=str(claims["sub"]), role="host"
+    )
+    if member is None:
+        raise ForbiddenException("Active host membership required in this tenant")
+    if not ban_book().user_may_enter(body.tenant_id, member.id):
         raise ForbiddenException("This user is banned from the tenant")
     token = mint_host_setup_session(claims=claims, tenant_id=body.tenant_id)
     await get_tenant_event_publisher().publish(
