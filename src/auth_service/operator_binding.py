@@ -19,8 +19,8 @@ def _uuid(value):
 
 
 def eligible(claims, tenant_id):
-    tenant = _uuid(os.getenv("PANOPTICON_OPERATOR_ENTRA_TENANT_ID"))
-    user = _uuid(os.getenv("PANOPTICON_OPERATOR_ENTRA_OBJECT_ID"))
+    tenant = _uuid(os.getenv("SPANOPTICON_OPERATOR_ENTRA_TENANT_ID"))
+    user = _uuid(os.getenv("SPANOPTICON_OPERATOR_ENTRA_OBJECT_ID"))
     return bool(
         tenant and user
         and settings.keycloak_issuer.rstrip("/") == PRODUCTION_ISSUER
@@ -31,7 +31,7 @@ def eligible(claims, tenant_id):
         and _uuid(claims.get("entra_object_id")) == user
         and isinstance(claims.get("sub"), str) and claims["sub"].strip()
         and isinstance(claims.get("email"), str) and claims["email"].strip()
-        and not claims.get("panopticon_auth") and not claims.get("purpose")
+        and not claims.get("spanopticon_auth") and not claims.get("purpose")
     )
 
 

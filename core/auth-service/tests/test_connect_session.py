@@ -24,7 +24,7 @@ def confidential_client(monkeypatch):
 def claims():
     return (
         {
-            "panopticon_auth": "tenant_session",
+            "spanopticon_auth": "tenant_session",
             "azp": "controlplane-frontend",
             "sub": "owner",
             "tenant_id": TENANT,
@@ -57,7 +57,7 @@ def test_verified_factor_uses_original_authentication_not_refresh():
 @pytest.mark.parametrize(
     "part,key,value",
     [
-        (0, "panopticon_auth", "api_key"),
+        (0, "spanopticon_auth", "api_key"),
         (0, "smoke_session", True),
         (0, "azp", "controlplane-m2m"),
         (0, "sub", "other"),

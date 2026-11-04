@@ -176,8 +176,8 @@ def test_pan_test_identities_are_split_and_have_no_secrets() -> None:
         assert not user.get("credentials")
         assert "UPDATE_PASSWORD" not in (user.get("requiredActions") or [])
         assert "CONFIGURE_TOTP" not in (user.get("requiredActions") or [])
-    assert "PANOPTICON_TEST_" not in raw
-    assert "panopticon-test-renter-password" not in raw
+    assert "SPANOPTICON_TEST_" not in raw
+    assert "spanopticon-test-renter-password" not in raw
 
 
 def test_frontend_groups_claim_mapper_stays_on_public_pkce_client() -> None:

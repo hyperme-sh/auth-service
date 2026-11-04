@@ -19,7 +19,7 @@ from eth_utils import is_hex_address, to_checksum_address
 SIWE_DOMAIN = os.environ.get("AUTH_SIWE_DOMAIN", "localhost")
 SIWE_URI = os.environ.get("AUTH_SIWE_URI", "http://localhost:3000")
 SIWE_STATEMENT = (
-    "Bind this wallet to the identified Panopticon person. This is not a login."
+    "Bind this wallet to the identified (s)panopticon person. This is not a login."
 )
 SIWE_VERSION = "1"
 DEFAULT_CHAIN_ID = 84532

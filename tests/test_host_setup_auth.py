@@ -66,7 +66,7 @@ async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_i
     setup_token = response.json()["access_token"]
     claims = try_decode_host_setup_session(setup_token)
     assert claims["purpose"] == "host_setup" and claims["tenant_id"] == str(tenant_uuid)
-    assert not ({"permissions", "realm_access", "groups", "panopticon_auth"} & claims.keys())
+    assert not ({"permissions", "realm_access", "groups", "spanopticon_auth"} & claims.keys())
     assert try_decode_tenant_session_jwt(setup_token) is None
     with pytest.raises(ValueError):
         mint_tenant_session_jwt(claims={"sub": "owner", "azp": CLIENT}, tenant_id=tenant_uuid)
@@ -126,7 +126,7 @@ def test_setup_session_rejects_wrong_purpose_audience_issuer_or_expiry(app, tena
 def test_old_generic_setup_session_is_rejected(app, tenant_uuid):
     from api.infrastructure.security.tenant_session_jwt import ISSUER
     token = jwt.encode({"iss": ISSUER, "sub": "owner", "azp": CLIENT,
-        "panopticon_auth": "tenant_session", "tenant_id": str(tenant_uuid),
+        "spanopticon_auth": "tenant_session", "tenant_id": str(tenant_uuid),
         "exp": int(time.time()) + 300}, settings.usable_api_key_exchange_secret(), algorithm="HS256")
     assert try_decode_tenant_session_jwt(token) is None
 
