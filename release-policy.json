@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "repository": "hyperme-sh/auth-service",
+  "component": "auth-service",
+  "line": "0.24",
+  "version_files": [
+    "pyproject.toml"
+  ]
+}
