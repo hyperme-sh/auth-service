@@ -41,3 +41,17 @@ this host binding. The new HTTP regressions run in standalone package checks.
 The real-Postgres enrollment boundaries remain under the retained
 `core/auth-service/tests/test_enrollment_db.py` integration reference and require
 separate owner-fixture execution. No live provider or deployment is exercised.
+## Release channels
+
+Successful main-push validation retains the validated Python wheel and source distribution and publishes
+an immutable `test-<commit>` GitHub prerelease. Push a `vMAJOR.MINOR.PATCH`
+tag at that tested commit to promote the exact files to a stable release,
+without rebuilding. Repository visibility applies to all package assets.
+Package metadata versions are preserved; these are GitHub distribution snapshots,
+not automatic PyPI publication or service deployment.
+
+Promotion requires the original Actions artifact (90-day requested retention;
+organization policy may shorten it). Expired evidence fails closed: validate a
+new main revision. The publisher verifies the run, source, workflow and artifact
+digest independently of release metadata. Repository immutable releases must be
+enabled. See the [shared release contract](https://github.com/hyperme-sh/.github/blob/3352fb1347e7920ec1d5cd14792ba3038a81abcb/actions/release-channel/README.md).
