@@ -25,7 +25,7 @@ provider/container infrastructure and are not collected by the standalone suite.
 That Dockerfile is not a standalone destination build. Container validation,
 remaining owner integration and deployment require separate acceptance.
 
-The main-only hosted workflow requires DEPENDENCY_READ_TOKEN with contents:read
+The main-only shared-runner workflow requires DEPENDENCY_READ_TOKEN with contents:read
 on the seven dependency repositories only. Actions remains disabled pending scoped
-access and hosted-worker policy. Checkout does not persist credentials; Git
+access and shared-runner qualification. Checkout does not persist credentials; Git
 headers are restricted to each dependency URL. No publishing/deployment occurs.
