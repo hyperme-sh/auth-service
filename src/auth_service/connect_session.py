@@ -227,7 +227,7 @@ async def connect_session_context(request: Request):
         authorization = request.headers.get("authorization", "")
         if not authorization.startswith("Bearer "):
             raise SessionDenied()
-        tenant = try_decode_tenant_session_jwt(credential(authorization[7:]))
+        tenant = await asyncio.to_thread(try_decode_tenant_session_jwt, credential(authorization[7:]))
         if not tenant:
             raise SessionDenied()
         tid = uuid.UUID(tenant["tenant_id"])
