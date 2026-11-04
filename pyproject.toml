@@ -15,7 +15,7 @@ dependencies = [
     "httpx>=0.28.1",
     "redis>=5.0.0",
     "bcrypt>=4.2.0",
-    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@0cc954f1f7e0cd88e2b47fbf9db00328854f2184",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@92ba54dd1f0fde38b3c439ea151f51a0ac3aa78b",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
 ]
