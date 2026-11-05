@@ -166,3 +166,20 @@ First-party code is [Apache-2.0](LICENSE); wheels and rebuilt source distributio
 carry checked SPDX metadata and exact license text. Dependencies retain their own
 licenses. Private CI stays on debrunners; public CI uses hosted Ubuntu so public
 forks cannot access organization runners.
+
+## Coordinated test bundles
+
+This service opts into the `next: 0.24.0` train through
+[.github/test-channel.json](.github/test-channel.json). Successful main validation
+publishes its exact retained `tested-dist` files as immutable `0.24.0-test.N`
+prerelease bundles. The pinned publisher verifies the run, source revision,
+configuration and original Actions artifact digest without executing caller code
+or receiving private dependency credentials. PRs validate without publication.
+
+This test-channel authorization supersedes the older main-publication restriction
+above. Package versions, dependency pins and accepted package baselines stay
+unchanged; existing stable package admission remains separate. Coordinated
+consumer/deployment selection must bind exact component commits and artifact
+digests, not matching repository-local counters. No stable promotion is automatic.
+Private jobs use debrunners and public jobs use hosted Ubuntu; no approval gates
+are introduced. Missing original evidence or publication collisions fail closed.

@@ -55,3 +55,14 @@ preparation, package validation and release jobs. This supersedes earlier hosted
 runner exceptions in this file. Keep dedicated infrastructure-convergence and
 trusted payment-smoke jobs on their existing specialized selectors. Reusable
 workflows must route private callers to debrunners. Do not add approval gates.
+
+## Authorized coordinated test bundles
+
+The owner authorized this service to join the `next: 0.24.0` test-bundle train.
+Successful main qualification may automatically publish `0.24.0-test.N` bundles
+through the pinned shared publisher. This supersedes the blanket publication
+prohibition only for that test channel. Embedded package versions and accepted
+component baselines stay unchanged. Select exact component commits and artifact
+digests in the coordinated manifest; local test counters need not match.
+Stable promotion still requires explicit owner selection of the gold candidate
+and destination. No new approval prerequisites or deployment authority are added.
