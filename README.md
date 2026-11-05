@@ -153,3 +153,16 @@ boundary and adds default-deny email evidence for verification-service. Configur
 preserve broker origin. Local email trust is separately default-off through
 `AUTH_VERIFICATION_LOCAL_EMAIL_TRUST`. See verification-service's contract and
 rollout requirements before enabling either policy.
+
+## Introspection test transfer and license
+
+The two missing Panopticon introspection regressions are now part of the active
+source/wheel/rebuilt-sdist suite. Introspection checks every presented client
+identifier against the configured allowlist before applying the existing identity
+package's age-confirmation predicate. Host-setup denial and off-event-loop account
+retirement checks remain enforced. Dependency pins and version 0.2.0 are unchanged.
+
+First-party code is [Apache-2.0](LICENSE); wheels and rebuilt source distributions
+carry checked SPDX metadata and exact license text. Dependencies retain their own
+licenses. Private CI stays on debrunners; public CI uses hosted Ubuntu so public
+forks cannot access organization runners.

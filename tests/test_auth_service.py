@@ -251,3 +251,47 @@ async def test_marketplace_discovery_uses_configured_tenant(http_client, monkeyp
     response = await http_client.get("/auth/enrollment/marketplace")
     assert response.status_code == 200
     assert response.json() == {"tenant_id": str(tenant)}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_introspection_rejects_unconfirmed_interactive_clients(
+    http_client, monkeypatch
+):
+    monkeypatch.setattr(api_config.settings, "auth_token_validation_mode", "introspection")
+    introspect_url = "http://keycloak.test/realms/demo/protocol/openid-connect/token/introspect"
+    respx.post(introspect_url).mock(
+        side_effect=[
+            Response(200, json={"active": True, "sub": "person", "azp": "hypermesh-native", "account_type": "human"}),
+            Response(200, json={"active": True, "sub": "person", "client_id": "controlplane-mobile"}),
+            Response(200, json={"active": True, "sub": "person", "azp": "controlplane-device", "terms_and_conditions": 0}),
+            Response(200, json={"active": True, "sub": "person", "azp": "controlplane-frontend", "terms_and_conditions": 1761900000}),
+            Response(200, json={"active": True, "sub": "renter", "client_id": "controlplane-mobile", "account_type": "service"}),
+        ]
+    )
+    for _ in range(3):
+        denied = await http_client.get("/auth/me", headers={"Authorization": "Bearer opaque-token"})
+        assert denied.status_code == 401
+    for _ in range(2):
+        accepted = await http_client.get("/auth/me", headers={"Authorization": "Bearer opaque-token"})
+        assert accepted.status_code == 200
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_introspection_rejects_clients_outside_the_allowlist(http_client, monkeypatch):
+    monkeypatch.setattr(api_config.settings, "auth_token_validation_mode", "introspection")
+    introspect_url = "http://keycloak.test/realms/demo/protocol/openid-connect/token/introspect"
+    respx.post(introspect_url).mock(
+        return_value=Response(
+            200,
+            json={
+                "active": True,
+                "sub": "person",
+                "client_id": "s3rch-web",
+                "azp": "s3rch-web",
+            },
+        )
+    )
+    denied = await http_client.get("/auth/me", headers={"Authorization": "Bearer opaque-token"})
+    assert denied.status_code == 401

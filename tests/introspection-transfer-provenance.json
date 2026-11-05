@@ -1,0 +1,13 @@
+{
+  "repository": "FyberLabs/panopticon",
+  "commit": "2cd00fd9a7ebb950999571a81be7cb0a24d9264e",
+  "source": "core/auth-service/tests/test_auth_service.py",
+  "source_sha256": "2b465e06721f1a87325b372aacd4c0701754b4f0c2523f5c8857d3e297022dc7",
+  "transferred_tests": [
+    "test_introspection_rejects_unconfirmed_interactive_clients",
+    "test_introspection_rejects_clients_outside_the_allowlist"
+  ],
+  "adaptations": [
+    "Function bodies unchanged; existing identity package owns the shared age predicate. Preserve owner off-event-loop retirement checks and explicit host-setup denial."
+  ]
+}
