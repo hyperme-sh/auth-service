@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from controlplane_api.permissions import Permission
 from api.infrastructure.persistence.db_session import get_db_session
 from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
-from controlplane_db.models import Role, Tenant, User
+from controlplane_db.models import Group, Role, Tenant, User, UserGroupMembership
 
 from auth_service.schemas import AuthMeResponse
 
@@ -28,6 +28,20 @@ class TenantSwitchGrant:
     role_name: str
     permissions: tuple[str, ...] = ()
     user_id: uuid.UUID | None = None
+    groups: tuple[str, ...] = ()
+
+
+async def _target_groups(session: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID | None) -> tuple[str, ...]:
+    if user_id is None:
+        return ()
+    names = await session.scalars(select(Group.name).join(
+        UserGroupMembership, UserGroupMembership.group_id == Group.id,
+    ).where(
+        Group.tenant_id == tenant_id,
+        UserGroupMembership.tenant_id == tenant_id,
+        UserGroupMembership.user_id == user_id,
+    ))
+    return tuple(sorted(set(names.all())))
 
 
 def _role_permissions(role: Role | None) -> tuple[str, ...]:
@@ -130,6 +144,7 @@ async def authorize_tenant_switch(
             role_name=role.name,
             permissions=_role_permissions(role),
             user_id=getattr(member, "id", None),
+            groups=await _target_groups(db, tenant_id, getattr(member, "id", None)),
         )
 
     await set_current_tenant_id_guc(db, None)

@@ -5,6 +5,7 @@ OIDC credential supplies signed authentication time and factor evidence. It is
 introspected on every request; neither credential is retained or returned.
 """
 
+import asyncio
 import hashlib
 import json
 import os
@@ -236,7 +237,7 @@ async def session_context(request: Request, *, verification=False):
         authorization = request.headers.get("authorization", "")
         if not authorization.startswith("Bearer "):
             raise SessionDenied()
-        tenant = try_decode_tenant_session_jwt(credential(authorization[7:]))
+        tenant = await asyncio.to_thread(try_decode_tenant_session_jwt, credential(authorization[7:]))
         if not tenant:
             raise SessionDenied()
         tid = uuid.UUID(tenant["tenant_id"])
