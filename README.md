@@ -74,6 +74,17 @@ revision run in the root suite. Realm-file assertions were transferred to
 controlplane-keycloak and portal-grant source assertions to controlplane-portal,
 so no runtime test depends on a neighboring checkout.
 
+## Coordinated version preparation
+
+The candidate package targets 0.24 with immutable dependency revisions and a
+complete runtime contract exported from its built wheel. The hosted PR lane uses
+fixtures built from clean exact dependency revisions, including every private
+transitive edge, without private credentials. Native Docker consumers remain
+mandatory. Wheels contain runtime code; source archives retain qualification
+tooling and fixtures. The ordinary main Git-install lane is retained.
+This change prepares artifacts and compatibility evidence; it does not tag,
+publish, promote or deploy a release. Provider/runtime acceptance stays separate.
+
 ## Test qualification and stable acceptance
 
 GitHub `test-<commit>` prereleases are development snapshots. Their embedded
@@ -112,3 +123,14 @@ session checks run off the caller event loop. Enrollment, host membership,
 role seeding and shared nonce regressions remain in the full package suite.
 This is component qualification; live provider and deployment acceptance remain
 separate, and closure enforcement stays default-off.
+
+
+### Initial stable declaration
+
+When there is no accepted stable release, the pinned admission workflow checks
+this repository's complete live release inventory and the exact owning package
+versions against `releases/candidate`. A stable release or incomplete inventory
+rejects this path. Candidate metadata identifies built artifacts; it does not
+establish an accepted baseline or publish anything. The exact-pinned publisher
+independently validates tested bytes and serializes any later explicit first
+stable publication. Test snapshots remain qualification evidence only.

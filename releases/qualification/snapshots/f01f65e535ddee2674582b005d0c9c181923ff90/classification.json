@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "kind": "qualified-test-snapshot",
+  "stable_release": false,
+  "former_record_path": "releases/accepted",
+  "live_release_id": 434698097,
+  "live_tag": "test-f01f65e535ddee2674582b005d0c9c181923ff90",
+  "reason": "Test artifact qualification does not establish an accepted stable release."
+}
