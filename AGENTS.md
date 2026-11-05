@@ -24,3 +24,11 @@ The user is the sole developer. Never add or enable GitHub required reviewers, b
 Credential-free PR consumers may run on disposable hosted Ubuntu with Docker
 and verified dependency wheel fixtures. Keep mandatory native tests and the
 no-skips assertion. Main private dependency access and runner scope stay unchanged.
+
+## Private CI runner policy
+
+Private repository jobs use `[self-hosted, linux, x64, debrunner]`, including
+preparation, package validation and release jobs. This supersedes earlier hosted
+runner exceptions in this file. Keep dedicated infrastructure-convergence and
+trusted payment-smoke jobs on their existing specialized selectors. Reusable
+workflows must route private callers to debrunners. Do not add approval gates.
