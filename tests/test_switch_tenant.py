@@ -185,6 +185,30 @@ async def test_switch_tenant_header_mismatch_rejected(app, http_client, tenant_u
 
 
 @pytest.mark.asyncio
+async def test_switch_names_a_seeded_host_that_cannot_be_repaired(app, http_client, tenant_uuid):
+    from auth_service import deps
+
+    async def fake_claims() -> dict:
+        return {"sub": "sub-1", "email": "leaser@test.hyperme.sh", "realm_access": {"roles": []}}
+
+    async def denied(*_args, **_kwargs):
+        return "seeded_host_inactive"
+
+    app.dependency_overrides[deps.get_access_token_claims] = fake_claims
+    try:
+        with patch("auth_service.test_operator_seed.ensure_seeded_host_role", new=denied):
+            response = await http_client.post(
+                "/auth/switch-tenant",
+                headers={"Authorization": "Bearer fake.jwt"},
+                json={"tenant_id": str(tenant_uuid)},
+            )
+        assert response.status_code == 403
+        assert response.json()["error"] == "seeded_host_inactive"
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+@pytest.mark.asyncio
 async def test_switch_tenant_refuses_without_membership(app, http_client, tenant_uuid):
     from auth_service import deps
 
@@ -269,10 +293,11 @@ async def test_authorize_member_and_host_and_unknown(tenant_uuid):
     member = type(
         "U",
         (),
-        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid, "is_active": True, "keycloak_sub": "kc-sub"},
+        {"role_id": uuid.uuid4(), "tenant_id": tenant_uuid, "is_active": True, "keycloak_sub": me.sub},
     )()
     tenant_admin = type("R", (), {"name": "admin", "permissions": []})()
-    platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None, "is_active": True, "keycloak_sub": "kc-sub"})()
+    platform = type("U", (), {"role_id": uuid.uuid4(), "tenant_id": None,
+                                 "is_active": True, "keycloak_sub": me.sub})()
     host_role = type(
         "R",
         (),

@@ -354,7 +354,7 @@ async def _lock_host_identity(
 
 
 async def _ensure_membership_user(
-    session: AsyncSession, tenant_id: uuid.UUID, user: AuthMeResponse
+    session: AsyncSession, tenant_id: uuid.UUID, user: AuthMeResponse, *, role_id: uuid.UUID
 ) -> User:
     """Service write for the existing marketplace tenant.
 
@@ -368,9 +368,11 @@ async def _ensure_membership_user(
         session, tenant_id, email=email, keycloak_sub=user.sub
     )
     if row is not None:
+        if row.keycloak_sub and row.keycloak_sub != user.sub:
+            raise EnrollmentError("Membership email is bound to another identity")
         return row
     first, last = _name_parts(user)
-    return await create_tenant_membership_row(
+    row = await create_tenant_membership_row(
         session,
         tenant_id,
         email=email,
@@ -380,6 +382,11 @@ async def _ensure_membership_user(
         is_active=True,
         keycloak_sub=user.sub,
     )
+    # New self-enrolled members need an explicit low-privilege target role.
+    # Tenant switching never invents a role for existing incomplete records.
+    row.role_id = role_id
+    await session.flush()
+    return row
 
 
 async def _ensure_group_member(
@@ -469,15 +476,14 @@ async def grant_held_roles(
         await _lock_host_identity(session, tenant_id, user.sub)
     wallet = await _bound_wallet(session, user.sub)
 
+    group_role = await _get_or_create_role(session, tenant_id, _GROUP_ROLE_NAME)
     member: User | None = None
     if held:
-        member = await _ensure_membership_user(session, tenant_id, user)
+        member = await _ensure_membership_user(session, tenant_id, user, role_id=group_role.id)
 
     renter_grant: RenterGrant | None = None
     host_grant: HostGrant | None = None
     org_admin_grant: OrgAdminGrant | None = None
-
-    group_role = await _get_or_create_role(session, tenant_id, _GROUP_ROLE_NAME)
 
     if HELD_RENTER in held and member is not None:
         renter_group = await _get_or_create_group(
