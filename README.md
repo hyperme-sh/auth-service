@@ -20,7 +20,7 @@ checkout and a rebuilt source archive. Wheel payloads must match runtime bytes.
 External identity/RPC interactions in these tests use deterministic test doubles.
 
 The active suite includes PostgreSQL enrollment and role seeding, shared Redis
-nonce replay protection, and production/test operator seed boundaries. All 219
+nonce replay protection, and production/test operator seed boundaries. All 276
 cases must execute without skips in each package context; CI retains their JUnit
 identities and rejects unequal inventories. Database fixtures apply the owning
 controlplane-db migration chains.
@@ -70,3 +70,8 @@ reference at `0c26906632a5219ae0aaa383d7b60f9216be796e`. Fixtures use owner
 migrations instead of the retired monorepo Alembic runner. Keycloak/provider
 suites and remaining cross-service integration are still separate work; these
 results do not establish deployment or live-provider acceptance.
+
+The additional connect-session and enrollment API cases from the same Panopticon
+revision run in the root suite. Realm-file assertions were transferred to
+controlplane-keycloak and portal-grant source assertions to controlplane-portal,
+so no runtime test depends on a neighboring checkout.
