@@ -222,6 +222,15 @@ async def current_member(tenant_id, subject):
 
 @router.get("/connect-session-context", include_in_schema=False)
 async def connect_session_context(request: Request):
+    return await session_context(request)
+
+
+@router.get("/verification-context", include_in_schema=False)
+async def verification_context(request: Request):
+    return await session_context(request, verification=True)
+
+
+async def session_context(request: Request, *, verification=False):
     headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
     try:
         authorization = request.headers.get("authorization", "")
@@ -252,6 +261,10 @@ async def connect_session_context(request: Request):
         introspection_shape(active)
         facts = verified_facts(tenant, origin, active)
         facts["member_id"] = await current_member(tid, facts["subject"])
+        if verification:
+            from auth_service.verification_evidence import email_evidence
+            facts = facts | email_evidence(origin)
+            facts["source"] = "auth_verification_v1"
         return JSONResponse(facts, headers=headers)
     except MembershipRevoked:
         return JSONResponse(

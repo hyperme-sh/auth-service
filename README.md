@@ -55,3 +55,13 @@ organization policy may shorten it). Expired evidence fails closed: validate a
 new main revision. The publisher verifies the run, source, workflow and artifact
 digest independently of release metadata. Repository immutable releases must be
 enabled. See the [shared release contract](https://github.com/hyperme-sh/.github/blob/7749591fccd30d46ba9b0adabe82114001c9d0de/actions/release-channel/README.md).
+
+## Verification evidence
+
+`/auth/verification-context` reuses the live Connect browser/tenant authentication
+boundary and adds default-deny email evidence for verification-service. Configure
+`AUTH_VERIFICATION_EMAIL_ISSUER` and signed broker aliases in
+`AUTH_VERIFICATION_EMAIL_PROVIDERS`; a Keycloak `identity_provider` mapper must
+preserve broker origin. Local email trust is separately default-off through
+`AUTH_VERIFICATION_LOCAL_EMAIL_TRUST`. See verification-service's contract and
+rollout requirements before enabling either policy.
