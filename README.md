@@ -20,7 +20,7 @@ checkout and a rebuilt source archive. Wheel payloads must match runtime bytes.
 External identity/RPC interactions in these tests use deterministic test doubles.
 
 The active suite includes PostgreSQL enrollment and role seeding, shared Redis
-nonce replay protection, and production/test operator seed boundaries. All 276
+nonce replay protection, and production/test operator seed boundaries. All 283
 cases must execute without skips in each package context; CI retains their JUnit
 identities and rejects unequal inventories. Database fixtures apply the owning
 controlplane-db migration chains.
@@ -101,3 +101,17 @@ become accepted through a provenance label. No stable baseline is recorded until
 that release exists. Stable publication remains closed without a valid baseline;
 first stable bootstrap and coordinated release qualification remain separate.
 No stable version, approval prerequisite or deployment is introduced here.
+
+## Closure dependency adoption
+
+The dependency graph follows merged core `dd5833c8ebc65bed48fe14968b7f7b5f43418fcb`.
+Direct pins match its exact transitive pins, including DB `482943cb` and tenancy
+`26c6207c`, both now contained in their merged owner histories. Validation uses
+Git revisions; new DB, tenancy and core snapshots have not been published because
+their release workflows are manually disabled.
+
+Introspection checks current account retirement authority, and synchronous
+session checks run off the caller event loop. Enrollment, host membership,
+role seeding and shared nonce regressions remain in the full package suite.
+This is component qualification; live provider and deployment acceptance remain
+separate, and closure enforcement stays default-off.

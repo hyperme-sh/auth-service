@@ -18,7 +18,7 @@
     "auth_service/smoke_oidc.py": "cd43577f2795081487b80230879f4e3142065745dc37aa7bde0a0b79876197e4",
     "auth_service/tenant_switch.py": "5b3a90fb8df2ff3771349ce2993a7dedb822d0e289e4cc8bb35c531c925b08c4",
     "auth_service/test_operator_seed.py": "94e2639bb2e597f9b755217f5add2a27f8a8d8f49304714fa172982654d44ee5",
-    "auth_service/token_validation.py": "894128d7c22c180352fa214ac2dd2756ce59878e13b0e5435d5a34271858c192",
+    "auth_service/token_validation.py": "b7323a9683fc5d9ea29dfbb2c8511bbbe9cdef26144a4eee901d1fb52745af0b",
     "auth_service/wallet_bind.py": "ee308190608aca3010530c6fd6370c39976cdbaa90b9645d3fedb2fb03fcc1a0"
   },
   "schema_version": 1

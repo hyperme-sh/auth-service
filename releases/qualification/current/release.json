@@ -5,12 +5,14 @@
     "auth-service": {
       "version": "0.24.0",
       "contract": "contract.json",
-      "contract_sha256": "ff4af9b4152d5b969342360c1ead14ca2df6eb38903fec8a15ecd42b60b8b7ff",
+      "contract_sha256": "e2572a3a33c38e9e680f40a4ed4cc0e0086ebf5e66abae0ada97ac1ad372a4dc",
       "artifact": {
         "kind": "package",
-        "uri": "urn:sha256:63f4ad72eded980093bea23189a2deab2c4d1288f64cf8af14718b3af997ceda",
-        "sha256": "63f4ad72eded980093bea23189a2deab2c4d1288f64cf8af14718b3af997ceda"
+        "uri": "urn:sha256:edd49a8293f271b08c39ebce657605b6adbdf4aec4981d818cc2f003f641b58b",
+        "sha256": "edd49a8293f271b08c39ebce657605b6adbdf4aec4981d818cc2f003f641b58b"
       }
     }
-  }
+  },
+  "purpose": "artifact-qualification",
+  "stable_release": false
 }

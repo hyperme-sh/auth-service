@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import jwt
@@ -7,6 +8,7 @@ from jwt import InvalidTokenError
 
 from controlplane_api.exceptions import UnauthorizedException
 from controlplane_api.config import settings
+from controlplane_identity.account_lifecycle import require_open_account
 from api.infrastructure.security.api_key_exchange_jwt import try_decode_api_key_session_jwt
 from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
 from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_session_jwt
@@ -16,10 +18,10 @@ from auth_service.keycloak_oidc import introspect_access_token
 
 
 async def validate_access_token(access_token: str) -> dict[str, Any]:
-    ex = try_decode_api_key_session_jwt(access_token)
+    ex = await asyncio.to_thread(try_decode_api_key_session_jwt, access_token)
     if ex is not None:
         return ex
-    switched = try_decode_tenant_session_jwt(access_token)
+    switched = await asyncio.to_thread(try_decode_tenant_session_jwt, access_token)
     if switched is not None:
         return switched
 
@@ -27,7 +29,12 @@ async def validate_access_token(access_token: str) -> dict[str, Any]:
         body = await introspect_access_token(access_token)
         if not body.get("active") or body.get("azp") == "hypermesh-host-setup" or body.get("client_id") == "hypermesh-host-setup":
             raise UnauthorizedException("Invalid or inactive access token")
-        return introspection_to_claims(body)
+        claims = introspection_to_claims(body)
+        try:
+            await asyncio.to_thread(require_open_account, claims)
+        except InvalidTokenError as exc:
+            raise UnauthorizedException("Invalid or expired access token") from exc
+        return claims
 
     validator = get_keycloak_jwt_validator()
     try:

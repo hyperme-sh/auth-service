@@ -7,12 +7,15 @@ name = "auth-service"
 version = "0.24.0"
 requires-python = ">=3.13"
 dependencies = [
-    "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@c2122d98795452f54d56808d1d94f8b9dffb476f",
-    "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@94717d746f9d321dde1a44019c10e31acaee3204",
+    "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@ae5aa86dc53b1a9e25ae4527fefeea6da6fb66ea",
+    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@26c6207cfa446e819992baaa0df53f3b694f6ced",
+    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@482943cbcd78ffd1a3d2ad4e1088ed7ed0cdeaea",
+    "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@ba971e08bcbf6ec45ec8e6f0ae26220378aa7cdb",
+    "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@797bb4303075e3e7fb54dd42a1451bfe3fd089fa",
     "httpx>=0.28.1",
     "redis>=5.0.0",
     "bcrypt>=4.2.0",
-    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@f75718584de811a1ef9fcc9226a67f073577b464",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@dd5833c8ebc65bed48fe14968b7f7b5f43418fcb",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
 ]
