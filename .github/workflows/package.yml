@@ -11,10 +11,29 @@ jobs:
     runs-on:
       group: shared-local
       labels: [self-hosted, linux, x64]
-    timeout-minutes: 15
+    timeout-minutes: 20
+    environment: controlplane-libs-read
     steps:
+      - name: Mint repository-scoped dependency token
+        id: dependency-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          app-id: ${{ vars.CONTROLPLANE_LIBS_APP_ID }}
+          private-key: ${{ secrets.CONTROLPLANE_LIBS_APP_PRIVATE_KEY }}
+          owner: hyperme-sh
+          permission-contents: read
+          repositories: |
+            controlplane-api
+            controlplane-core
+            controlplane-db
+            controlplane-events
+            controlplane-identity
+            controlplane-tenancy
+            user-service
       - name: Prepare release output
-        run: echo "RELEASE_ARTIFACT_DIR=$(mktemp -d "$RUNNER_TEMP/release-dist.XXXXXX")" >> "$GITHUB_ENV"
+        run: |
+          echo "RELEASE_ARTIFACT_DIR=$(mktemp -d "$RUNNER_TEMP/release-dist.XXXXXX")" >> "$GITHUB_ENV"
+          echo "TEST_EVIDENCE_DIR=$(mktemp -d "$RUNNER_TEMP/test-evidence.XXXXXX")" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -24,7 +43,7 @@ jobs:
           python-version: '3.13'
       - name: Validate auth package
         env:
-          DEPENDENCY_READ_TOKEN: ${{ secrets.DEPENDENCY_READ_TOKEN }}
+          DEPENDENCY_READ_TOKEN: ${{ steps.dependency-token.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -48,6 +67,13 @@ jobs:
           export GIT_CONFIG_VALUE_6="AUTHORIZATION: basic $header"
           unset DEPENDENCY_READ_TOKEN
           bash scripts/check-package.sh
+      - name: Retain executed test identities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-results
+          path: ${{ env.TEST_EVIDENCE_DIR }}/*.xml
+          if-no-files-found: error
+          retention-days: 90
       - name: Retain validated package bytes
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

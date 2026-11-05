@@ -13,20 +13,30 @@ concurrency:
   group: package-release-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: false
 jobs:
+  release-admission:
+    if: github.event_name == 'push'
+    uses: hyperme-sh/spanopticon/.github/workflows/component-release.yml@60e605ff39923c61bccc6c732181f82e557be35a
+    with:
+      release-line: '0.24'
+      baseline-ref: ${{ vars.SPANOPTICON_RELEASE_BASELINE_SHA }}
+      requested-version: ${{ github.ref_name }}
   publish:
+    needs: release-admission
     permissions:
       contents: write
       actions: read
     if: >-
-      github.event_name == 'push' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
+      always() &&
+      ((github.event_name == 'push' && needs.release-admission.result == 'success') ||
+       (github.event_name == 'workflow_run' && needs.release-admission.result == 'skipped' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Publish or promote exact tested artifacts
-        uses: hyperme-sh/.github/actions/release-channel@7749591fccd30d46ba9b0adabe82114001c9d0de
+        uses: hyperme-sh/.github/actions/release-channel@45b5987d7000ab44bddc4e5ec3a0ff7674d3b137
         with:
           workflow: .github/workflows/package.yml
           token: ${{ github.token }}

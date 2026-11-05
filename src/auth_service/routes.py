@@ -264,12 +264,18 @@ async def auth_switch_tenant(
                 detail="X-Tenant-ID must match tenant in request body",
             )
 
-    from auth_service.test_operator_seed import provision_test_operator
+    from auth_service.test_operator_seed import (
+        ensure_seeded_host_role,
+        provision_test_operator,
+    )
 
     from auth_service import operator_binding
 
     await provision_test_operator(claims, body.tenant_id)
+    denial = await ensure_seeded_host_role(claims, body.tenant_id)
     await operator_binding.provision(claims, body.tenant_id)
+    if denial:
+        raise ForbiddenException(denial)
     grant = await authorize_tenant_switch(user, body.tenant_id)
     if grant is None:
         raise ForbiddenException("Not a member of this tenant")
@@ -282,11 +288,12 @@ async def auth_switch_tenant(
     proposed = tenant_session_permissions(
         grant.permissions,
         email=user.email,
-        groups=groups_from_claims(claims),
+        # Tenant-session groups describe that source tenant, not fresh IdP proof.
+        groups=groups_from_claims(claims) if not claims.get("spanopticon_auth") else [],
         hosted_domains=hosted_domains_from_claims(claims),
     )
     access = mint_tenant_session_jwt(
-        claims={**claims, "permissions": [], "realm_access": {"roles": []}},
+        claims={**claims, "permissions": [], "realm_access": {"roles": []}, "groups": list(grant.groups)},
         tenant_id=body.tenant_id,
         extra_roles=[grant.role_name],
         extra_permissions=operator_binding.permissions(

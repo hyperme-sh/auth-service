@@ -5,6 +5,7 @@ OIDC credential supplies signed authentication time and factor evidence. It is
 introspected on every request; neither credential is retained or returned.
 """
 
+import asyncio
 import hashlib
 import json
 import os
