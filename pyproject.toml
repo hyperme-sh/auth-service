@@ -31,7 +31,7 @@ dev = [
 packages = ["src/auth_service"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
+include = ["/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
