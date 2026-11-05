@@ -1,0 +1,7 @@
+{
+  "source_repository": "hyperme-sh/controlplane-identity",
+  "revision": "5aeff3d2c00568f39ca6e8b75c7e63883d3a510b",
+  "path": "tests/test_interactive_age.py",
+  "sha256": "f2a5a6600f1dc4036c7253da7433877c8acf622db944a84c55009604fe9ad45d",
+  "adaptation": "Retain policy helper/test bodies; exercise core legacy settings and validator aliases."
+}

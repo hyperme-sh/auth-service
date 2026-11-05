@@ -183,3 +183,10 @@ consumer/deployment selection must bind exact component commits and artifact
 digests, not matching repository-local counters. No stable promotion is automatic.
 Private jobs use debrunners and public jobs use hosted Ubuntu; no approval gates
 are introduced. Missing original evidence or publication collisions fail closed.
+
+## Interactive identity policy adoption
+
+The exact API, core and identity pins now enforce age confirmation on ordinary
+interactive JWT validation. Seven consumer regressions retain machine/service
+exemptions and run in all three package contexts alongside the auth suite.
+This is package qualification, not live provider or full self-hosted acceptance.
