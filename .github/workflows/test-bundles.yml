@@ -1,0 +1,26 @@
+name: Test bundles
+on:
+  workflow_run:
+    workflows: [Standalone package]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: versioned-test-bundles
+  cancel-in-progress: false
+jobs:
+  bundle:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Publish exact qualified test bundle
+        uses: hyperme-sh/.github/actions/bundle-channel@2f4d291a3e833520b7a8c5cb5e5cbc812395f691
+        with:
+          mode: test
+          token: ${{ github.token }}
