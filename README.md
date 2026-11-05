@@ -80,9 +80,10 @@ so no runtime test depends on a neighboring checkout.
 
 The candidate package targets 0.24 with immutable dependency revisions and a
 complete runtime contract exported from its built wheel. The hosted PR lane uses
-verified existing dependency artifacts, including every private transitive edge,
-without private credentials. Native Docker consumers remain mandatory; fixtures
-are excluded from distributions. The ordinary main Git-install lane is retained.
+fixtures built from clean exact dependency revisions, including every private
+transitive edge, without private credentials. Native Docker consumers remain
+mandatory. Wheels contain runtime code; source archives retain qualification
+tooling and fixtures. The ordinary main Git-install lane is retained.
 This change prepares artifacts and compatibility evidence; it does not tag,
 publish, promote or deploy a release. Provider/runtime acceptance stays separate.
 
