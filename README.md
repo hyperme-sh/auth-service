@@ -116,3 +116,14 @@ session checks run off the caller event loop. Enrollment, host membership,
 role seeding and shared nonce regressions remain in the full package suite.
 This is component qualification; live provider and deployment acceptance remain
 separate, and closure enforcement stays default-off.
+
+
+### Initial stable declaration
+
+When there is no accepted stable release, the pinned admission workflow checks
+this repository's complete live release inventory and the exact owning package
+versions against `releases/candidate`. A stable release or incomplete inventory
+rejects this path. Candidate metadata identifies built artifacts; it does not
+establish an accepted baseline or publish anything. The exact-pinned publisher
+independently validates tested bytes and serializes any later explicit first
+stable publication. Test snapshots remain qualification evidence only.
