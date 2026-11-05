@@ -1,0 +1,21 @@
+{
+  "repository": "hyperme-sh/auth-service",
+  "revision": "f01f65e535ddee2674582b005d0c9c181923ff90",
+  "release_id": 434698097,
+  "immutable": true,
+  "tag": "test-f01f65e535ddee2674582b005d0c9c181923ff90",
+  "run_id": 41954553762,
+  "artifact_id": 13382995369,
+  "assets": {
+    "auth_service-0.2.0-py3-none-any.whl": "sha256:3296c79d0204c257547ba01712f131962e13e7a5dd0f5ec218b38ec3927afe22",
+    "auth_service-0.2.0.tar.gz": "sha256:33c175da83491949c0fea3e801670999ce8f63b8e3bc0d52c2031eb21f34e7fa"
+  },
+  "published_release_url": "https://github.com/hyperme-sh/auth-service/releases/tag/test-f01f65e535ddee2674582b005d0c9c181923ff90",
+  "checks": [
+    "successful same-repository main-push package run",
+    "live Actions artifact digest",
+    "release bytes equal tested bytes",
+    "immutable release and tag revision",
+    "asset digests equal manifest"
+  ]
+}
