@@ -46,9 +46,11 @@ uv build --out-dir "$scratch/dist"
 uv run --frozen "${run_options[@]}" python scripts/verify_wheel.py "$scratch/dist"
 uv run --frozen "${run_options[@]}" pytest -q tests_tools
 uv run --frozen "${run_options[@]}" python scripts/export_release_contract.py "$scratch"/dist/*.whl --output "$scratch/contract"
-if [[ -f releases/candidate/release.json ]]; then
-  uv run --frozen "${run_options[@]}" python scripts/verify_release_candidate.py releases/candidate/release.json "$scratch/contract/contract.json" "$scratch/contract/evidence.json" auth-service
-fi
+for qualified_manifest in releases/qualification/current/release.json releases/candidate/release.json; do
+  if [[ -f "$qualified_manifest" ]]; then
+    uv run --frozen "${run_options[@]}" python scripts/verify_release_candidate.py "$qualified_manifest" "$scratch/contract/contract.json" "$scratch/contract/evidence.json" auth-service
+  fi
+done
 uv export --frozen "${export_options[@]}" --no-emit-project --format requirements-txt --output-file "$scratch/requirements.txt" >/dev/null
 uv venv --python 3.13 "$scratch/venv"
 uv pip sync --python "$scratch/venv/bin/python" "$scratch/requirements.txt"
