@@ -4,7 +4,7 @@
     "auth_service/__init__.py": "52938b4b6281b26ac611c823bdc28daee8a7852a835c51bdf5e6efd1c5827d50",
     "auth_service/app.py": "f34d638980ce4749019e44fcbcb51e0eb8c776d25ae77623a579da4ce66815af",
     "auth_service/claims.py": "49ec61ea25bdcbde6f3b64b258274cd57590a0bbd5c6e10212120795514316ce",
-    "auth_service/connect_session.py": "b64f62fa10f7b3ba82c5a5c3d3422650e8112ccedad5fe815fda1607d68a4e20",
+    "auth_service/connect_session.py": "d7704e79badf2a29a03aad644eefb7ad94949c7ef4024a480654fcd56ffb792d",
     "auth_service/deps.py": "e88f366956943ec4f78d24acc8311986c2df022f6c27aaa7d2a20cc89af98833",
     "auth_service/enrollment.py": "1164247a59599c912bc1240b6f532b52e789498ae5baf03edcd93bae49ea7d10",
     "auth_service/host_binding_client.py": "574ff9bc04bc109a1b21f66fa114b3c1a7c83fa0da5673fda447629b7baad250",
@@ -19,6 +19,7 @@
     "auth_service/tenant_switch.py": "5b3a90fb8df2ff3771349ce2993a7dedb822d0e289e4cc8bb35c531c925b08c4",
     "auth_service/test_operator_seed.py": "94e2639bb2e597f9b755217f5add2a27f8a8d8f49304714fa172982654d44ee5",
     "auth_service/token_validation.py": "b7323a9683fc5d9ea29dfbb2c8511bbbe9cdef26144a4eee901d1fb52745af0b",
+    "auth_service/verification_evidence.py": "9522fffb3a8b12e9bb09d5a353300dca08f246c866e4b5720d615f6304d43e1b",
     "auth_service/wallet_bind.py": "ee308190608aca3010530c6fd6370c39976cdbaa90b9645d3fedb2fb03fcc1a0"
   },
   "schema_version": 1
