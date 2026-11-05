@@ -75,3 +75,13 @@ The additional connect-session and enrollment API cases from the same Panopticon
 revision run in the root suite. Realm-file assertions were transferred to
 controlplane-keycloak and portal-grant source assertions to controlplane-portal,
 so no runtime test depends on a neighboring checkout.
+
+## Coordinated version preparation
+
+The candidate package targets 0.24 with immutable dependency revisions and a
+complete runtime contract exported from its built wheel. The hosted PR lane uses
+verified existing dependency artifacts, including every private transitive edge,
+without private credentials. Native Docker consumers remain mandatory; fixtures
+are excluded from distributions. The ordinary main Git-install lane is retained.
+This change prepares artifacts and compatibility evidence; it does not tag,
+publish, promote or deploy a release. Provider/runtime acceptance stays separate.

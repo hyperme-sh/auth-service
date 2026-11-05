@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "dependencies": [
+    {
+      "distribution": "controlplane-api",
+      "version": "0.24.0",
+      "dependency_revision": "c2122d98795452f54d56808d1d94f8b9dffb476f",
+      "artifact_revision": "c2122d98795452f54d56808d1d94f8b9dffb476f",
+      "wheel": "controlplane_api-0.24.0-py3-none-any.whl",
+      "sha256": "cc39416970f1808625ce53f11af22bc48b888dffdcecfed5d95e86a2d5f06349",
+      "source_url": "https://github.com/hyperme-sh/controlplane-api/releases/download/test-c2122d98795452f54d56808d1d94f8b9dffb476f/controlplane_api-0.24.0-py3-none-any.whl",
+      "run_id": 41944884466,
+      "artifact_id": 13377692480
+    },
+    {
+      "distribution": "controlplane-tenancy",
+      "version": "0.24.0",
+      "dependency_revision": "c8f01df2b475d92a41977161f8a72e095765481e",
+      "artifact_revision": "c8f01df2b475d92a41977161f8a72e095765481e",
+      "wheel": "controlplane_tenancy-0.24.0-py3-none-any.whl",
+      "sha256": "8808aaa921f4833c19998dd4a844e720c6a36eea5e92b4d5337a0e9e3649e007",
+      "source_url": "https://github.com/hyperme-sh/controlplane-tenancy/releases/download/test-c8f01df2b475d92a41977161f8a72e095765481e/controlplane_tenancy-0.24.0-py3-none-any.whl",
+      "run_id": 41944874268,
+      "artifact_id": 13377283598
+    },
+    {
+      "distribution": "controlplane-identity",
+      "version": "0.24.0",
+      "dependency_revision": "94717d746f9d321dde1a44019c10e31acaee3204",
+      "artifact_revision": "94717d746f9d321dde1a44019c10e31acaee3204",
+      "wheel": "controlplane_identity-0.24.0-py3-none-any.whl",
+      "sha256": "dc8519d07eadd07efd7d05487a44c0a29d85d5cfb2ac37fedb7f78fe8e3b3ad9",
+      "source_url": "https://github.com/hyperme-sh/controlplane-identity/releases/download/test-94717d746f9d321dde1a44019c10e31acaee3204/controlplane_identity-0.24.0-py3-none-any.whl",
+      "run_id": 41940130507,
+      "artifact_id": 13375966324
+    },
+    {
+      "distribution": "controlplane-db",
+      "version": "0.24.0",
+      "dependency_revision": "6ee52fe3e775548956cada649715fdde80f6cd1d",
+      "artifact_revision": "6ee52fe3e775548956cada649715fdde80f6cd1d",
+      "wheel": "controlplane_db-0.24.0-py3-none-any.whl",
+      "sha256": "f9944d506da43dbc0da1d0142226096c37c1073d97b726ae05a770ab8d64f4c8",
+      "source_url": "https://github.com/hyperme-sh/controlplane-db/releases/download/test-6ee52fe3e775548956cada649715fdde80f6cd1d/controlplane_db-0.24.0-py3-none-any.whl",
+      "run_id": 41940733018,
+      "artifact_id": 13374864982
+    },
+    {
+      "distribution": "controlplane-events",
+      "version": "0.24.0",
+      "dependency_revision": "ae5aa86dc53b1a9e25ae4527fefeea6da6fb66ea",
+      "artifact_revision": "ae5aa86dc53b1a9e25ae4527fefeea6da6fb66ea",
+      "wheel": "controlplane_events-0.24.0-py3-none-any.whl",
+      "sha256": "3956b4d78429e7158b053d9d0d4c425659e6f82a2b9ead8f1614bfae6d15939f",
+      "source_url": "https://github.com/hyperme-sh/controlplane-events/releases/download/test-ae5aa86dc53b1a9e25ae4527fefeea6da6fb66ea/controlplane_events-0.24.0-py3-none-any.whl",
+      "run_id": 41939526369,
+      "artifact_id": 13375229422
+    },
+    {
+      "distribution": "operator-ban-store",
+      "version": "0.24.0",
+      "dependency_revision": "344d8c14cffcdffe5d07b9fa29da33837092a3c7",
+      "artifact_revision": "344d8c14cffcdffe5d07b9fa29da33837092a3c7",
+      "wheel": "operator_ban_store-0.24.0-py3-none-any.whl",
+      "sha256": "b26fc97ffd31af5ce2d54173147829e27e3e8821a84d8cfe00f1cca512cbae44",
+      "source_url": "https://github.com/hyperme-sh/user-service/releases/download/test-344d8c14cffcdffe5d07b9fa29da33837092a3c7/operator_ban_store-0.24.0-py3-none-any.whl",
+      "run_id": 41951969168,
+      "artifact_id": 13382045687
+    },
+    {
+      "distribution": "controlplane-core",
+      "version": "0.24.0",
+      "dependency_revision": "f75718584de811a1ef9fcc9226a67f073577b464",
+      "artifact_revision": "f75718584de811a1ef9fcc9226a67f073577b464",
+      "wheel": "controlplane_core-0.24.0-py3-none-any.whl",
+      "sha256": "4c3ba1f009b433ab5f38d6f8392452a33d2b36599249e335c72823f10e9c7c5e",
+      "source_url": "https://github.com/hyperme-sh/controlplane-core/releases/download/test-f75718584de811a1ef9fcc9226a67f073577b464/controlplane_core-0.24.0-py3-none-any.whl",
+      "run_id": 41953454972,
+      "artifact_id": 13381378144
+    }
+  ]
+}
