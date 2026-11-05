@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "line": "0.24",
+  "purpose": "stable-release",
+  "components": {
+    "auth-service": {
+      "version": "0.24.0",
+      "contract": "contract.json",
+      "contract_sha256": "e2572a3a33c38e9e680f40a4ed4cc0e0086ebf5e66abae0ada97ac1ad372a4dc",
+      "artifact": {
+        "kind": "package",
+        "uri": "urn:sha256:edd49a8293f271b08c39ebce657605b6adbdf4aec4981d818cc2f003f641b58b",
+        "sha256": "edd49a8293f271b08c39ebce657605b6adbdf4aec4981d818cc2f003f641b58b"
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+name: Isolated consumer qualification
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Prepare qualification outputs
+        run: |
+          echo "RELEASE_ARTIFACT_DIR=$(mktemp -d "$RUNNER_TEMP/prepared-dist.XXXXXX")" >> "$GITHUB_ENV"
+          echo "TEST_EVIDENCE_DIR=$(mktemp -d "$RUNNER_TEMP/prepared-tests.XXXXXX")" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.11.26'
+          python-version: '3.13'
+      - run: bash scripts/check-package.sh --fixtures
+      - name: Retain qualified PR artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prepared-dist
+          path: ${{ env.RELEASE_ARTIFACT_DIR }}/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - name: Retain native consumer evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prepared-consumers
+          path: ${{ env.TEST_EVIDENCE_DIR }}/*.xml
+          if-no-files-found: error
+          retention-days: 30
