@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
-from auth_service import tenant_switch, routes, deps
+from auth_service import routes, deps
+from user_service import identity_tenant_switch as tenant_switch
 from auth_service.schemas import AuthMeResponse, EnrollmentGrantRequest
 from test_switch_tenant import _FakeSession
 from controlplane_identity.security.tenant_session_jwt import try_decode_tenant_session_jwt
@@ -91,7 +92,7 @@ def test_org_admin_enrollment_requires_target_tenant_authority(scope, role):
 
 @pytest.mark.asyncio
 async def test_foreign_admin_enrollment_does_not_write_membership(monkeypatch):
-    from auth_service import enrollment
+    from user_service import identity_enrollment as enrollment
     from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
     monkeypatch.setattr(enrollment, '_bound_wallet', AsyncMock(return_value=None))
     monkeypatch.setattr(enrollment, '_get_or_create_role', AsyncMock())

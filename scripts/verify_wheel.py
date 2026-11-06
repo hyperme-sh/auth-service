@@ -6,6 +6,11 @@ root = Path(__file__).resolve().parents[1]
 expected = {p.relative_to(root / 'src').as_posix(): p.read_bytes()
             for p in (root / 'src').rglob('*')
             if p.is_file() and '__pycache__' not in p.parts}
+# Owner migration bundles are installed only in their owning service image.
+excluded_owner_resources = ('auth_service/migrate.py', 'auth_service/migrations/')
+expected = {name: data for name, data in expected.items()
+            if not any(name == path or (path.endswith('/') and name.startswith(path))
+                       for path in excluded_owner_resources)}
 resource = root / 'proto/spanopticon/v1/contractecho.proto'
 if resource.exists():
     expected['controlplane_proto_data/contractecho.proto'] = resource.read_bytes()

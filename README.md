@@ -170,3 +170,17 @@ The Python package version is **0.2.0**. Release admission uses line `0.2`. Succ
 ## License
 
 First-party code is [Apache-2.0](LICENSE). Dependencies keep their own licenses.
+
+## Identity-owner qualification
+
+Identity writes are exercised through the installed user-service owner fixture
+recorded in `tests_artifacts/identity-owner/manifest.json`. Native PostgreSQL
+assertions run against that owner implementation; auth HTTP enrollment tests use
+its real authenticated router with an in-process transport and the native test
+transaction. Route/JWT unit tests isolate the owner separately. The fixture is
+only a test dependency and is not included in the auth runtime wheel.
+
+The coordinated development graph uses explicit immutable uv overrides for
+transitive owner pins. Fixture validation checks the selected lock, wheel hashes,
+and the original dependency declarations before applying those overrides.
+Qualification does not publish packages or authorize deployment.
