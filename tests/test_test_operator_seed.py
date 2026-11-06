@@ -1,6 +1,6 @@
 import uuid
 import pytest
-from auth_service import test_operator_seed as seed
+from user_service import identity_test_seed as seed
 
 
 def claims():

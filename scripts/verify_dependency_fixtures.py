@@ -32,11 +32,16 @@ def verify(root):
             locked[entry['name']] = entry
     if not locked or len(records) != len(locked) or {r['distribution'] for r in records} != set(locked):
         raise ValueError('Fixture inventory differs from locked dependencies')
+    overrides = dict(pin(r) for r in project.get('tool', {}).get('uv', {}).get('override-dependencies', []))
+    for name, source in overrides.items():
+        if name not in locked or locked[name]['source'] != {'git': source}:
+            raise ValueError('Explicit override differs from locked dependency')
     def references(requirements):
         children = set()
         for requirement in requirements:
             if 'git+' not in requirement: continue
             name, source = pin(requirement)
+            source = overrides.get(name, source)
             if name not in locked or locked[name]['source'] != {'git': source}:
                 raise ValueError('Declared dependency differs from locked dependency')
             children.add(name)
@@ -64,6 +69,9 @@ def verify(root):
             info = email.parser.BytesParser().parsebytes(archive.read(metadata[0]))
             if info.get_all('Name') != [name] or info.get_all('Version') != [record['version']]:
                 raise ValueError('Fixture metadata differs from dependency')
+            declared_git = sorted(r for r in info.get_all('Requires-Dist', []) if 'git+' in r)
+            if declared_git != record.get('declared_git_requirements'):
+                raise ValueError('Audited transitive dependency declarations differ from fixture')
             graph[name] = references(info.get_all('Requires-Dist', []))
         wheels.append(wheel.resolve())
     reached, pending = set(), list(roots)

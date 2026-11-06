@@ -25,7 +25,7 @@ from api.infrastructure.persistence.db_session import (
 )
 from api.infrastructure.persistence.tenant_guc import set_current_tenant_id_guc
 from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
-from auth_service.enrollment import (
+from user_service.identity_enrollment import (
     EnrollmentError,
     HELD_HOST,
     HELD_ORG_ADMIN,
@@ -34,8 +34,9 @@ from auth_service.enrollment import (
     grant_held_roles,
 )
 from auth_service.schemas import AuthMeResponse
-from auth_service.tenant_switch import authorize_tenant_switch
-from auth_service.wallet_bind import bind_wallet, get_wallet_binding, issue_siwe_nonce
+from user_service.identity_tenant_switch import authorize_tenant_switch
+from auth_service.wallet_bind import bind_wallet, issue_siwe_nonce
+from user_service.identity_wallet_bind import get_wallet_binding
 from controlplane_db.models import (
     ApiKey,
     Group,
@@ -122,7 +123,7 @@ async def db_session(migrated_sync_url: str, seed: Seed):
 @pytest.fixture(autouse=True)
 def host_owner_http(monkeypatch):
     import httpx
-    from auth_service import enrollment
+    from user_service import identity_enrollment as enrollment
     from auth_service.host_binding_client import HttpHostBindingClient
     token = "owner-test-token-" + "x" * 40
     def owner(request):
@@ -655,7 +656,7 @@ async def test_host_authority_rolls_back_and_retry_reuses_owner_reservation(migr
 @pytest.mark.asyncio
 @pytest.mark.parametrize("username", ["admin", "admin@test.hyperme.sh", "renamed-account", None])
 async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, monkeypatch, username):
-    from auth_service.test_operator_seed import provision_test_operator, EMAIL, ROLE
+    from user_service.identity_test_seed import provision_test_operator, EMAIL, ROLE
     from controlplane_api.config import settings
     from api.domain.operator.population import SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
     from controlplane_api.exceptions import ForbiddenException
@@ -685,7 +686,7 @@ async def test_seeded_operator_gets_durable_scoped_membership(db_session, seed, 
 
 @pytest.mark.asyncio
 async def test_seeded_host_role_attaches_existing_user_role(db_session, seed, monkeypatch):
-    from auth_service.test_operator_seed import (
+    from user_service.identity_test_seed import (
         HOST_EMAIL, HOST_ROLE, TEST_ISSUER, ensure_seeded_host_role,
     )
     from controlplane_api.config import settings
@@ -758,7 +759,7 @@ async def test_seeded_host_role_attaches_existing_user_role(db_session, seed, mo
 async def test_seeded_host_repairs_unresolved_platform_role_and_null_subject(
     db_session, seed, monkeypatch,
 ):
-    from auth_service.test_operator_seed import (
+    from user_service.identity_test_seed import (
         HOST_EMAIL, HOST_ROLE, TEST_ISSUER, ensure_seeded_host_role,
     )
     from controlplane_api.config import settings
@@ -830,7 +831,7 @@ async def test_seeded_host_repairs_unresolved_platform_role_and_null_subject(
 
 @pytest.mark.asyncio
 async def test_tenant_user_role_is_created_for_the_seeded_host_only(db_session):
-    from auth_service.test_operator_seed import _tenant_user_role
+    from user_service.identity_test_seed import _tenant_user_role
     from sqlalchemy import delete
     tenant_id = uuid.uuid4()
     await db_session.execute(text(
@@ -867,8 +868,8 @@ async def test_production_operator_membership_does_not_store_authority(db_sessio
 
 @pytest.mark.asyncio
 async def test_operator_bootstrap_preserves_existing_platform_identity(db_session, seed):
-    from auth_service.test_operator_seed import provision_operator, SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
-    from auth_service.tenant_switch import authorize_tenant_switch
+    from user_service.identity_test_seed import provision_operator, SEEDED_TEST_ADMIN_OPERATOR_CLAIMS
+    from user_service.identity_tenant_switch import authorize_tenant_switch
 
     subject = f"operator-{uuid.uuid4()}"
     email = f"{subject}@example.com"
@@ -1032,3 +1033,33 @@ async def test_native_setup_uses_bound_active_host_group_without_inventing_tenan
         assert claims["purpose"] == "host_setup"
         assert "permissions" not in claims
     assert member.role_id is None
+
+
+@pytest.fixture(autouse=True)
+def identity_owner_http(monkeypatch):
+    """Real owner router and SQL implementation, using the native test transaction.
+
+    Only the transport is in-process; auth still serializes and authenticates its
+    command and the actual owner validates and executes it.
+    """
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    import httpx
+    from auth_service import identity_owner
+    from user_service.identity_api import router
+    from api.infrastructure.persistence.db_session import get_db_session
+    app = FastAPI(); app.include_router(router, prefix='/api/v1')
+    class OwnerSession:
+        def __init__(self, session): self.session = session
+        def begin(self): return self.session.begin_nested()
+        def __getattr__(self, name): return getattr(self.session, name)
+    @asynccontextmanager
+    async def maker():
+        yield OwnerSession(get_db_session())
+    app.state.session_maker = maker
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL', 'http://identity-owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN', 'isolated-owner-test-token')
+    factory = httpx.AsyncClient
+    monkeypatch.setattr(identity_owner, 'httpx', SimpleNamespace(AsyncClient=lambda **kw: factory(
+        transport=httpx.ASGITransport(app=app), **kw)))

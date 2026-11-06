@@ -38,6 +38,8 @@ sync_environment() {
   .venv/bin/python scripts/verify_preparation_environment.py "$PWD"
 }
 sync_environment
+identity_wheel=$(python3 scripts/verify_identity_owner_fixture.py)
+uv pip install --python .venv/bin/python --no-deps "$identity_wheel"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 docker info >/dev/null
@@ -60,6 +62,7 @@ else
 uv pip uninstall --python "$scratch/venv/bin/python" controlplane-core controlplane-api controlplane-tenancy controlplane-identity controlplane-db controlplane-events operator-ban-store
 uv pip install --python "$scratch/venv/bin/python" --constraint "$scratch/requirements.txt" "$scratch"/dist/*.whl
 fi
+uv pip install --python "$scratch/venv/bin/python" --no-deps "$identity_wheel"
 cp -R tests "$scratch/"
 (cd "$scratch" && "$scratch/venv/bin/python" -I -m pytest -c /dev/null -o asyncio_mode=auto -o asyncio_default_fixture_loop_scope=function tests --junitxml="$scratch/wheel.xml")
 # Rebuild from the sdist; a checkout must not supply omitted package files.

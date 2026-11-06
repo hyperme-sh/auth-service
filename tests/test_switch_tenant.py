@@ -13,7 +13,7 @@ from api.infrastructure.security.tenant_session_jwt import (
     try_decode_tenant_session_jwt,
 )
 from auth_service.schemas import AuthMeResponse
-from auth_service.tenant_switch import (
+from user_service.identity_tenant_switch import (
     TenantSwitchGrant,
     _email_norm,
     _role_has_host_manage,
@@ -310,7 +310,7 @@ async def test_authorize_member_and_host_and_unknown(tenant_uuid):
     )()
 
     with patch(
-        "auth_service.tenant_switch.set_current_tenant_id_guc",
+        "user_service.identity_tenant_switch.set_current_tenant_id_guc",
         new=AsyncMock(),
     ):
         granted = await authorize_tenant_switch(

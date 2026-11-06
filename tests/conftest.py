@@ -22,6 +22,14 @@ def event_sink() -> list:
 
 @pytest.fixture
 def app(event_sink, monkeypatch):
+    # Route/JWT unit tests isolate the external owner. Native enrollment tests
+    # use the actual owner router and PostgreSQL instead of this fixture.
+    from auth_service import identity_owner
+    async def owner(operation, **payload):
+        if operation not in {'seed-operator', 'seed-host', 'provision-operator'}:
+            raise AssertionError('Unexpected identity-owner operation: ' + operation)
+        return None
+    monkeypatch.setattr(identity_owner, 'call', owner)
     monkeypatch.setattr(api_config.settings, "keycloak_issuer", "http://keycloak.test/realms/demo")
     monkeypatch.setattr(api_config.settings, "keycloak_jwks_url", "http://keycloak.test/jwks")
     monkeypatch.setattr(api_config.settings, "keycloak_client_id", "test-client")

@@ -9,15 +9,15 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
-    "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@76750a7c620950c8d0b911664ef4e605bc4d9188",
-    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@7f80b575cd49e813b37ce33c6fcffb1c8718b91e",
-    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@8d57f8d979f3808cf8d4b78e99debe18864bd6b4",
+    "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@6483e018a8caea43a4b78e81b1869104109a0ca8",
+    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@df20c32d575c49a6e9016b91479dfd75083db7a6",
+    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@a0583880f526efceb18d7d04dce6c6527a6b6550",
     "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@294899f4ef12afc76ffd99978eceb9e4671f613f",
     "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@5aeff3d2c00568f39ca6e8b75c7e63883d3a510b",
     "httpx>=0.28.1",
     "redis>=5.0.0",
     "bcrypt>=4.2.0",
-    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@ca69f73ea71c610f724f3601c516046a695d42af",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@ad10ab653cf5915b1156c2024929277ed4ec2736",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
 ]
@@ -47,3 +47,14 @@ allow-direct-references = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.uv]
+# Coordinated owner qualification selects these immutable revisions over transitive pins.
+override-dependencies = [
+    "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@6483e018a8caea43a4b78e81b1869104109a0ca8",
+    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@df20c32d575c49a6e9016b91479dfd75083db7a6",
+    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@a0583880f526efceb18d7d04dce6c6527a6b6550",
+    "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@294899f4ef12afc76ffd99978eceb9e4671f613f",
+    "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@5aeff3d2c00568f39ca6e8b75c7e63883d3a510b",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@ad10ab653cf5915b1156c2024929277ed4ec2736"
+]

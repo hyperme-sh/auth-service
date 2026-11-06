@@ -99,3 +99,11 @@ async def ensure_seeded_host_role(claims, tenant_id, session=None):
     from auth_service.identity_owner import call
     result = await call('seed-host', claims=claims, tenant_id=str(tenant_id))
     return result
+
+
+async def provision_operator(claims, tenant_id, *, email, role_name, permissions, session=None):
+    """Delegate the production binding without accepting durable operator grants."""
+    from auth_service.identity_owner import call
+    if role_name != 'entra-network-operator' or permissions or email != str(claims.get('email', '')).strip().lower():
+        raise ValueError('Unsupported production operator grant')
+    return await call('provision-operator', claims=claims, tenant_id=str(tenant_id))

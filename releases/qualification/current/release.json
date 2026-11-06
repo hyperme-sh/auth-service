@@ -5,11 +5,11 @@
     "auth-service": {
       "version": "0.2.0",
       "contract": "contract.json",
-      "contract_sha256": "db31884012a2623dabdd473a1a2e12bd4352829561e95dd2dda8bf855e6ff75c",
+      "contract_sha256": "25c60832e535717852cf950191a25b4b340d695a90756aaa05a1ccb01fa9f372",
       "artifact": {
         "kind": "package",
-        "uri": "urn:sha256:c59da1373a07542193d473da641a0f04249741ee03d7420e75736c0edca55e12",
-        "sha256": "c59da1373a07542193d473da641a0f04249741ee03d7420e75736c0edca55e12"
+        "uri": "urn:sha256:290a7a4bd9d102efce3309a52cffdc6ce23c677370aa47d2a74eac991894fece",
+        "sha256": "290a7a4bd9d102efce3309a52cffdc6ce23c677370aa47d2a74eac991894fece"
       }
     }
   },
