@@ -34,6 +34,8 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/auth_service"]
+# Owner migrations are an image-local bundle, not a transitive runtime dependency.
+exclude = ["src/auth_service/migrations/**", "src/auth_service/migrate.py"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/LICENSE", "/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
