@@ -1,0 +1,16 @@
+{
+  "archive": "controlplane-db-e2ee88b60c8d9ebd412c9626a2b0dd6955af6c10.tar.gz",
+  "archive_sha256": "76f7c92a56666a6abd46a1b8b8e1a440faeedb3d9254754def3f8e23dae0db9e",
+  "commit": "e2ee88b60c8d9ebd412c9626a2b0dd6955af6c10",
+  "purpose": "Private immutable historical reconciliation fixture, never a runtime migration bundle",
+  "repository": "https://github.com/hyperme-sh/controlplane-db",
+  "schema_version": 1,
+  "source_tree": "6c85b09b2eb3e5b41693afdaa49c7867c4578e96",
+  "tar_sha256": "d06c03466d64bf5047dbbaf628b8b2628f2821789ca58d20b02092f670e89d5b",
+  "validation": {
+    "failed": 0,
+    "log_sha256": "0586f1c45abfe3b24eda399aa167e4facd305c35761fed0d7c4c30eac55af649",
+    "passed": 180,
+    "postgres_major": 16
+  }
+}

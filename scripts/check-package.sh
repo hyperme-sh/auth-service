@@ -76,7 +76,11 @@ uv build --wheel "$scratch"/sdist/* --out-dir "$scratch/rebuilt"
 uv run --frozen "${run_options[@]}" python scripts/verify_wheel.py "$scratch/rebuilt"
 uv run --frozen "${run_options[@]}" python scripts/export_release_contract.py "$scratch"/rebuilt/*.whl --output "$scratch/rebuilt-contract"
 cmp "$scratch/contract/contract.json" "$scratch/rebuilt-contract/contract.json"
-uv pip install --no-config --python "$scratch/venv/bin/python" --no-deps --reinstall "$scratch"/rebuilt/*.whl
+if (( ${#fixture_wheels[@]} )); then
+  uv pip install --no-config --python "$scratch/venv/bin/python" --no-deps --reinstall "$scratch"/rebuilt/*.whl
+else
+  uv pip install --python "$scratch/venv/bin/python" --constraint "$scratch/requirements.txt" --reinstall-package auth-service "$scratch"/rebuilt/*.whl
+fi
 (cd "$scratch" && "$scratch/venv/bin/python" -I -m pytest -c /dev/null -o asyncio_mode=auto -o asyncio_default_fixture_loop_scope=function tests --junitxml="$scratch/sdist.xml")
 python3 scripts/verify-test-results.py "$scratch/source.xml" "$scratch/wheel.xml" "$scratch/sdist.xml"
 if [[ -n "${TEST_EVIDENCE_DIR:-}" ]]; then

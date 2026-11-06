@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 
+import historical_db_fixture  # noqa: F401; verified test-only migration snapshot
+
 import pytest
 
 from api.core import config as api_config
