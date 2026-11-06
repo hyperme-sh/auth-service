@@ -10,14 +10,14 @@ license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@2a49f9af5f6c4dc9d6c4ddebc83c41d6331e2c87",
-    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@f252909af772b2c820555af36de456d46f17cfcb",
-    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@95ef61433374274f4a4fc287e15982be6357e1cc",
+    "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@7f80b575cd49e813b37ce33c6fcffb1c8718b91e",
+    "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@8d57f8d979f3808cf8d4b78e99debe18864bd6b4",
     "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@732256a5207ee502d7bf70cb171cf2eea1803b87",
     "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@5aeff3d2c00568f39ca6e8b75c7e63883d3a510b",
     "httpx>=0.28.1",
     "redis>=5.0.0",
     "bcrypt>=4.2.0",
-    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@c3b7b4b65e04de1830f4c24bf00669dca3a97375",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@9e2dc869c4545b922cc8ac96d0e53c3198bea257",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
 ]
