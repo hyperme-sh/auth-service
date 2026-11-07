@@ -163,6 +163,36 @@ The package workflow (`.github/workflows/package.yml`) uses Python 3.13 and uv 0
 
 Release channels, test bundles, and stable tags are in [docs/releasing.md](docs/releasing.md). Admission checklist: [docs/release-policy.md](docs/release-policy.md).
 
+## Standalone container
+
+Build from this repository root with `docker build --build-arg GIT_SHA=$(git rev-parse HEAD) -t auth-local .`.
+The digest-pinned Python image installs the frozen public dependency graph in a
+build stage, then copies the installed environment into a non-root runtime.
+Git, uv, the source checkout and fixture tooling stay out of the runtime. The
+current pinned core still declares pytest as a runtime dependency; this build
+keeps declared dependencies rather than removing them after resolution.
+
+Configure DATABASE_URL for a nonprivileged role that owns a dedicated schema.
+Run `python -m auth_service.migrate --database-url-file /run/auth-database-url`
+inside the image against that role before starting `python -m auth_service.main`.
+Owner migrations are image-local and remain absent from runtime wheels.
+Configure KEYCLOAK_ISSUER, KEYCLOAK_JWKS_URL and the intended client allowlists;
+identity mutations also require AUTH_IDENTITY_OWNER_URL and
+AUTH_IDENTITY_OWNER_TOKEN for the separately deployed user owner.
+
+`uv run --frozen python scripts/check-container.py --evidence /tmp/auth-container.json`
+builds a local image and uses disposable PostgreSQL and Keycloak containers. It
+checks fresh nonprivileged owner migrations, installed runtime startup, native
+JWKS and introspection authentication, age and setup-client denials, tenant-header
+isolation and native logout. Every exposed fixture port binds only to loopback;
+fixture credentials are random, and task-owned containers, network and generated
+image are removed. No deployed provider or registry publication is used.
+
+The auth-only schema does not yet support host-setup session membership reads;
+that route still depends on native tenancy tables. Auth #3 remains open for that
+owner boundary and broader fleet acceptance. [Host/closure reconciliation](docs/qualification/host-setup-reconciliation-2026-11-07.md)
+records completed #9 source and native regression adoption separately.
+
 ## Release and versioning
 
 The Python package version is **0.2.0**. Release admission uses line `0.2`. Successful validation on `main` can also publish immutable GitHub prereleases named `0.24.0-test.N`. Those prereleases keep package version 0.2.0 and are not a stable release. Stable publication runs on a `v*` tag after admission. Details, artifact layout, and the baseline variable are in [docs/releasing.md](docs/releasing.md).
