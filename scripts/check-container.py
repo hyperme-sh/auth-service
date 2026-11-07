@@ -72,14 +72,17 @@ def main():
         db_name, issuer_name = 'auth-db-' + identity, 'auth-issuer-' + identity
         db = start(POSTGRES_IMAGE, name=db_name,
             environment={'POSTGRES_USER': 'fixture', 'POSTGRES_PASSWORD': password, 'POSTGRES_DB': 'auth'})
-        wait(lambda: db.exec_run(['pg_isready', '-U', 'fixture', '-d', 'auth']).exit_code == 0)
+        # The entrypoint's temporary init server accepts Unix sockets before
+        # database creation finishes. Only the final server listens on TCP.
+        wait(lambda: db.exec_run(['pg_isready', '-h', '127.0.0.1', '-U', 'fixture', '-d', 'auth']).exit_code == 0)
         owner_password = uuid.uuid4().hex + uuid.uuid4().hex
         provision = db.exec_run(['psql', '-U', 'fixture', '-d', 'auth', '-v', 'ON_ERROR_STOP=1', '-c',
             f"CREATE ROLE auth_owner LOGIN PASSWORD '{owner_password}' NOSUPERUSER NOBYPASSRLS; "
             "CREATE SCHEMA auth_service AUTHORIZATION auth_owner; "
             "ALTER ROLE auth_owner IN DATABASE auth SET search_path=auth_service; "
             "REVOKE ALL ON SCHEMA public FROM PUBLIC;"])
-        assert provision.exit_code == 0, 'Disposable owner-role bootstrap failed'
+        assert provision.exit_code == 0, ('Disposable owner-role bootstrap failed: ' +
+            provision.output.decode(errors='replace').replace(password, '[redacted]').replace(owner_password, '[redacted]'))
         database_url = f'postgresql+asyncpg://auth_owner:{owner_password}@{db_name}:5432/auth' 
         issuer = start(KEYCLOAK_IMAGE, name=issuer_name, port=8080,
             environment={'KC_BOOTSTRAP_ADMIN_USERNAME': 'fixture-admin', 'KC_BOOTSTRAP_ADMIN_PASSWORD': password},
