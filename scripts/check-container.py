@@ -10,6 +10,7 @@ import uuid
 
 import docker
 import httpx
+import jwt
 
 ROOT = Path(__file__).resolve().parents[1]
 POSTGRES_IMAGE = 'postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416'
@@ -87,7 +88,7 @@ def main():
         issuer = start(KEYCLOAK_IMAGE, name=issuer_name, port=8080,
             environment={'KC_BOOTSTRAP_ADMIN_USERNAME': 'fixture-admin', 'KC_BOOTSTRAP_ADMIN_PASSWORD': password},
             command=f'start-dev --hostname=http://{issuer_name}:8080 --hostname-strict=false')
-        with httpx.Client(timeout=10, trust_env=False, follow_redirects=False) as http:
+        with httpx.Client(timeout=20, trust_env=False, follow_redirects=False) as http:
             issuer_url = endpoint(issuer, 8080)
             wait(lambda: http.get(issuer_url + '/realms/master/.well-known/openid-configuration').status_code == 200)
             response = http.post(issuer_url + '/realms/master/protocol/openid-connect/token', data={
@@ -132,6 +133,15 @@ def main():
                 'KEYCLOAK_ALLOWED_AUDIENCES': ','.join(tokens),
                 'API_KEY_EXCHANGE_JWT_SECRET': uuid.uuid4().hex + uuid.uuid4().hex,
                 'ACCOUNT_CLOSURE_ENFORCEMENT_ENABLED': 'false'}
+            target_tenant, owner_member, owner_token = str(uuid.uuid4()), str(uuid.uuid4()), uuid.uuid4().hex
+            owner_name = 'auth-host-owner-' + identity
+            owner = start(image, name=owner_name,
+                environment={'HOST_SETUP_FIXTURE_SUBJECT':subject, 'HOST_SETUP_FIXTURE_TENANT':target_tenant,
+                    'HOST_SETUP_FIXTURE_MEMBER':owner_member, 'HOST_SETUP_FIXTURE_TOKEN':owner_token},
+                command=['python','-c',(ROOT/'scripts/host-owner-fixture.py').read_text()])
+            wait(lambda: owner.exec_run(['python','-c',"import socket; s=socket.create_connection(('127.0.0.1',8001),timeout=1); s.close()"]).exit_code==0)
+            env.update(AUTH_IDENTITY_OWNER_URL='http://' + owner_name + ':8001', AUTH_IDENTITY_OWNER_TOKEN=owner_token)
+
             migration = start(image, name='auth-migrate-' + identity, environment=env,
                 command=['python', '-c', '''import os
 from sqlalchemy import create_engine, text
@@ -185,7 +195,29 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                 response = http.get(url + '/auth/tenant', headers={'Authorization': 'Bearer ' + tokens['controlplane-frontend'], 'X-Tenant-ID': str(uuid.uuid4())})
                 assert response.status_code == 403
                 checks.append(mode + ': dedicated setup accepted and header-only tenant authority denied')
+                setup_headers = {'Authorization':'Bearer ' + tokens['hypermesh-host-setup'], 'X-Tenant-ID':target_tenant}
+                reply = http.post(url + '/auth/host-setup/session',headers=setup_headers,json={'tenant_id':target_tenant})
+                assert reply.status_code == 200, reply.text
+                setup = jwt.decode(reply.json()['access_token'],env['API_KEY_EXCHANGE_JWT_SECRET'],
+                    algorithms=['HS256'],audience='hypermesh-host-setup',issuer='https://spanopticon.internal/host-setup')
+                assert setup['sub']==subject and setup['tenant_id']==target_tenant and setup['purpose']=='host_setup'
+                assert not {'permissions','realm_access','groups','spanopticon_auth'} & setup.keys()
+                checks.append(mode + ': fresh auth-only schema mints only a purpose-bound setup token after owner HTTP grant')
+                for owner_mode, expected in (('deny',403),('invalid',503)):
+                    assert owner.exec_run(['python','-c',f"from pathlib import Path; Path('/tmp/owner-mode').write_text('{owner_mode}')"]).exit_code==0
+                    reply=http.post(url+'/auth/host-setup/session',headers=setup_headers,json={'tenant_id':target_tenant})
+                    assert reply.status_code==expected, (owner_mode,reply.status_code,reply.text)
+                assert owner.exec_run(['python','-c',"from pathlib import Path; Path('/tmp/owner-mode').unlink()"]).exit_code==0
+                reply=http.post(url+'/auth/host-setup/session',headers=setup_headers,json={'tenant_id':str(uuid.uuid4())})
+                assert reply.status_code==403
+                checks.append(mode + ': denied, malformed and mismatched host authority cannot mint a token')
                 auth_urls[mode] = url
+            owner.stop(timeout=2)
+            for url in auth_urls.values():
+                reply=http.post(url+'/auth/host-setup/session',headers={
+                    'Authorization':'Bearer '+tokens['hypermesh-host-setup'],'X-Tenant-ID':target_tenant},json={'tenant_id':target_tenant})
+                assert reply.status_code==503
+            checks.append('Unavailable owner cannot reuse an earlier host grant in either auth mode')
             assert http.post(admin_url + '/users/' + subject + '/logout', headers=admin).status_code == 204
             response = http.get(auth_urls['introspection'] + '/auth/me', headers={'Authorization': 'Bearer ' + tokens['controlplane-frontend']})
             assert response.status_code == 401
@@ -194,7 +226,7 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
         args.evidence.write_text(json.dumps({'source_revision': revision, 'image_id': built.id,
             'image_revision': built.attrs['Config']['Labels']['org.opencontainers.image.revision'],
             'fixtures': {'postgres': POSTGRES_IMAGE, 'keycloak': KEYCLOAK_IMAGE}, 'checks': checks,
-            'scope': 'Disposable container and issuer acceptance only; no deployment, external provider or user-owner host-session adoption'}, indent=2)+'\n')
+            'scope': 'Disposable auth container/issuer with an explicit owner HTTP fixture; actual owner SQL/RLS runs separately in package tests; no deployment or provider activation'}, indent=2)+'\n')
         print(f'{len(checks)} standalone container acceptance groups passed')
     finally:
         cleanup_errors = []

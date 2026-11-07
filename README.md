@@ -143,7 +143,7 @@ The test-plane smoke route is `POST /auth/hypermesh-smoke/session`. It exists on
 
 **API keys.** A stored API key is a machine credential for lease and catalog calls. The gateway checks the key and mints the 5-minute API-key session JWT described above. This service accepts that JWT on the same `validate_access_token` entry other control-plane services use. The subject is `apikey:<key record id>`. It is a different credential from the portal user's Keycloak subject and from the tenant-session JWT. Scopes on the exchanged token are the key's scopes.
 
-**Host setup.** The native host installer uses Keycloak client `hypermesh-host-setup`. Those tokens are valid only on `/auth/host-setup/me`, `/auth/host-setup/enrollment/grant`, and `/auth/host-setup/session`. The grant accepts `held_roles: ["host"]` only. The session route requires an active host member in the requested tenant, matched by Keycloak subject, and honors tenant bans. It mints a 15-minute JWT with issuer `https://spanopticon.internal/host-setup`, audience `hypermesh-host-setup`, and `purpose=host_setup`. That token carries the subject and tenant id. It does not carry portal roles or permissions, and it is not a tenant-session JWT. A renter membership, an email match, or a platform-manager permission does not satisfy the host check.
+**Host setup.** The native host installer uses Keycloak client `hypermesh-host-setup`. Those tokens are valid only on `/auth/host-setup/me`, `/auth/host-setup/enrollment/grant`, and `/auth/host-setup/session`. The grant accepts `held_roles: ["host"]` only. The session route asks the user owner for current active host membership and durable user-ban state, bound to the exact Keycloak subject and requested tenant. It mints a 15-minute JWT with issuer `https://spanopticon.internal/host-setup`, audience `hypermesh-host-setup`, and `purpose=host_setup`. That token carries the subject and tenant id. It does not carry portal roles or permissions, and it is not a tenant-session JWT. A renter membership, an email match, or a platform-manager permission does not satisfy the host check.
 
 **Payout and verification.** Payment and verification callers send two credentials to `/auth/connect-session-context`: the tenant-session JWT (`Authorization` and a matching `X-Tenant-ID`) and the original browser access token (`X-Auth-Session-Token`). The browser token must be `azp=controlplane-frontend` from this realm, still active at introspection, with `acr=2` and `amr` containing `pwd` and `otp` or `totp`. `auth_time` must be within 24 hours. The response is issuer facts plus the live member id. It does not echo either credential. `/auth/verification-context` adds email evidence for verification-service under the policy above. `/auth/connect-session-end-context` checks only the browser token.
 
@@ -157,7 +157,7 @@ uv run pytest
 bash scripts/check-package.sh
 ```
 
-`pytest` collects `tests/` only. `scripts/check-package.sh` needs Docker. It runs that suite from the checkout, from a freshly built wheel in a clean environment, and again from a wheel rebuilt from the sdist, and it requires the three JUnit inventories to match with no skips. External identity and RPC calls in the standalone suite use test doubles. `core/auth-service/tests` expect the surrounding control-plane tree and are not part of this run.
+`pytest` collects `tests/` only. `scripts/check-package.sh` needs Docker. It runs that suite from the checkout, from a freshly built wheel in a clean environment, and again from a wheel rebuilt from the sdist, and it requires the three JUnit inventories to match with no skips. External issuer calls in the package suite use test doubles. Native identity-owner cases use the authenticated actual owner router and PostgreSQL with its pinned test wheel; the standalone container lane separately uses actual Keycloak and an explicit owner HTTP fixture. `core/auth-service/tests` expect the surrounding control-plane tree and are not part of this run.
 
 The package workflow (`.github/workflows/package.yml`) uses Python 3.13 and uv 0.11.26. All seven GitHub dependency owners are public. Qualification uses anonymous HTTPS fetches with ambient Git credentials disabled; it does not mint a dependency token or select a secret-bearing environment. Immutable dependency pins, read-only workflow permissions and private-runner routing remain in place.
 
@@ -188,9 +188,12 @@ isolation and native logout. Every exposed fixture port binds only to loopback;
 fixture credentials are random, and task-owned containers, network and generated
 image are removed. No deployed provider or registry publication is used.
 
-The auth-only schema does not yet support host-setup session membership reads;
-that route still depends on native tenancy tables. Auth #3 remains open for that
-owner boundary and broader fleet acceptance. [Host/closure reconciliation](docs/qualification/host-setup-reconciliation-2026-11-07.md)
+Host-setup sessions use the private user-owner `host-setup` command. Deploy the
+additive user-owner endpoint before this consumer; auth never falls back to local
+tenancy tables or a process-local ban book. Package tests use the actual owner
+router and PostgreSQL. Container tests use an explicitly controlled owner HTTP
+fixture to prove forwarding, minting, denial and outage handling against a fresh
+auth-only schema. Auth #3 remains open for coordinated runtime/fleet acceptance. [Host/closure reconciliation](docs/qualification/host-setup-reconciliation-2026-11-07.md)
 records completed #9 source and native regression adoption separately.
 
 ## Release and versioning

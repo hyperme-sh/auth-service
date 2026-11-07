@@ -4,9 +4,10 @@ Auth #9's missing-code premise predates #11, merged at
 `a7460ac9d5fb109aeec8afdf48e9af06493c4047`, and the owner dependency refresh in
 #16, merged at `774f64afe1a3790b0efb47b3bdd08ef5c50bca70`.
 
-The dedicated session route sets the tenant GUC, calls the installed tenancy
-owner's get_active_tenant_role_member with the exact opaque subject and host
-role, checks bans, and emits a purpose-bound host-setup session. It does not use
+The dedicated session route asks the authenticated user owner to authorize the
+exact opaque subject and tenant. The owner sets the tenant GUC, calls its
+packaged get_active_tenant_role_member for the host role and checks durable user
+bans; auth then emits only a purpose-bound host-setup session. It does not use
 general tenant-switch authority, an email fallback or platform-manager grants.
 The packaged tenancy revision is `c1f37025a93c8b4e38699a42665ce380a66a54fd`.
 
@@ -29,8 +30,9 @@ signed tokens. Original auth paths and hashes are retained as provenance.
 
 This completes #9's source adoption and regression reconciliation. Deployment is
 a separate state: auth #3 retains independent container/fleet and remaining owner
-boundary acceptance. In particular, host-setup session membership still reads
-native tenancy tables directly; an auth-only owner schema cannot yet serve that
-exchange. The standalone container work qualifies startup and actual issuer
-validation without disguising that remaining ownership dependency. No deployed
+boundary acceptance. The standalone container change initially exposed host-session membership reads
+against native tenancy tables. The follow-up now uses a narrow user-owner HTTP
+command and checks durable bans there. Actual owner router/SQL tests and the
+separate controlled-HTTP-peer container fixture verify the new boundary; deploying
+the additive owner before the consumer remains part of coordinated acceptance. No deployed
 realm, closure switch or production provider is changed by these checks.

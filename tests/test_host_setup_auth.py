@@ -1,5 +1,6 @@
 """Setup identity cannot become a general tenant credential."""
 import time
+import uuid
 from types import SimpleNamespace
 from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
 from unittest.mock import AsyncMock
@@ -56,9 +57,8 @@ async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_i
     _, issue = oidc
     token = issue(permissions=["HOST_MANAGE_TENANTS"], realm_access={"roles": ["admin"]})
     headers = {"Authorization": "Bearer " + token}
-    grant = AsyncMock(return_value=SimpleNamespace(id="member"))
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", grant)
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
+    grant = AsyncMock(return_value=SimpleNamespace(user_id=uuid.uuid4()))
+    monkeypatch.setattr("auth_service.routes.authorize_host_setup", grant)
     assert (await http_client.get("/auth/host-setup/me", headers=headers)).status_code == 200
     response = await http_client.post("/auth/host-setup/session", headers=headers, json={"tenant_id": str(tenant_uuid)})
     assert response.status_code == 200, response.text
@@ -82,8 +82,7 @@ async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_i
 async def test_setup_session_requires_membership_and_matching_tenant(http_client, tenant_uuid, oidc, monkeypatch):
     _, issue = oidc
     grant = AsyncMock(return_value=None)
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", grant)
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
+    monkeypatch.setattr("auth_service.routes.authorize_host_setup", grant)
     headers = {"Authorization": "Bearer " + issue()}
     assert (await http_client.post("/auth/host-setup/session", headers=headers, json={"tenant_id": str(tenant_uuid)})).status_code == 403
     grant.assert_awaited_once()
@@ -156,13 +155,11 @@ async def test_generic_introspection_rejects_setup_client(app, monkeypatch, iden
         await token_validation.validate_access_token("opaque-device-token")
 
 
-async def test_banned_member_cannot_exchange_setup_session(http_client, tenant_uuid, oidc, monkeypatch):
-    import uuid
-    from api.domain.operator import bans
+async def test_owner_denial_prevents_setup_session(http_client, tenant_uuid, oidc, monkeypatch):
     _, issue = oidc
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_membership.get_active_tenant_role_member", AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())))
-    monkeypatch.setattr("api.infrastructure.persistence.tenant_guc.set_current_tenant_id_guc", AsyncMock())
-    monkeypatch.setattr(bans, "ban_book", lambda: SimpleNamespace(user_may_enter=lambda *_: False))
+    authority = AsyncMock(return_value=None)
+    monkeypatch.setattr("auth_service.routes.authorize_host_setup", authority)
     response = await http_client.post("/auth/host-setup/session", headers={"Authorization": "Bearer " + issue()},
         json={"tenant_id": str(tenant_uuid)})
     assert response.status_code == 403
+    authority.assert_awaited_once_with("owner", tenant_uuid)
