@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ('/api/v1/internal/identity/host-setup','/api/v1/internal/identity/session-member'):
+        if self.path not in ('/api/v1/internal/identity/host-setup','/api/v1/internal/identity/session-member','/api/v1/internal/identity/tenant-switch-current'):
             return self.reply(404, None)
         if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             return self.reply(401, None)
@@ -35,16 +35,23 @@ class Handler(BaseHTTPRequestHandler):
         if not 0 < length <= 8192:
             return self.reply(422, None)
         value = json.loads(self.rfile.read(length))
-        if set(value) != {'subject', 'tenant_id'}:
-            return self.reply(422, None)
+        switching = self.path.endswith('/tenant-switch-current')
+        if switching:
+            if set(value) != {'user', 'tenant_id'} or not isinstance(value['user'], dict):
+                return self.reply(422, None)
+            requested_subject = value['user'].get('sub')
+        else:
+            if set(value) != {'subject', 'tenant_id'}:
+                return self.reply(422, None)
+            requested_subject = value['subject']
         with Path('/tmp/owner-requests.jsonl').open('a') as output:
             output.write(json.dumps(value) + '\n')
         mode = Path('/tmp/owner-mode').read_text() if Path('/tmp/owner-mode').exists() else 'allow'
         if mode == 'invalid':
             return self.reply(200, {'user_id': 'not-a-uuid'})
-        if mode != 'allow' or value != {'subject': subject, 'tenant_id': tenant}:
+        if mode != 'allow' or requested_subject != subject or value['tenant_id'] != tenant:
             return self.reply(200, None)
-        self.reply(200, {'user_id': member})
+        self.reply(200, {'user_id': member, 'role_name':'renter', 'permissions':[], 'groups':['renter']} if switching else {'user_id': member})
 
 
 HTTPServer(('0.0.0.0', 8001), Handler).serve_forever()
