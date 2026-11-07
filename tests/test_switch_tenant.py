@@ -400,7 +400,7 @@ async def test_client_requires_current_owner_command(monkeypatch, legacy_owner):
     monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN', 'fixture-private-token')
     tenant = uuid.uuid4()
     with respx.mock:
-        peer = respx.post('https://owner.test/api/v1/internal/identity/tenant-switch-current').mock(return_value=httpx.Response(422 if legacy_owner else 200, json={'detail':'unknown operation'} if legacy_owner else None))
+        peer = respx.post('https://owner.test/api/v1/internal/identity/tenant-switch-current').mock(return_value=httpx.Response(422, json={'detail':'unknown operation'}) if legacy_owner else httpx.Response(200, content='null'))
         if legacy_owner:
             with pytest.raises(httpx.HTTPStatusError):
                 await remote_switch(AuthMeResponse(sub='fixture-subject'), tenant)
