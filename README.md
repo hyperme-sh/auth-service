@@ -159,7 +159,7 @@ bash scripts/check-package.sh
 
 `pytest` collects `tests/` only. `scripts/check-package.sh` needs Docker. It runs that suite from the checkout, from a freshly built wheel in a clean environment, and again from a wheel rebuilt from the sdist, and it requires the three JUnit inventories to match with no skips. External identity and RPC calls in the standalone suite use test doubles. `core/auth-service/tests` expect the surrounding control-plane tree and are not part of this run.
 
-The package workflow (`.github/workflows/package.yml`) uses Python 3.13 and uv 0.11.26. It needs a contents-read token for the seven GitHub repositories listed above.
+The package workflow (`.github/workflows/package.yml`) uses Python 3.13 and uv 0.11.26. All seven GitHub dependency owners are public. Qualification uses anonymous HTTPS fetches with ambient Git credentials disabled; it does not mint a dependency token or select a secret-bearing environment. Immutable dependency pins, read-only workflow permissions and private-runner routing remain in place.
 
 Release channels, test bundles, and stable tags are in [docs/releasing.md](docs/releasing.md). Admission checklist: [docs/release-policy.md](docs/release-policy.md).
 
