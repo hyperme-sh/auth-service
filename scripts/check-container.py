@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import inspect
+from html.parser import HTMLParser
+from urllib.parse import urlsplit, parse_qs
 import json
 from pathlib import Path
 import subprocess
@@ -27,6 +32,44 @@ def wait(check, *, timeout=180):
             pass
         time.sleep(0.5)
     raise AssertionError('Disposable service did not become ready')
+
+
+class LoginForm(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.action=None; self.fields={}; self.inside=False
+    def handle_starttag(self,tag,attributes):
+        values=dict(attributes)
+        if tag=='form' and values.get('id')=='kc-form-login':
+            self.action=values.get('action'); self.inside=True
+        if self.inside and tag=='input' and values.get('type')=='hidden' and values.get('name'):
+            self.fields[values['name']]=values.get('value','')
+    def handle_endtag(self,tag):
+        if tag=='form':self.inside=False
+
+
+def browser_token(http,issuer_url,realm,password):
+    redirect='http://127.0.0.1/fixture/callback'
+    verifier=uuid.uuid4().hex+uuid.uuid4().hex
+    challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
+    state=uuid.uuid4().hex
+    page=http.get(issuer_url+f'/realms/{realm}/protocol/openid-connect/auth',params={
+        'client_id':'controlplane-frontend','redirect_uri':redirect,'scope':'openid profile email',
+        'response_type':'code','state':state,'code_challenge':challenge,'code_challenge_method':'S256'})
+    assert page.status_code==200
+    form=LoginForm();form.feed(page.text);assert form.action
+    action=urlsplit(form.action)
+    assert action.path.startswith(f'/realms/{realm}/login-actions/')
+    # The configured issuer hostname is container-private; keep the same actual
+    # provider path/query through its loopback fixture port, never another origin.
+    reply=http.post(issuer_url+action.path+'?'+action.query,data={**form.fields,'username':'fixture-human','password':password})
+    assert reply.status_code in (302,303), 'Disposable native browser login did not finish'
+    location=urlsplit(reply.headers['location']);expected=urlsplit(redirect)
+    assert (location.scheme,location.netloc,location.path)==(expected.scheme,expected.netloc,expected.path)
+    result=parse_qs(location.query);assert result.get('state')==[state] and result.get('code')
+    token=http.post(issuer_url+f'/realms/{realm}/protocol/openid-connect/token',data={
+        'grant_type':'authorization_code','client_id':'controlplane-frontend','redirect_uri':redirect,
+        'code_verifier':verifier,'code':result['code'][0]})
+    token.raise_for_status();return token.json()['access_token']
 
 
 def main():
@@ -103,13 +146,21 @@ def main():
                 mappers = [{'name': 'audience', 'protocol': 'openid-connect', 'protocolMapper': 'oidc-audience-mapper',
                     'config': {'included.client.audience': client_id, 'access.token.claim': 'true'}}]
                 if adult:
+                    # Expose Keycloak's recorded AUTH_TIME; never substitute iat
+                    # or hardcode an authentication/factor timestamp.
+                    mappers.append({'name':'fixture-native-auth-time','protocol':'openid-connect',
+                        'protocolMapper':'oidc-usersessionmodel-note-mapper','config':{
+                            'user.session.note':'AUTH_TIME','claim.name':'auth_time','jsonType.label':'long',
+                            'access.token.claim':'true','introspection.token.claim':'true'}})
                     mappers.append({'name': 'fixture-adult', 'protocol': 'openid-connect',
                         'protocolMapper': 'oidc-hardcoded-claim-mapper', 'config': {
                             'claim.name': 'terms_and_conditions', 'claim.value': '1700000000',
                             'jsonType.label': 'String', 'access.token.claim': 'true'}})
                 assert http.post(admin_url + '/clients', headers=admin, json={
                     'clientId': client_id, 'enabled': True, 'publicClient': True,
-                    'standardFlowEnabled': False, 'directAccessGrantsEnabled': True,
+                    'standardFlowEnabled': client_id=='controlplane-frontend', 'directAccessGrantsEnabled': True,
+                    'redirectUris':['http://127.0.0.1/fixture/callback'] if client_id=='controlplane-frontend' else [],
+                    'attributes':{'pkce.code.challenge.method':'S256'} if client_id=='controlplane-frontend' else {},
                     'protocolMappers': mappers}).status_code == 201
             assert http.post(admin_url + '/clients', headers=admin, json={
                 'clientId': 'fixture-introspection', 'enabled': True, 'publicClient': False,
@@ -121,14 +172,27 @@ def main():
             subject = http.get(admin_url + '/users?username=fixture-human', headers=admin).json()[0]['id']
             tokens = {}
             for client_id in ('controlplane-frontend', 'controlplane-mobile', 'hypermesh-host-setup'):
+                if client_id=='controlplane-frontend':
+                    # Use the canonical issuer origin inside the fixture network,
+                    # so the provider's browser cookies and action origins match.
+                    browser=start(image,name='auth-browser-'+identity,command=['python','-c','import time; time.sleep(600)'])
+                    code=('import os,uuid,hashlib,base64,httpx\nfrom html.parser import HTMLParser\nfrom urllib.parse import urlsplit,parse_qs\n'
+                        +inspect.getsource(LoginForm)+'\n'+inspect.getsource(browser_token)
+                        +"\nwith httpx.Client(timeout=20,trust_env=False,follow_redirects=False) as client:\n print('FIXTURE_TOKEN='+browser_token(client,os.environ['FIXTURE_ISSUER'],os.environ['FIXTURE_REALM'],os.environ['FIXTURE_PASSWORD']))")
+                    result=browser.exec_run(['python','-c',code],environment={
+                        'FIXTURE_ISSUER':f'http://{issuer_name}:8080','FIXTURE_REALM':realm,'FIXTURE_PASSWORD':password})
+                    assert result.exit_code==0, 'Native browser PKCE fixture failed'
+                    tokens[client_id]=next(line.removeprefix('FIXTURE_TOKEN=') for line in result.output.decode().splitlines() if line.startswith('FIXTURE_TOKEN='))
+                    continue
                 response = http.post(issuer_url + f'/realms/{realm}/protocol/openid-connect/token', data={
-                    'grant_type': 'password', 'client_id': client_id, 'username': 'fixture-human', 'password': password})
+                    'grant_type': 'password', 'client_id': client_id, 'username': 'fixture-human', 'password': password,'scope':'openid profile email'})
                 response.raise_for_status()
                 tokens[client_id] = response.json()['access_token']
             env = {'DATABASE_URL': database_url, 'SERVICE_NAME': 'auth-service', 'FASTAPI_ENV': 'test',
                 'KEYCLOAK_ISSUER': f'http://{issuer_name}:8080/realms/{realm}',
                 'KEYCLOAK_JWKS_URL': f'http://{issuer_name}:8080/realms/{realm}/protocol/openid-connect/certs',
                 'KEYCLOAK_CLIENT_ID': 'fixture-introspection', 'KEYCLOAK_CLIENT_SECRET': password,
+                'AUTH_CONNECT_INTROSPECTION_CLIENT_ID':'fixture-introspection','AUTH_CONNECT_INTROSPECTION_CLIENT_SECRET':password,
                 'KEYCLOAK_ALLOWED_CLIENT_IDS': ','.join(tokens),
                 'KEYCLOAK_ALLOWED_AUDIENCES': ','.join(tokens),
                 'API_KEY_EXCHANGE_JWT_SECRET': uuid.uuid4().hex + uuid.uuid4().hex,
@@ -167,6 +231,7 @@ import auth_service.app
 print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
 '''
             auth_urls = {}
+            context_headers = {}
             for mode in ('jwt', 'introspection'):
                 auth = start(image, name='auth-' + mode + '-' + identity, port=8000,
                     environment={**env, 'AUTH_TOKEN_VALIDATION_MODE': mode})
@@ -211,6 +276,27 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                 reply=http.post(url+'/auth/host-setup/session',headers=setup_headers,json={'tenant_id':str(uuid.uuid4())})
                 assert reply.status_code==403
                 checks.append(mode + ': denied, malformed and mismatched host authority cannot mint a token')
+                tenant_token = auth.exec_run(['python','-c',
+                    "import os,uuid; import auth_service.app; from controlplane_identity.security.tenant_session_jwt import mint_tenant_session_jwt; print('FIXTURE_TOKEN='+mint_tenant_session_jwt(claims={'sub':os.environ['FIXTURE_SUBJECT'],'azp':'controlplane-frontend'},tenant_id=uuid.UUID(os.environ['FIXTURE_TENANT'])))"],
+                    environment={'FIXTURE_SUBJECT':subject,'FIXTURE_TENANT':target_tenant})
+                assert tenant_token.exit_code==0, 'Native fixture tenant token creation failed'
+                context_headers[mode]={'Authorization':'Bearer '+next(line.removeprefix('FIXTURE_TOKEN=') for line in tenant_token.output.decode().splitlines() if line.startswith('FIXTURE_TOKEN=')),
+                    'X-Tenant-ID':target_tenant,'X-Auth-Session-Token':tokens['controlplane-frontend']}
+                for path in ('/auth/connect-session-context','/auth/verification-context'):
+                    facts=http.get(url+path,headers=context_headers[mode])
+                    assert facts.status_code==200, facts.text
+                    assert facts.json()['member_id']==owner_member and facts.json()['subject']==subject
+                    # The real fixture used password browser login, not an OTP ceremony.
+                    assert facts.json()['second_factor_at'] is None
+                    assert facts.headers['cache-control']=='no-store'
+                    for peer_mode,status in (('deny',403),('invalid',503)):
+                        assert owner.exec_run(['python','-c',f"from pathlib import Path; Path('/tmp/owner-mode').write_text('{peer_mode}')"]).exit_code==0
+                        denied=http.get(url+path,headers=context_headers[mode])
+                        assert denied.status_code==status, denied.text
+                        assert (denied.json().get('code')=='membership_revoked')==(status==403)
+                        assert denied.headers['cache-control']=='no-store'
+                    assert owner.exec_run(['python','-c',"from pathlib import Path; Path('/tmp/owner-mode').unlink()"]).exit_code==0
+                checks.append(mode + ': connect and verification contexts use owner HTTP with revocation/outage distinction and no fabricated MFA')
                 auth_urls[mode] = url
             owner.stop(timeout=2)
             for url in auth_urls.values():
@@ -218,10 +304,26 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                     'Authorization':'Bearer '+tokens['hypermesh-host-setup'],'X-Tenant-ID':target_tenant},json={'tenant_id':target_tenant})
                 assert reply.status_code==503
             checks.append('Unavailable owner cannot reuse an earlier host grant in either auth mode')
+            for mode,url in auth_urls.items():
+                for path in ('/auth/connect-session-context','/auth/verification-context'):
+                    denied=http.get(url+path,headers=context_headers[mode])
+                    assert denied.status_code==503 and 'membership_revoked' not in denied.text
+                    assert denied.headers['cache-control']=='no-store'
+            checks.append('Unavailable owner cannot reuse earlier context membership or claim revocation')
+            # The master admin token can expire during intentional peer outages.
+            refreshed=http.post(issuer_url+'/realms/master/protocol/openid-connect/token',data={
+                'grant_type':'password','client_id':'admin-cli','username':'fixture-admin','password':password})
+            refreshed.raise_for_status()
+            admin={'Authorization':'Bearer '+refreshed.json()['access_token']}
             assert http.post(admin_url + '/users/' + subject + '/logout', headers=admin).status_code == 204
             response = http.get(auth_urls['introspection'] + '/auth/me', headers={'Authorization': 'Bearer ' + tokens['controlplane-frontend']})
             assert response.status_code == 401
             checks.append('Native logout makes introspected session inactive')
+            for mode,url in auth_urls.items():
+                for path in ('/auth/connect-session-context','/auth/verification-context'):
+                    ended=http.get(url+path,headers=context_headers[mode])
+                    assert ended.status_code==403 and 'membership_revoked' not in ended.text
+            checks.append('Native issuer logout is denied before membership, distinct from owner outage')
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         args.evidence.write_text(json.dumps({'source_revision': revision, 'image_id': built.id,
             'image_revision': built.attrs['Config']['Labels']['org.opencontainers.image.revision'],

@@ -1068,3 +1068,39 @@ def identity_owner_http(monkeypatch):
     factory = httpx.AsyncClient
     monkeypatch.setattr(identity_owner, 'httpx', SimpleNamespace(AsyncClient=lambda **kw: factory(
         transport=httpx.ASGITransport(app=app), **kw)))
+
+
+@pytest.mark.parametrize('boundary', ['active','inactive','closed','unbound','other-subject','other-tenant','inactive-tenant','banned','lifted','foreign-ban','other-kind-ban'])
+async def test_session_context_reads_real_owner_membership_and_durable_bans(db_session,seed,boundary):
+    from datetime import UTC,datetime
+    from auth_service.connect_session import current_member,MembershipRevoked
+    from user_service.models import OperatorBan
+    from controlplane_db.models import Tenant
+    from api.domain.operator.bans import ban_book
+    subject='session-member-'+uuid.uuid4().hex
+    target=Tenant(id=uuid.uuid4(),name='context-target-'+uuid.uuid4().hex,is_active=True)
+    member=User(id=uuid.uuid4(),tenant_id=target.id,keycloak_sub=subject,
+        email=subject+'@example.invalid',first_name='Session',last_name='Member',gender='unspecified',is_active=True,role_id=None)
+    other=Tenant(id=uuid.uuid4(),name='context-'+uuid.uuid4().hex,is_active=True)
+    db_session.add_all([target,member,other]);await db_session.flush()
+    tenant_id=target.id
+    if boundary=='inactive':member.is_active=False
+    elif boundary=='closed':member.deleted_at=datetime.now(UTC)
+    elif boundary=='unbound':member.keycloak_sub=None
+    elif boundary=='other-subject':subject='another-'+subject
+    elif boundary=='other-tenant':tenant_id=other.id
+    elif boundary=='inactive-tenant':
+        from sqlalchemy import update
+        await db_session.execute(update(Tenant).where(Tenant.id==target.id).values(is_active=False))
+    if boundary in ('banned','lifted','foreign-ban','other-kind-ban'):
+        db_session.add(OperatorBan(id=uuid.uuid4(),tenant_id=other.id if boundary=='foreign-ban' else target.id,
+            subject_kind='group' if boundary=='other-kind-ban' else 'user',subject_id=member.id,
+            reason='fixture',created_by='fixture',created_at=datetime.now(UTC),
+            lifted_at=datetime.now(UTC) if boundary=='lifted' else None))
+    await db_session.flush();ban_book().clear()
+    try:
+        if boundary in ('active','lifted','foreign-ban','other-kind-ban'):
+            assert await current_member(tenant_id,subject)==str(member.id)
+        else:
+            with pytest.raises(MembershipRevoked):await current_member(tenant_id,subject)
+    finally:ban_book().clear()
