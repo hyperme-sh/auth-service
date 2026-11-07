@@ -40,5 +40,5 @@ class TenantSwitchGrant:
 async def authorize_tenant_switch(user, tenant_id, session=None):
     from auth_service.identity_owner import call
     from pydantic import TypeAdapter
-    result = await call('tenant-switch', user=user.model_dump(mode='json'), tenant_id=str(tenant_id))
+    result = await call('tenant-switch-current', user=user.model_dump(mode='json'), tenant_id=str(tenant_id))
     return None if result is None else TypeAdapter(TenantSwitchGrant).validate_python(result)

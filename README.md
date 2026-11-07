@@ -220,3 +220,5 @@ The coordinated development graph uses explicit immutable uv overrides for
 transitive owner pins. Fixture validation checks the selected lock, wheel hashes,
 and the original dependency declarations before applying those overrides.
 Qualification does not publish packages or authorize deployment.
+
+Auth requires the additive `tenant-switch-current` owner command, so an older owner cannot silently omit the durable gate. Tenant-switch grants include durable destination-tenant user-ban enforcement by user-service, including platform overrides and legacy email memberships. Auth no longer consults a local ban book. The test-only smoke route retains its default-off/OIDC guards and, after enrollment, uses the private exact-subject `session-member` command; owner denial refuses minting and owner outage returns 503.
