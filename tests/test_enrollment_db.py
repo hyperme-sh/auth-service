@@ -34,6 +34,7 @@ from user_service.identity_enrollment import (
     grant_held_roles,
 )
 from auth_service.schemas import AuthMeResponse
+from auth_service.identity_owner import call as real_identity_owner_call
 from user_service.identity_tenant_switch import authorize_tenant_switch
 from auth_service.wallet_bind import bind_wallet, issue_siwe_nonce
 from user_service.identity_wallet_bind import get_wallet_binding
@@ -985,13 +986,17 @@ async def test_switched_session_retains_target_renter_checkout_without_source_ro
 @pytest.mark.asyncio
 @pytest.mark.parametrize("boundary", ["host", "inactive", "closed", "unbound", "other-subject", "other-tenant", "renter"])
 async def test_native_setup_uses_bound_active_host_group_without_inventing_tenant_role(
-    db_session, seed, app, boundary,
+    db_session, seed, app, boundary, monkeypatch,
 ):
     from datetime import UTC, datetime
     from starlette.requests import Request
     from api.common.exceptions import ForbiddenException
     from api.infrastructure.security.tenant_session_jwt import try_decode_host_setup_session
     from auth_service.routes import host_setup_session
+    from auth_service import identity_owner
+    # The app fixture isolates route unit tests. This native case restores the
+    # real command client, using identity_owner_http's actual owner router/SQL.
+    monkeypatch.setattr(identity_owner, 'call', real_identity_owner_call)
     from auth_service.schemas import SwitchTenantRequest
 
     subject = "native-host-" + uuid.uuid4().hex
@@ -1021,7 +1026,7 @@ async def test_native_setup_uses_bound_active_host_group_without_inventing_tenan
     await db_session.flush()
     call = host_setup_session(SwitchTenantRequest(tenant_id=tenant_id),
         Request({"type": "http", "headers": []}),
-        {"sub": subject, "email": person.email, "azp": "hypermesh-host-setup"}, db_session)
+        {"sub": subject, "email": person.email, "azp": "hypermesh-host-setup"})
     if boundary != "host":
         with pytest.raises(ForbiddenException):
             await call
