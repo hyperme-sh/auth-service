@@ -29,11 +29,15 @@ jobs:
           unset GH_TOKEN GITHUB_TOKEN DEPENDENCY_READ_TOKEN
           export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=0 GIT_TERMINAL_PROMPT=0
           bash scripts/check-package.sh
+      - name: Qualify standalone container with disposable issuer and database
+        run: uv run --frozen python scripts/check-container.py --evidence "$TEST_EVIDENCE_DIR/container.json"
       - name: Retain executed test identities
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: test-results
-          path: ${{ env.TEST_EVIDENCE_DIR }}/*.xml
+          path: |
+            ${{ env.TEST_EVIDENCE_DIR }}/*.xml
+            ${{ env.TEST_EVIDENCE_DIR }}/*.json
           if-no-files-found: error
           retention-days: 90
       - name: Retain validated package bytes
