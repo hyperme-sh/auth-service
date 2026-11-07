@@ -15,20 +15,17 @@ from datetime import UTC, datetime
 
 import httpx
 import jwt
-from api.infrastructure.persistence.db_session import get_db_session
 from api.infrastructure.security.keycloak_jwt import get_keycloak_jwt_validator
 from api.infrastructure.security.tenant_session_jwt import (
     is_smoke_session,
     try_decode_tenant_session_jwt,
 )
 from controlplane_api.config import settings
-from controlplane_tenancy.tenant_guc import set_current_tenant_id_guc
-from controlplane_tenancy.tenant_membership import get_tenant_membership_row
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import SQLAlchemyError
 
 from auth_service.keycloak_oidc import introspect_access_token
+from auth_service.session_membership import authorize_session_member, MemberAuthorityUnavailable
 
 router = APIRouter()
 BROWSER_CLIENT = "controlplane-frontend"
@@ -204,21 +201,13 @@ async def connect_session_end_context(request: Request):
 
 
 async def current_member(tenant_id, subject):
-    db = get_db_session()
-    await set_current_tenant_id_guc(db, tenant_id)
-    member = await get_tenant_membership_row(db, tenant_id, keycloak_sub=subject)
-    if (
-        member is None
-        or member.keycloak_sub != subject
-        or not member.is_active
-        or member.deleted_at is not None
-    ):
+    try:
+        grant = await authorize_session_member(subject, tenant_id)
+    except MemberAuthorityUnavailable as exc:
+        raise SessionUnavailable() from exc
+    if grant is None:
         raise MembershipRevoked()
-    from api.domain.operator.bans import ban_book
-
-    if not ban_book().user_may_enter(tenant_id, member.id):
-        raise MembershipRevoked()
-    return str(member.id)
+    return str(grant.user_id)
 
 
 @router.get("/connect-session-context", include_in_schema=False)
@@ -287,7 +276,6 @@ async def session_context(request: Request, *, verification=False):
         httpx.HTTPError,
         TimeoutError,
         jwt.PyJWKClientError,
-        SQLAlchemyError,
     ):
         return JSONResponse(
             {"detail": "Session verification unavailable"},

@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != '/api/v1/internal/identity/host-setup':
+        if self.path not in ('/api/v1/internal/identity/host-setup','/api/v1/internal/identity/session-member'):
             return self.reply(404, None)
         if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             return self.reply(401, None)

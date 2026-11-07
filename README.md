@@ -193,7 +193,10 @@ additive user-owner endpoint before this consumer; auth never falls back to loca
 tenancy tables or a process-local ban book. Package tests use the actual owner
 router and PostgreSQL. Container tests use an explicitly controlled owner HTTP
 fixture to prove forwarding, minting, denial and outage handling against a fresh
-auth-only schema. Auth #3 remains open for coordinated runtime/fleet acceptance. [Host/closure reconciliation](docs/qualification/host-setup-reconciliation-2026-11-07.md)
+auth-only schema. Session-context identity membership also uses the private `session-member` command.
+Both membership decisions use current owner state and durable bans; browser
+credential checks and the distinction between revocation and outage remain in
+auth. Auth #3 remains open for coordinated runtime/fleet acceptance. [Host/closure reconciliation](docs/qualification/host-setup-reconciliation-2026-11-07.md)
 records completed #9 source and native regression adoption separately.
 
 ## Release and versioning
