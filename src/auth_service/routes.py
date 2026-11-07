@@ -6,6 +6,7 @@ import uuid
 from typing import Annotated
 
 import jwt
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -272,20 +273,18 @@ async def auth_switch_tenant(
 
     from auth_service import operator_binding
 
-    await provision_test_operator(claims, body.tenant_id)
-    denial = await ensure_seeded_host_role(claims, body.tenant_id)
-    await operator_binding.provision(claims, body.tenant_id)
-    if denial:
-        raise ForbiddenException(denial)
-    grant = await authorize_tenant_switch(user, body.tenant_id)
+    try:
+        await provision_test_operator(claims, body.tenant_id)
+        denial = await ensure_seeded_host_role(claims, body.tenant_id)
+        await operator_binding.provision(claims, body.tenant_id)
+        if denial:
+            raise ForbiddenException(denial)
+        grant = await authorize_tenant_switch(user, body.tenant_id)
+    except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+        raise HTTPException(503, 'Tenant membership authority unavailable',
+                            headers={'Cache-Control': 'no-store'}) from exc
     if grant is None:
         raise ForbiddenException("Not a member of this tenant")
-    if grant.user_id is not None:
-        from api.domain.operator.bans import ban_book
-
-        if not ban_book().user_may_enter(body.tenant_id, grant.user_id):
-            raise ForbiddenException("This user is banned from the tenant")
-
     proposed = tenant_session_permissions(
         grant.permissions,
         email=user.email,
@@ -367,12 +366,8 @@ async def auth_smoke_session(
             "github_oidc_rejected",
             "GitHub OIDC token rejected",
         )
-    session = get_db_session()
-
-    from api.infrastructure.persistence.tenant_membership import (
-        MARKETPLACE_TENANT_ID,
-        get_tenant_membership_row,
-    )
+    from api.infrastructure.persistence.tenant_membership import MARKETPLACE_TENANT_ID
+    from auth_service.session_membership import authorize_session_member
 
     identity = AuthMeResponse(
         sub=settings.smoke_session_subject,
@@ -383,7 +378,7 @@ async def auth_smoke_session(
     )
     try:
         granted = await grant_held_roles(
-            session,
+            None,
             identity,
             tenant_id=MARKETPLACE_TENANT_ID,
             requested=["renter"],
@@ -394,26 +389,17 @@ async def auth_smoke_session(
                 "smoke_enrollment_refused",
                 "smoke renter enrollment refused",
             )
-        member = await get_tenant_membership_row(
-            session,
-            MARKETPLACE_TENANT_ID,
-            email=settings.smoke_session_email,
-            keycloak_sub=settings.smoke_session_subject,
-        )
+        member = await authorize_session_member(settings.smoke_session_subject, MARKETPLACE_TENANT_ID)
         if member is None:
             return _smoke_json(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "smoke_membership_missing",
-                "smoke renter membership missing",
+                status.HTTP_403_FORBIDDEN,
+                "smoke_membership_refused",
+                "smoke renter membership refused",
             )
-        from api.domain.operator.bans import ban_book
-
-        if not ban_book().user_may_enter(MARKETPLACE_TENANT_ID, member.id):
-            raise ForbiddenException("This user is banned from the tenant")
 
         access = mint_tenant_session_jwt(
             claims={
-                "sub": str(member.id),
+                "sub": str(member.user_id),
                 "email": settings.smoke_session_email,
                 "preferred_username": settings.smoke_session_username,
                 "azp": settings.smoke_oidc_audience,
@@ -430,7 +416,7 @@ async def auth_smoke_session(
             tenant_id=MARKETPLACE_TENANT_ID,
             event_type=AUTH_TOKEN_ISSUED_V1,
             payload=AuthTokenIssuedPayload(
-                subject=str(member.id),
+                subject=str(member.user_id),
                 grant_type=settings.smoke_session_claim,
                 client_id=settings.smoke_oidc_audience,
             ).model_dump(mode="json"),
@@ -457,7 +443,7 @@ async def auth_smoke_session(
         expires_in=TENANT_SESSION_TTL_SECONDS,
         token_type="Bearer",
         tenant_id=MARKETPLACE_TENANT_ID,
-        user_id=member.id,
+        user_id=member.user_id,
     )
 
 

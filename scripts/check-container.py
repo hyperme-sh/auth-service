@@ -297,6 +297,20 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                         assert denied.headers['cache-control']=='no-store'
                     assert owner.exec_run(['python','-c',"from pathlib import Path; Path('/tmp/owner-mode').unlink()"]).exit_code==0
                 checks.append(mode + ': connect and verification contexts use owner HTTP with revocation/outage distinction and no fabricated MFA')
+                switch_headers = {'Authorization':'Bearer '+tokens['controlplane-frontend']}
+                switched = http.post(url+'/auth/switch-tenant',headers=switch_headers,json={'tenant_id':target_tenant})
+                assert switched.status_code == 200, switched.text
+                switched_claims = jwt.decode(switched.json()['access_token'],env['API_KEY_EXCHANGE_JWT_SECRET'],
+                    algorithms=['HS256'],issuer='https://spanopticon.internal/tenant-session')
+                assert switched_claims['sub']==subject and switched_claims['tenant_id']==target_tenant
+                assert 'renter' in switched_claims['realm_access']['roles']
+                for peer_mode, expected in (('deny',403),('invalid',503)):
+                    assert owner.exec_run(['python','-c',f"from pathlib import Path; Path('/tmp/owner-mode').write_text('{peer_mode}')"]).exit_code==0
+                    refused=http.post(url+'/auth/switch-tenant',headers=switch_headers,json={'tenant_id':target_tenant})
+                    assert refused.status_code==expected, refused.text
+                assert owner.exec_run(['python','-c',"from pathlib import Path; Path('/tmp/owner-mode').unlink()"]).exit_code==0
+                assert http.post(url+'/auth/hypermesh-smoke/session',headers=switch_headers).status_code==404
+                checks.append(mode + ': current owner command controls tenant switching and smoke remains disabled')
                 auth_urls[mode] = url
             owner.stop(timeout=2)
             for url in auth_urls.values():
@@ -304,6 +318,10 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                     'Authorization':'Bearer '+tokens['hypermesh-host-setup'],'X-Tenant-ID':target_tenant},json={'tenant_id':target_tenant})
                 assert reply.status_code==503
             checks.append('Unavailable owner cannot reuse an earlier host grant in either auth mode')
+            for url in auth_urls.values():
+                refused=http.post(url+'/auth/switch-tenant',headers={'Authorization':'Bearer '+tokens['controlplane-frontend']},json={'tenant_id':target_tenant})
+                assert refused.status_code==503 and refused.headers['cache-control']=='no-store'
+            checks.append('Unavailable owner cannot reuse an earlier tenant-switch grant in either auth mode')
             for mode,url in auth_urls.items():
                 for path in ('/auth/connect-session-context','/auth/verification-context'):
                     denied=http.get(url+path,headers=context_headers[mode])

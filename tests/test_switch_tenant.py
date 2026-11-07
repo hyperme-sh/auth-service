@@ -366,3 +366,48 @@ async def test_header_only_still_missing_tenant_context(app, http_client, tenant
         assert "tenant context" in r.json()["error"].lower()
     finally:
         app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+@pytest.mark.parametrize('outcome', ['allow', 'deny', 'outage', 'seed-operator-outage', 'seed-host-outage'])
+async def test_switch_uses_owner_decision_without_local_ban_cache(app, http_client, tenant_uuid, monkeypatch, outcome):
+    from api.domain.operator.bans import ban_book
+    from auth_service import deps, routes
+    async def claims():
+        return {'sub':'fixture-subject','email':'fixture@example.invalid','azp':'controlplane-m2m'}
+    app.dependency_overrides[deps.get_access_token_claims] = claims
+    def no_local_authority(*args, **kwargs):
+        raise AssertionError('Only the owner transaction decides durable bans')
+    monkeypatch.setattr(type(ban_book()), 'user_may_enter', no_local_authority)
+    authority = AsyncMock(return_value=None if outcome == 'deny' else TenantSwitchGrant(role_name='admin', user_id=uuid.uuid4()))
+    if outcome == 'outage':
+        authority.side_effect = RuntimeError('unavailable')
+    monkeypatch.setattr(routes, 'authorize_tenant_switch', authority)
+    if outcome.startswith('seed-'):
+        from auth_service import test_operator_seed
+        operation = 'provision_test_operator' if outcome == 'seed-operator-outage' else 'ensure_seeded_host_role'
+        monkeypatch.setattr(test_operator_seed, operation, AsyncMock(side_effect=RuntimeError('owner unavailable')))
+    try:
+        reply = await http_client.post('/auth/switch-tenant', headers={'Authorization':'Bearer fixture'}, json={'tenant_id':str(tenant_uuid)})
+        assert reply.status_code == {'allow':200,'deny':403}.get(outcome,503), reply.text
+        if 'outage' in outcome:
+            assert reply.headers['cache-control'] == 'no-store'
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims, None)
+
+
+@pytest.mark.parametrize('legacy_owner', [False, True])
+async def test_client_requires_current_owner_command(monkeypatch, legacy_owner):
+    import httpx
+    import respx
+    from auth_service.tenant_switch import authorize_tenant_switch as remote_switch
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL', 'https://owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN', 'fixture-private-token')
+    tenant = uuid.uuid4()
+    with respx.mock:
+        peer = respx.post('https://owner.test/api/v1/internal/identity/tenant-switch-current').mock(return_value=httpx.Response(422, json={'detail':'unknown operation'}) if legacy_owner else httpx.Response(200, content='null'))
+        if legacy_owner:
+            with pytest.raises(httpx.HTTPStatusError):
+                await remote_switch(AuthMeResponse(sub='fixture-subject'), tenant)
+        else:
+            assert await remote_switch(AuthMeResponse(sub='fixture-subject'), tenant) is None
+        assert peer.calls.last.request.headers['authorization'] == 'Bearer fixture-private-token'
