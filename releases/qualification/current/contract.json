@@ -13,7 +13,7 @@
     "auth_service/keycloak_oidc.py": "5f8c0707563ffdf3cadbe50324f7091145f65b1ed4f08d3e971a034c930d6474",
     "auth_service/main.py": "649d1d0b0db0f14aa1c37ff10c51ec5452b5668c6978d2f4de3a9fb9950bc10b",
     "auth_service/operator_binding.py": "881762859393b8d602fd2818eff10e1caff54f35a70f161a7a5d4b61c96fc7d7",
-    "auth_service/routes.py": "4e14c6bc4cff7384ff414930688ea3e2953864f81ac4075165203b4608c19724",
+    "auth_service/routes.py": "1413978de22a69f876c986c04b27b2791e242f28310109dfe7c981ed73293528",
     "auth_service/schemas.py": "58317ffab4a4d4779e54c69eaa818b1bb0d06003fbf53e588d67c9d9c1489449",
     "auth_service/session_membership.py": "29af7ed60fc104aab4690d125e49e7493a93220c57e9736dea8b943e924e5f71",
     "auth_service/siwe.py": "29f5cade312cc2d71e8ff041358a885ae0de9ad5ce8ad17b273a400513460919",

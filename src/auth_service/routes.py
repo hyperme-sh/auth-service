@@ -273,12 +273,12 @@ async def auth_switch_tenant(
 
     from auth_service import operator_binding
 
-    await provision_test_operator(claims, body.tenant_id)
-    denial = await ensure_seeded_host_role(claims, body.tenant_id)
-    await operator_binding.provision(claims, body.tenant_id)
-    if denial:
-        raise ForbiddenException(denial)
     try:
+        await provision_test_operator(claims, body.tenant_id)
+        denial = await ensure_seeded_host_role(claims, body.tenant_id)
+        await operator_binding.provision(claims, body.tenant_id)
+        if denial:
+            raise ForbiddenException(denial)
         grant = await authorize_tenant_switch(user, body.tenant_id)
     except (httpx.HTTPError, ValueError, RuntimeError) as exc:
         raise HTTPException(503, 'Tenant membership authority unavailable',

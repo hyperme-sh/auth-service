@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ('/api/v1/internal/identity/host-setup','/api/v1/internal/identity/session-member','/api/v1/internal/identity/tenant-switch-current'):
+        if self.path not in ('/api/v1/internal/identity/host-setup','/api/v1/internal/identity/session-member','/api/v1/internal/identity/tenant-switch-current','/api/v1/internal/identity/seed-operator','/api/v1/internal/identity/seed-host'):
             return self.reply(404, None)
         if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             return self.reply(401, None)
@@ -35,6 +35,12 @@ class Handler(BaseHTTPRequestHandler):
         if not 0 < length <= 8192:
             return self.reply(422, None)
         value = json.loads(self.rfile.read(length))
+        if self.path.rsplit('/',1)[-1] in ('seed-operator','seed-host'):
+            if (set(value) != {'claims','tenant_id'} or not isinstance(value['claims'],dict)
+                    or value['claims'].get('sub') != subject or value['tenant_id'] != tenant):
+                return self.reply(422, None)
+            # The ordinary fixture identity is ineligible for either seed.
+            return self.reply(200, None)
         switching = self.path.endswith('/tenant-switch-current')
         if switching:
             if set(value) != {'user', 'tenant_id'} or not isinstance(value['user'], dict):
