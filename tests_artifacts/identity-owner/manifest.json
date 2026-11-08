@@ -1,7 +1,7 @@
 {
   "wheel": "user_service-0.1.0-py3-none-any.whl",
-  "sha256": "2cce3e3f08b4e1f83024723ed100f80e5728d4e34957c1645bc9fc41b3581b4d",
-  "source_revision": "bbda54ab414bdf24decdea2a4b8219e96b8ffcd7",
+  "sha256": "adc85ca576f3f0f1c2718f3c3f6b2312a8f8c91f4e17f883b66293b22bd53ef6",
+  "source_revision": "01d2aa27ce25ac4e0d0fc469ca0004703a88c8e6",
   "purpose": "native identity-owner test fixture only; not an auth runtime dependency",
-  "source_url": "https://github.com/hyperme-sh/user-service/tree/bbda54ab414bdf24decdea2a4b8219e96b8ffcd7"
+  "source_url": "https://github.com/hyperme-sh/user-service/tree/01d2aa27ce25ac4e0d0fc469ca0004703a88c8e6"
 }
