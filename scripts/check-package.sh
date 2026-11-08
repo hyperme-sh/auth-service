@@ -54,13 +54,18 @@ for qualified_manifest in releases/qualification/current/release.json releases/c
   fi
 done
 uv export --frozen "${export_options[@]}" --no-emit-project --format requirements-txt --output-file "$scratch/requirements.txt" >/dev/null
+python3 scripts/export_selected_overrides.py pyproject.toml "$scratch/overrides.txt"
+install_options=(--constraint "$scratch/requirements.txt")
+if [[ -s "$scratch/overrides.txt" ]]; then
+  install_options+=(--overrides "$scratch/overrides.txt")
+fi
 uv venv --python 3.13 "$scratch/venv"
 uv pip sync --python "$scratch/venv/bin/python" "$scratch/requirements.txt"
 if (( ${#fixture_wheels[@]} )); then
   uv pip install --no-config --python "$scratch/venv/bin/python" --no-deps "${fixture_wheels[@]}" "$scratch"/dist/*.whl
 else
 uv pip uninstall --python "$scratch/venv/bin/python" controlplane-core controlplane-api controlplane-tenancy controlplane-identity controlplane-db controlplane-events operator-ban-store
-uv pip install --python "$scratch/venv/bin/python" --constraint "$scratch/requirements.txt" "$scratch"/dist/*.whl
+uv pip install --python "$scratch/venv/bin/python" "${install_options[@]}" "$scratch"/dist/*.whl
 fi
 uv pip install --python "$scratch/venv/bin/python" --no-deps "$identity_wheel"
 cp -R tests "$scratch/"
@@ -79,7 +84,7 @@ cmp "$scratch/contract/contract.json" "$scratch/rebuilt-contract/contract.json"
 if (( ${#fixture_wheels[@]} )); then
   uv pip install --no-config --python "$scratch/venv/bin/python" --no-deps --reinstall "$scratch"/rebuilt/*.whl
 else
-  uv pip install --python "$scratch/venv/bin/python" --constraint "$scratch/requirements.txt" --reinstall-package auth-service "$scratch"/rebuilt/*.whl
+  uv pip install --python "$scratch/venv/bin/python" "${install_options[@]}" --reinstall-package auth-service "$scratch"/rebuilt/*.whl
 fi
 (cd "$scratch" && "$scratch/venv/bin/python" -I -m pytest -c /dev/null -o asyncio_mode=auto -o asyncio_default_fixture_loop_scope=function tests --junitxml="$scratch/sdist.xml")
 python3 scripts/verify-test-results.py "$scratch/source.xml" "$scratch/wheel.xml" "$scratch/sdist.xml"
