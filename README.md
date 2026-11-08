@@ -222,3 +222,25 @@ and the original dependency declarations before applying those overrides.
 Qualification does not publish packages or authorize deployment.
 
 Auth requires the additive `tenant-switch-current` owner command, so an older owner cannot silently omit the durable gate. Tenant-switch grants include durable destination-tenant user-ban enforcement by user-service, including platform overrides and legacy email memberships. Auth no longer consults a local ban book. The test-only smoke route retains its default-off/OIDC guards and, after enrollment, uses the private exact-subject `session-member` command; owner denial refuses minting and owner outage returns 503.
+
+
+## Actual owner runtime acceptance
+
+`scripts/check-owner-runtime.py` runs selected local, non-root Auth and User images
+with real Keycloak browser PKCE login and a disposable PostgreSQL historical
+schema. It verifies source labels and every installed runtime file against the
+selected successful-main wheels, reconciles the exact historical identity
+policies with the source-pinned test-only owner tool, and tests JWT/introspection
+switching, session facts, cross-tenant refusal, durable ban/lift, owner outage and
+issuer logout. Smoke and public closure stay off; no provider operation occurs.
+
+Build each image from its normal Dockerfile at the selected immutable source.
+Supply `--auth-image`, `--auth-revision`, `--auth-wheel`, `--owner-image`,
+`--owner-revision`, `--owner-wheel` and `--evidence` explicitly. Download the wheels
+from successful exact-head qualification and verify artifact digests first. The
+package lane must have installed its verified identity-owner fixture. The runner
+removes only its own disposable containers, network and anonymous volumes. It
+never selects a shared database, publishes images or changes TEST deployment.
+The resulting receipt establishes disposable runtime compatibility; live TEST
+image, TLS/credential wiring, database privileges and public journeys require
+separate deployment evidence.
