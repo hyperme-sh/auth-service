@@ -250,7 +250,22 @@ async def session_context(request: Request, *, verification=False):
                 raise SessionUnavailable() from None
         introspection_shape(active)
         facts = verified_facts(tenant, origin, active)
-        facts["member_id"] = await current_member(tid, facts["subject"])
+        if tenant.get('scope_version')==1:
+            from auth_service.scoped_session import current_scope, ScopeUnavailable
+            try:
+                scope=await current_scope(facts['subject'],tid,uuid.UUID(tenant['organization_id']))
+            except ScopeUnavailable as exc:
+                raise SessionUnavailable() from exc
+            if scope is None:raise MembershipRevoked()
+            if (scope.network_id!=tenant.get('network_id') or scope.generation!=tenant.get('scope_generation')
+                    or scope.manifest_sha256!=tenant.get('scope_manifest_sha256')):
+                raise SessionDenied()
+            facts.update(member_id=str(scope.user_id),organization_id=str(scope.organization_id),network_id=scope.network_id,
+                scope_generation=scope.generation,scope_manifest_sha256=scope.manifest_sha256)
+        else:
+            if __import__('os').environ.get('AUTH_SCOPE_GENERATION'):
+                raise SessionDenied()
+            facts['member_id'] = await current_member(tid, facts['subject'])
         if verification:
             from auth_service.verification_evidence import email_evidence
             facts = facts | email_evidence(origin)
