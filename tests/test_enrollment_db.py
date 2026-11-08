@@ -1106,7 +1106,8 @@ async def test_session_context_reads_real_owner_membership_and_durable_bans(db_s
     finally:ban_book().clear()
 
 
-async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_url,app,http_client,monkeypatch):
+@pytest.mark.parametrize("scope_kind",["organization","network"])
+async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_url,app,http_client,monkeypatch,scope_kind):
     """Fresh local namespace only; no shared TEST identity or scope is touched."""
     import hashlib
     from pathlib import Path
@@ -1115,16 +1116,17 @@ async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_
     from fastapi import FastAPI
     import httpx
     from sqlalchemy.engine import make_url
-    from auth_service import scoped_session,deps
+    from auth_service import scoped_session,network_session,deps
     from api.infrastructure.persistence.db_session import get_db_session
     from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_session_jwt
-    from user_service.scope_api import router
-    from user_service.scope_schema import install,DDL_SHA256
+    from user_service.scope_adapter import router
+    from user_service.authority_migrate import install
+    from importlib.resources import files
     from controlplane_events.owner_schema import migrate
     fixture=Path(__file__).with_name('fixtures')/'scope-owner'
     manifest=json.loads((fixture/'manifest.json').read_text())
     for name,digest in manifest['files'].items():assert hashlib.sha256((fixture/name).read_bytes()).hexdigest()==digest
-    assert manifest['files']['0002.sql']==DDL_SHA256
+    assert (fixture/'0002.sql').read_bytes()==files('user_service').joinpath('authority_schema.sql').read_bytes()
     name='local_auth_scope_'+uuid.uuid4().hex;reader=name+'_reader';password=uuid.uuid4().hex
     root=create_engine(migrated_sync_url)
     with root.begin() as db:
@@ -1138,18 +1140,24 @@ async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_
     tenant,other,org,user=(uuid.uuid4() for _ in range(4));subject='local:scoped:'+uuid.uuid4().hex
     try:
         migrate(owner,revision='0001_owner_schema',ddl=(fixture/'0001.sql').read_text())
-        with owner.begin() as db:install(db,(fixture/'0002.sql').read_text())
+        install(owner)
         with admin.begin() as db:
             db.exec_driver_sql(f'GRANT USAGE ON SCHEMA "{name}" TO "{reader}"')
             db.exec_driver_sql(f'GRANT SELECT ON ALL TABLES IN SCHEMA "{name}" TO "{reader}"')
-            db.exec_driver_sql(f'GRANT UPDATE ON identity_org_memberships TO "{reader}"')
-            db.execute(text("INSERT INTO identity_scope_generation VALUES(true,'local-v1',:hash)"),{'hash':'a'*64})
-            db.exec_driver_sql("INSERT INTO identity_networks VALUES('local-network',true)")
+            db.exec_driver_sql(f'GRANT UPDATE ON organization_memberships TO "{reader}"')
+            db.execute(text("INSERT INTO authority_fixture_generation(generation,manifest_sha256,subjects_sha256,source_sha) VALUES('local-v1',:hash,:hash,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')"),{'hash':'a'*64})
+            db.exec_driver_sql("INSERT INTO authority_networks VALUES('local-network',true)")
             db.execute(text('INSERT INTO tenants(id,name,is_active) VALUES(:id,:name,true)'),{'id':tenant,'name':str(tenant)})
-            db.execute(text("INSERT INTO identity_network_tenants VALUES(:tenant,'local-network')"),{'tenant':tenant})
+            db.execute(text("INSERT INTO authority_tenants VALUES(:tenant,'local-network')"),{'tenant':tenant})
             db.execute(text("INSERT INTO organizations(id,tenant_id,legal_name) VALUES(:org,:tenant,'Local org')"),{'org':org,'tenant':tenant})
-            db.execute(text("INSERT INTO users(id,tenant_id,keycloak_sub,email,first_name,last_name,gender,is_active) VALUES(:id,:tenant,:sub,'local-scope@example.invalid','Local','Scope','unspecified',true)"),{'id':user,'tenant':tenant,'sub':subject})
-            db.execute(text("INSERT INTO identity_org_memberships VALUES(:tenant,:org,:user,'admin',false,true)"),{'tenant':tenant,'org':org,'user':user})
+            db.execute(text("INSERT INTO users(id,tenant_id,keycloak_sub,email,first_name,last_name,gender,is_active) VALUES(:id,NULL,:sub,'local-scope@example.invalid','Local','Global','unspecified',true)"),{'id':user,'sub':subject})
+            profile=uuid.uuid4()
+            db.execute(text("INSERT INTO users(id,tenant_id,keycloak_sub,email,first_name,last_name,gender,is_active) VALUES(:id,:tenant,:sub,'local-scope@example.invalid','Local','Scope','unspecified',true)"),{'id':profile,'tenant':tenant,'sub':subject})
+            db.execute(text("INSERT INTO organization_memberships VALUES(:tenant,:org,:user,'admin',false,true)"),{'tenant':tenant,'org':org,'user':profile})
+            if scope_kind=='network':
+                db.execute(text('DELETE FROM organization_memberships WHERE user_id=:profile'),{'profile':profile})
+                db.execute(text('DELETE FROM users WHERE id=:profile'),{'profile':profile})
+                db.execute(text("INSERT INTO authority_network_admins VALUES('local-network',:user,true)"),{'user':user})
         peer=FastAPI();peer.include_router(router,prefix='/api/v1');peer.state.session_maker=maker
         async def peer_db():
             async with maker() as db:
@@ -1157,18 +1165,30 @@ async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_
         peer.dependency_overrides[get_db_session]=peer_db
         factory=httpx.AsyncClient
         monkeypatch.setattr(scoped_session,'httpx',SimpleNamespace(HTTPError=httpx.HTTPError,AsyncClient=lambda **kw:factory(transport=httpx.ASGITransport(peer),**kw)))
-        for key,value in {'USER_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_MANIFEST_SHA256':'a'*64,'AUTH_SCOPE_AUTHORITY_URL':'https://local-scope-owner','AUTH_SCOPE_AUTHORITY_TOKEN':'local-scope-secret'}.items():monkeypatch.setenv(key,value)
+        monkeypatch.setattr(network_session,'httpx',scoped_session.httpx)
+        for key,value in {'USER_SCOPED_AUTHORITY_REQUIRED':'1','USER_TEST_FIXTURE_GENERATION':'local-v1','USER_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_MANIFEST_SHA256':'a'*64,'AUTH_SCOPE_AUTHORITY_URL':'https://local-scope-owner','AUTH_SCOPE_AUTHORITY_TOKEN':'local-scope-secret'}.items():monkeypatch.setenv(key,value)
         async def claims():return {'sub':subject,'azp':'controlplane-frontend','scope':'openid','realm_access':{'roles':['admin']}}
         app.dependency_overrides[deps.get_access_token_claims]=claims
-        result=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(org)})
+        path='/auth/network-session' if scope_kind=='network' else '/auth/scoped-session'
+        body={'tenant_id':str(tenant),**({'organization_id':str(org)} if scope_kind=='organization' else {})}
+        result=await http_client.post(path,headers={'Authorization':'Bearer local-browser'},json=body)
         assert result.status_code==200,result.text
         signed=try_decode_tenant_session_jwt(result.json()['access_token'])
-        assert signed['organization_id']==str(org) and signed['realm_access']['roles']==['org:admin']
-        assert signed['permissions']==[]
-        denied=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(other)})
+        assert signed['scope_kind']==scope_kind
+        if scope_kind=='organization':
+            assert signed['organization_id']==str(org) and signed['realm_access']['roles']==['org:admin']
+            assert signed['permissions']==[]
+            other_body={**body,'organization_id':str(other)}
+        else:
+            assert signed['organization_id'] is None and signed['realm_access']['roles']==['network:admin']
+            assert set(signed['permissions'])=={'operator:console','operator:support','operator:program','operator:resolve'}
+            other_body={'tenant_id':str(other)}
+        denied=await http_client.post(path,headers={'Authorization':'Bearer local-browser'},json=other_body)
         assert denied.status_code==403
-        with admin.begin() as db:db.execute(text('UPDATE identity_org_memberships SET active=false WHERE user_id=:user'),{'user':user})
-        denied=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(org)})
+        with admin.begin() as db:
+            if scope_kind=='organization':db.execute(text('UPDATE organization_memberships SET enabled=false WHERE user_id=:user'),{'user':profile})
+            else:db.execute(text('UPDATE authority_network_admins SET enabled=false WHERE user_id=:user'),{'user':user})
+        denied=await http_client.post(path,headers={'Authorization':'Bearer local-browser'},json=body)
         assert denied.status_code==403
     finally:
         app.dependency_overrides.pop(deps.get_access_token_claims,None)

@@ -51,9 +51,11 @@ def test_keycloak_host_setup_requires_own_audience_and_client(oidc):
             validator.validate_host_setup_sync(issue(**changes))
 
 
+@pytest.mark.parametrize("scoped",[False,True])
 async def test_setup_session_strips_tenant_authority_and_generic_routes_reject_it(
-    app, http_client, tenant_uuid, oidc, monkeypatch, event_sink,
+    app, http_client, tenant_uuid, oidc, monkeypatch, event_sink, scoped,
 ):
+    if scoped:monkeypatch.setenv("AUTH_SCOPE_GENERATION","local-v1")
     _, issue = oidc
     token = issue(permissions=["HOST_MANAGE_TENANTS"], realm_access={"roles": ["admin"]})
     headers = {"Authorization": "Bearer " + token}

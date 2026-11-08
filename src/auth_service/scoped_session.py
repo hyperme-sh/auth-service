@@ -36,7 +36,7 @@ class ScopeGrant(BaseModel):
     manifest_sha256: str=Field(pattern='^[a-f0-9]{64}$')
 
 
-async def current_scope(subject,tenant_id,organization_id):
+def owner_configuration():
     url=os.environ.get('AUTH_SCOPE_AUTHORITY_URL','').rstrip('/')
     token=os.environ.get('AUTH_SCOPE_AUTHORITY_TOKEN','')
     generation=os.environ.get('AUTH_SCOPE_GENERATION','')
@@ -44,10 +44,15 @@ async def current_scope(subject,tenant_id,organization_id):
     if not all((url,token,generation,manifest)):raise ScopeUnavailable('Scope owner configuration required')
     try:
         parsed=urlsplit(url)
-        if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        if parsed.scheme!='https' or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
             raise ValueError('Verified TLS owner endpoint required')
     except ValueError as exc:
         raise ScopeUnavailable('Verified TLS owner endpoint required') from exc
+    return url,token,generation,manifest
+
+
+async def current_scope(subject,tenant_id,organization_id):
+    url,token,generation,manifest=owner_configuration()
     try:
         async with httpx.AsyncClient(timeout=10,follow_redirects=False) as client:
             r=await client.post(url+'/api/v1/internal/organization-authority/check',headers={'Authorization':'Bearer '+token},json={'subject':subject,'tenant_id':str(tenant_id),'organization_id':str(organization_id),'capability':'member'})
@@ -78,7 +83,7 @@ async def scoped_session(body: ScopedRequest,request: Request,user: CurrentAuthU
     if grant is None:raise HTTPException(403,'Current organization membership required',headers=headers)
     base=mint_tenant_session_jwt(claims={**claims,'azp':client_id,'permissions':[],'realm_access':{'roles':[]},'groups':[]},tenant_id=body.tenant_id,extra_roles=['org:'+grant.role])
     payload=jwt.decode(base,settings.usable_api_key_exchange_secret(),algorithms=['HS256'],issuer='https://spanopticon.internal/tenant-session')
-    payload.update(scope_version=1,organization_id=str(grant.organization_id),network_id=grant.network_id,
+    payload.update(scope_version=1,scope_kind='organization',organization_id=str(grant.organization_id),network_id=grant.network_id,
         scope_generation=grant.generation,scope_manifest_sha256=grant.manifest_sha256)
     access=jwt.encode(payload,settings.usable_api_key_exchange_secret(),algorithm='HS256')
     from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
