@@ -244,3 +244,29 @@ never selects a shared database, publishes images or changes TEST deployment.
 The resulting receipt establishes disposable runtime compatibility; live TEST
 image, TLS/credential wiring, database privileges and public journeys require
 separate deployment evidence.
+
+
+## Configured organization scope sessions
+
+`POST /auth/scoped-session` accepts a tenant and organization selection only after
+normal issuer authentication. It sends the verified subject to User's current
+organization authority contract with `AUTH_SCOPE_AUTHORITY_TOKEN` at
+`AUTH_SCOPE_AUTHORITY_URL`. The response must exactly match the requested subject,
+tenant, org, configured `AUTH_SCOPE_GENERATION` and
+`AUTH_SCOPE_MANIFEST_SHA256`. Denial is uncached 403; outages, malformed replies
+and binding mismatches are uncached 503. No browser token is forwarded.
+
+The signed tenant session includes the verified network/org and generation
+binding. It replaces incoming roles/groups/permissions with an org role only;
+no tenant/network admin role or reusable billing permission is minted. Session
+contexts recheck the current scope owner after browser/issuer verification, so
+disabled or revoked membership cannot rely on stale signed scope claims. In
+configured scope mode, legacy tenant switching and unscoped contexts are refused.
+Token issuance emits the existing audit event with the selected scope facts.
+
+Shared TEST requires the canonical Infra fixture generation and its installed
+seed/acceptance receipts. This package does not seed accounts, invent scopes,
+create temporary admins, or use bootstrap credentials. The additive owner scope
+schema, private controller provisioning, other consumer adoption and TEST cutover
+remain separate gates. Local PostgreSQL schema fixtures are digest-bound to the
+exact source-pinned test-only owner artifact and never provision a live realm.

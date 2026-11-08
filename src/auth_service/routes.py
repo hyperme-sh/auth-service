@@ -80,6 +80,8 @@ from auth_service.connect_session import router as connect_session_router
 
 router = APIRouter(tags=["auth"])
 router.include_router(connect_session_router)
+from auth_service.scoped_session import router as scoped_session_router
+router.include_router(scoped_session_router)
 logger = logging.getLogger(__name__)
 
 
@@ -249,6 +251,8 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
+    if __import__("os").environ.get("AUTH_SCOPE_GENERATION"):
+        raise HTTPException(403,"Use the explicit scoped-session endpoint",headers={"Cache-Control":"no-store"})
     if is_smoke_session(claims):
         raise ForbiddenException("Smoke session cannot switch tenant")
     raw = request.headers.get("X-Tenant-ID")

@@ -1104,3 +1104,76 @@ async def test_session_context_reads_real_owner_membership_and_durable_bans(db_s
         else:
             with pytest.raises(MembershipRevoked):await current_member(tenant_id,subject)
     finally:ban_book().clear()
+
+
+async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_url,app,http_client,monkeypatch):
+    """Fresh local namespace only; no shared TEST identity or scope is touched."""
+    import hashlib
+    from pathlib import Path
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    import httpx
+    from sqlalchemy.engine import make_url
+    from auth_service import scoped_session,deps
+    from api.infrastructure.persistence.db_session import get_db_session
+    from api.infrastructure.security.tenant_session_jwt import try_decode_tenant_session_jwt
+    from user_service.scope_api import router
+    from user_service.scope_schema import install,DDL_SHA256
+    from controlplane_events.owner_schema import migrate
+    fixture=Path(__file__).with_name('fixtures')/'scope-owner'
+    manifest=json.loads((fixture/'manifest.json').read_text())
+    for name,digest in manifest['files'].items():assert hashlib.sha256((fixture/name).read_bytes()).hexdigest()==digest
+    assert manifest['files']['0002.sql']==DDL_SHA256
+    name='local_auth_scope_'+uuid.uuid4().hex;reader=name+'_reader';password=uuid.uuid4().hex
+    root=create_engine(migrated_sync_url)
+    with root.begin() as db:
+        for role in (name,reader):db.exec_driver_sql(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
+        db.exec_driver_sql(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"')
+        for role in (name,reader):db.exec_driver_sql(f'ALTER ROLE "{role}" SET search_path TO "{name}"')
+    owner=create_engine(make_url(migrated_sync_url).set(username=name,password=password))
+    admin=create_engine(migrated_sync_url,connect_args={'options':'-csearch_path='+name})
+    engine=create_async_engine(make_url(migrated_sync_url).set(drivername='postgresql+asyncpg',username=reader,password=password))
+    maker=async_sessionmaker(engine,expire_on_commit=False)
+    tenant,other,org,user=(uuid.uuid4() for _ in range(4));subject='local:scoped:'+uuid.uuid4().hex
+    try:
+        migrate(owner,revision='0001_owner_schema',ddl=(fixture/'0001.sql').read_text())
+        with owner.begin() as db:install(db,(fixture/'0002.sql').read_text())
+        with admin.begin() as db:
+            db.exec_driver_sql(f'GRANT USAGE ON SCHEMA "{name}" TO "{reader}"')
+            db.exec_driver_sql(f'GRANT SELECT ON ALL TABLES IN SCHEMA "{name}" TO "{reader}"')
+            db.exec_driver_sql(f'GRANT UPDATE ON identity_org_memberships TO "{reader}"')
+            db.execute(text("INSERT INTO identity_scope_generation VALUES(true,'local-v1',:hash)"),{'hash':'a'*64})
+            db.exec_driver_sql("INSERT INTO identity_networks VALUES('local-network',true)")
+            db.execute(text('INSERT INTO tenants(id,name,is_active) VALUES(:id,:name,true)'),{'id':tenant,'name':str(tenant)})
+            db.execute(text("INSERT INTO identity_network_tenants VALUES(:tenant,'local-network')"),{'tenant':tenant})
+            db.execute(text("INSERT INTO organizations(id,tenant_id,legal_name) VALUES(:org,:tenant,'Local org')"),{'org':org,'tenant':tenant})
+            db.execute(text("INSERT INTO users(id,tenant_id,keycloak_sub,email,first_name,last_name,gender,is_active) VALUES(:id,:tenant,:sub,'local-scope@example.invalid','Local','Scope','unspecified',true)"),{'id':user,'tenant':tenant,'sub':subject})
+            db.execute(text("INSERT INTO identity_org_memberships VALUES(:tenant,:org,:user,'admin',false,true)"),{'tenant':tenant,'org':org,'user':user})
+        peer=FastAPI();peer.include_router(router,prefix='/api/v1');peer.state.session_maker=maker
+        async def peer_db():
+            async with maker() as db:
+                async with db.begin():yield db
+        peer.dependency_overrides[get_db_session]=peer_db
+        factory=httpx.AsyncClient
+        monkeypatch.setattr(scoped_session,'httpx',SimpleNamespace(HTTPError=httpx.HTTPError,AsyncClient=lambda **kw:factory(transport=httpx.ASGITransport(peer),**kw)))
+        for key,value in {'USER_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_MANIFEST_SHA256':'a'*64,'AUTH_SCOPE_AUTHORITY_URL':'https://local-scope-owner','AUTH_SCOPE_AUTHORITY_TOKEN':'local-scope-secret'}.items():monkeypatch.setenv(key,value)
+        async def claims():return {'sub':subject,'azp':'controlplane-frontend','scope':'openid','realm_access':{'roles':['admin']}}
+        app.dependency_overrides[deps.get_access_token_claims]=claims
+        result=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(org)})
+        assert result.status_code==200,result.text
+        signed=try_decode_tenant_session_jwt(result.json()['access_token'])
+        assert signed['organization_id']==str(org) and signed['realm_access']['roles']==['org:admin']
+        assert signed['permissions']==[]
+        denied=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(other)})
+        assert denied.status_code==403
+        with admin.begin() as db:db.execute(text('UPDATE identity_org_memberships SET active=false WHERE user_id=:user'),{'user':user})
+        denied=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(org)})
+        assert denied.status_code==403
+    finally:
+        app.dependency_overrides.pop(deps.get_access_token_claims,None)
+        await engine.dispose();owner.dispose();admin.dispose()
+        with root.begin() as db:
+            db.exec_driver_sql(f'DROP SCHEMA "{name}" CASCADE')
+            for role in (reader,name):db.exec_driver_sql(f'DROP OWNED BY "{role}"');db.exec_driver_sql(f'DROP ROLE "{role}"')
+        root.dispose()
