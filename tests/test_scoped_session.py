@@ -85,3 +85,31 @@ async def test_scoped_context_rechecks_current_owner(scoped_owner,monkeypatch,re
 async def test_scope_credentials_require_verified_tls_endpoint(scoped_owner,monkeypatch,url):
     g=scoped_owner;monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_URL',url)
     with pytest.raises(ScopeUnavailable):await current_scope(g['subject'],uuid.UUID(g['tenant_id']),uuid.UUID(g['organization_id']))
+
+
+@pytest.mark.parametrize('client_fields',[{'client_id':'controlplane-m2m'},{'azp':'controlplane-mobile'}])
+@respx.mock
+async def test_scoped_session_preserves_verified_client_identity(app,http_client,scoped_owner,client_fields):
+    g=scoped_owner
+    async def claims():return {'sub':g['subject'],**client_fields}
+    app.dependency_overrides[deps.get_access_token_claims]=claims
+    respx.post('https://scope.local/api/v1/internal/organization-authority/check').mock(return_value=httpx.Response(200,json=g))
+    try:
+        r=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-issuer'},json={'tenant_id':g['tenant_id'],'organization_id':g['organization_id']})
+        assert r.status_code==200,r.text
+        signed=try_decode_tenant_session_jwt(r.json()['access_token'])
+        assert signed['azp']==next(iter(client_fields.values()))
+        assert signed['azp']!='controlplane-frontend'
+    finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)
+
+
+@pytest.mark.parametrize('client_fields',[{}, {'azp':'controlplane-frontend','client_id':'other-client'}, {'azp':123}])
+@respx.mock
+async def test_missing_or_conflicting_client_cannot_reach_scope_owner(app,http_client,scoped_owner,client_fields):
+    g=scoped_owner
+    async def claims():return {'sub':g['subject'],**client_fields}
+    app.dependency_overrides[deps.get_access_token_claims]=claims
+    try:
+        r=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-issuer'},json={'tenant_id':g['tenant_id'],'organization_id':g['organization_id']})
+        assert r.status_code==403 and r.headers['cache-control']=='no-store'
+    finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)

@@ -1,5 +1,5 @@
 {
-  "source_revision": "37ab2e5b50e7f999feee7b663468c5a615b57ec4",
+  "source_revision": "0deb98c2651fdb9eb75fddd5d482c14e4f388ed8",
   "purpose": "Frozen local native schema fixtures only; never shared TEST provisioning",
   "files": {
     "0002.sql": "339592b729f6f23e1b4b43aecd524fe791691b402562c7acb18c2b33eef6bda6",
