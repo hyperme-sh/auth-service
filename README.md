@@ -266,7 +266,32 @@ Token issuance emits the existing audit event with the selected scope facts.
 
 Shared TEST requires the canonical Infra fixture generation and its installed
 seed/acceptance receipts. This package does not seed accounts, invent scopes,
-create temporary admins, or use bootstrap credentials. The additive owner scope
-schema, private controller provisioning, other consumer adoption and TEST cutover
+create temporary admins, or use bootstrap credentials. The consolidated User-owned
+authority schema, private controller provisioning, other consumer adoption and TEST cutover
 remain separate gates. Local PostgreSQL schema fixtures are digest-bound to the
 exact source-pinned test-only owner artifact and never provision a live realm.
+
+
+`POST /auth/network-session` is a separate selection for a current network admin
+in an active tenant. User's purpose-authenticated private network contract supplies
+the canonical global user ID, exact network/tenant, sealed generation/manifest and
+current operator capabilities. Auth requires verified HTTPS, exact binding and a
+strict DTO, permits only the four explicit operator capabilities, strips incoming
+roles/groups/permissions and mints `network:admin` with `scope_kind=network`.
+It creates no org profile/membership or purchase capability. Connect rechecks the
+current network contract after normal signed-browser/introspection verification;
+revocation is distinct from an owner outage and no MFA fact is invented.
+
+Org sessions carry `scope_kind=organization`. The native dedicated host-setup
+routes retain their verified client and current owner checks when scope mode is
+active; they never exchange a host identity into an org/network browser session.
+Portal must explicitly discover/select current contexts, then use the matching
+org or network endpoint. Generic tenant switching and unscoped browser Connect
+remain refused when `AUTH_SCOPE_GENERATION` is configured.
+
+Native tests pin the consolidated User #65 candidate and exercise both org and
+network exchanges over actual owner HTTP and non-superuser/non-bypass PostgreSQL.
+They install only the canonical `authority_*`/`organization_memberships` graph,
+not the earlier `identity_scope_*` prototype. Test-only dependencies do not change
+production package dependencies. Shared provisioning and rollout belong to the
+single reset controller; source qualification does not perform them.

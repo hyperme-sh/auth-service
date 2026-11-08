@@ -252,15 +252,22 @@ async def session_context(request: Request, *, verification=False):
         facts = verified_facts(tenant, origin, active)
         if tenant.get('scope_version')==1:
             from auth_service.scoped_session import current_scope, ScopeUnavailable
+            from auth_service.network_session import current_network
             try:
-                scope=await current_scope(facts['subject'],tid,uuid.UUID(tenant['organization_id']))
+                if tenant.get('scope_kind') not in (None,'organization','network'):raise SessionDenied()
+                if tenant.get('scope_kind')=='network':
+                    if tenant.get('organization_id') is not None:raise SessionDenied()
+                    scope=await current_network(facts['subject'],tid)
+                else:
+                    scope=await current_scope(facts['subject'],tid,uuid.UUID(tenant['organization_id']))
             except ScopeUnavailable as exc:
                 raise SessionUnavailable() from exc
             if scope is None:raise MembershipRevoked()
             if (scope.network_id!=tenant.get('network_id') or scope.generation!=tenant.get('scope_generation')
                     or scope.manifest_sha256!=tenant.get('scope_manifest_sha256')):
                 raise SessionDenied()
-            facts.update(member_id=str(scope.user_id),organization_id=str(scope.organization_id),network_id=scope.network_id,
+            facts.update(member_id=str(scope.user_id),organization_id=str(scope.organization_id) if scope.organization_id else None,network_id=scope.network_id,
+                scope_kind=tenant.get('scope_kind','organization'),
                 scope_generation=scope.generation,scope_manifest_sha256=scope.manifest_sha256)
         else:
             if __import__('os').environ.get('AUTH_SCOPE_GENERATION'):

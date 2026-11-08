@@ -676,3 +676,6 @@ async def host_setup_session(
         expires_in=TENANT_SESSION_TTL_SECONDS,
         token_type="Bearer",
     )
+
+from auth_service.network_session import router as network_session_router
+router.include_router(network_session_router)
