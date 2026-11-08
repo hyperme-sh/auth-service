@@ -1157,7 +1157,7 @@ async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_
         peer.dependency_overrides[get_db_session]=peer_db
         factory=httpx.AsyncClient
         monkeypatch.setattr(scoped_session,'httpx',SimpleNamespace(HTTPError=httpx.HTTPError,AsyncClient=lambda **kw:factory(transport=httpx.ASGITransport(peer),**kw)))
-        for key,value in {'USER_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_MANIFEST_SHA256':'a'*64,'AUTH_SCOPE_AUTHORITY_URL':'http://local-scope-owner','AUTH_SCOPE_AUTHORITY_TOKEN':'local-scope-secret'}.items():monkeypatch.setenv(key,value)
+        for key,value in {'USER_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_GENERATION':'local-v1','AUTH_SCOPE_MANIFEST_SHA256':'a'*64,'AUTH_SCOPE_AUTHORITY_URL':'https://local-scope-owner','AUTH_SCOPE_AUTHORITY_TOKEN':'local-scope-secret'}.items():monkeypatch.setenv(key,value)
         async def claims():return {'sub':subject,'azp':'controlplane-frontend','scope':'openid','realm_access':{'roles':['admin']}}
         app.dependency_overrides[deps.get_access_token_claims]=claims
         result=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json={'tenant_id':str(tenant),'organization_id':str(org)})

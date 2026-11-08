@@ -1,6 +1,7 @@
 """Mint only owner-authorized, generation-bound organization sessions."""
 import os
 import uuid
+from urllib.parse import urlsplit
 
 import httpx
 import jwt
@@ -41,6 +42,12 @@ async def current_scope(subject,tenant_id,organization_id):
     generation=os.environ.get('AUTH_SCOPE_GENERATION','')
     manifest=os.environ.get('AUTH_SCOPE_MANIFEST_SHA256','')
     if not all((url,token,generation,manifest)):raise ScopeUnavailable('Scope owner configuration required')
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError('Verified TLS owner endpoint required')
+    except ValueError as exc:
+        raise ScopeUnavailable('Verified TLS owner endpoint required') from exc
     try:
         async with httpx.AsyncClient(timeout=10,follow_redirects=False) as client:
             r=await client.post(url+'/api/v1/internal/organization-authority/check',headers={'Authorization':'Bearer '+token},json={'subject':subject,'tenant_id':str(tenant_id),'organization_id':str(organization_id),'capability':'member'})

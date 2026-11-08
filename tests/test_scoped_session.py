@@ -79,3 +79,9 @@ async def test_scoped_context_rechecks_current_owner(scoped_owner,monkeypatch,re
     payload=json.loads(response.body)
     if result=='allow':assert payload['organization_id']==g['organization_id'] and payload['second_factor_at'] is None
     assert (payload.get('code')=='membership_revoked')==(result=='revoked')
+
+
+@pytest.mark.parametrize('url',['http://scope.local','https://user:password@scope.local','https://scope.local?secret=value'])
+async def test_scope_credentials_require_verified_tls_endpoint(scoped_owner,monkeypatch,url):
+    g=scoped_owner;monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_URL',url)
+    with pytest.raises(ScopeUnavailable):await current_scope(g['subject'],uuid.UUID(g['tenant_id']),uuid.UUID(g['organization_id']))
