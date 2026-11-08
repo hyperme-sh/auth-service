@@ -63,15 +63,6 @@ Git dependencies are exact commits. `uv sync --frozen` needs read access to:
 uv sync --frozen
 ```
 
-Package qualification carries only explicit `[tool.uv].override-dependencies`
-into both wheel and rebuilt-sdist installations via uv's `--overrides`, alongside
-the locked public constraints. This reconciles selected private dependency
-revisions without rewriting their distribution metadata or advancing versions.
-The isolated fixture in `tests_tools/test_selected_overrides.py` creates local
-wheels and a temporary environment, reproduces conflicting direct URLs with
-constraints alone, and verifies both selected installations with no index or
-network access. It removes only its temporary files after success or failure.
-
 Apply the control-plane schema before serving enrollment. `upgrade` accepts the same URL the app uses and opens it with psycopg:
 
 ```sh
