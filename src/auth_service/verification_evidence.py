@@ -12,7 +12,10 @@ def email_evidence(origin, env=None):
     issuer = env.get("AUTH_VERIFICATION_EMAIL_ISSUER", "")
     providers = set(filter(None, env.get("AUTH_VERIFICATION_EMAIL_PROVIDERS", "").split(",")))
     provider = origin.get("identity_provider")
-    trusted = provider in providers if isinstance(provider, str) else env.get("AUTH_VERIFICATION_LOCAL_EMAIL_TRUST", "false") == "true"
+    if "identity_provider" in origin:
+        trusted = isinstance(provider, str) and provider in providers
+    else:
+        trusted = env.get("AUTH_VERIFICATION_LOCAL_EMAIL_TRUST", "false") == "true"
     email = origin.get("email")
     if (not issuer or urlsplit(issuer).scheme != "https" or origin.get("iss") != issuer
         or origin.get("azp") != "controlplane-frontend" or origin.get("email_verified") is not True
