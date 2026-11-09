@@ -295,3 +295,21 @@ async def test_introspection_rejects_clients_outside_the_allowlist(http_client, 
     )
     denied = await http_client.get("/auth/me", headers={"Authorization": "Bearer opaque-token"})
     assert denied.status_code == 401
+
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_contact_approval_cannot_recover_login_or_tenant_session(http_client, event_sink, tenant_uuid):
+    # The issuer owns refresh tokens. A verification result or OTP is not one.
+    issuer = respx.post("http://keycloak.test/realms/demo/protocol/openid-connect/token").mock(
+        return_value=Response(400, json={"error": "invalid_grant"})
+    )
+    contact = {"purpose": "onboarding", "decision": "allow", "phone_status": "verified"}
+    for credential in ("123456", str(uuid.uuid4())):
+        refreshed = await http_client.post("/auth/refresh", json={"refresh_token": credential, **contact})
+        assert refreshed.status_code == 401 and "access_token" not in refreshed.json()
+        switched = await http_client.post("/auth/switch-tenant", json={"tenant_id": str(tenant_uuid), **contact})
+        assert switched.status_code == 401 and "access_token" not in switched.json()
+    assert issuer.call_count == 2
+    assert not any(event["event_type"] == AUTH_TOKEN_ISSUED_V1 for event in event_sink)

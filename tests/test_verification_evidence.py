@@ -11,3 +11,13 @@ def test_explicit_broker_policy():
 @pytest.mark.parametrize('change', [{'iss':'https://evil.test'}, {'azp':'other'}, {'identity_provider':'untrusted'}, {'identity_provider':None}, {'email_verified':'true'}, {'email':None}])
 def test_forged_or_untrusted_claims(change):
     assert email_evidence(CLAIMS | change, ENV) == {"email":None, "email_verified":False}
+
+
+
+@pytest.mark.parametrize("provider", [None, False, [], {}, "", "unknown"])
+def test_local_trust_cannot_promote_an_explicit_untrusted_broker(provider):
+    env = ENV | {"AUTH_VERIFICATION_LOCAL_EMAIL_TRUST": "true"}
+    assert email_evidence(CLAIMS | {"identity_provider": provider}, env)["email_verified"] is False
+    local = {key: value for key, value in CLAIMS.items() if key != "identity_provider"}
+    assert email_evidence(local, env)["email_verified"] is True
+    assert email_evidence(local, ENV)["email_verified"] is False

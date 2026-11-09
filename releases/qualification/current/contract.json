@@ -24,7 +24,7 @@
     "auth_service/tenant_switch.py": "53dbe380365dd14557e673d30f8858a0cf5f265ffc2b1a52d53051aa6530ddbb",
     "auth_service/test_operator_seed.py": "9618d19f7c4957f4bd2f97f9d54c2024f5562c7645cb87b6b658d99c9add92bc",
     "auth_service/token_validation.py": "de79e5543ac89fcd0c28615241dc7711fdb279771fd6a07d9324954aa36bd5e8",
-    "auth_service/verification_evidence.py": "9522fffb3a8b12e9bb09d5a353300dca08f246c866e4b5720d615f6304d43e1b",
+    "auth_service/verification_evidence.py": "00ea629e6383c9eb9d7929d2feae664237ec7dc187341c01566f38b995611a2f",
     "auth_service/wallet_bind.py": "364c558b27676672127d93f1949c6ed22ea44fc7b7bd37f5481e6d8869219419"
   },
   "schema_version": 1
