@@ -41,6 +41,10 @@ def owner_configuration():
     token=os.environ.get('AUTH_SCOPE_AUTHORITY_TOKEN','')
     generation=os.environ.get('AUTH_SCOPE_GENERATION','')
     manifest=os.environ.get('AUTH_SCOPE_MANIFEST_SHA256','')
+    if os.environ.get('STARTUP_IDENTITY_ENABLED') == '1':
+        from auth_service.startup_identity import configuration
+        from auth_service._startup_contract import fingerprint
+        generation,manifest='startup-v1',fingerprint(configuration())
     if not all((url,token,generation,manifest)):raise ScopeUnavailable('Scope owner configuration required')
     try:
         parsed=urlsplit(url)
