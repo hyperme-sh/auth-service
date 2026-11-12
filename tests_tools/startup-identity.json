@@ -1,17 +1,61 @@
 {
-  "schema_version": 1,
-  "environment": "isolated",
-  "entra_tenant_id": "00000000-0000-4000-8000-000000000101",
-  "entra_account_id": "00000000-0000-4000-8000-000000000102",
-  "tenant_id": "00000000-0000-4000-8000-000000000103",
-  "network_id": "startup-isolated",
-  "email": "startup-operator@example.invalid",
-  "issuer": "https://startup-issuer.example.invalid/realms/isolated",
-  "audience": "startup-isolated",
-  "sea_public_key": "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY.T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU",
-  "organizations": [
-    "fyberlabs",
-    "tennesseewindage",
-    "hyperme.sh"
-  ]
+  "binding": {
+    "entra": {
+      "audience": "00000000-0000-4000-8000-000000000104",
+      "broker": "startup-microsoft",
+      "issuer": "https://login.microsoftonline.com/00000000-0000-4000-8000-000000000101/v2.0",
+      "object_id": "00000000-0000-4000-8000-000000000102",
+      "subject": "synthetic-upstream-subject",
+      "tenant_id": "00000000-0000-4000-8000-000000000101"
+    },
+    "keycloak_admin": {
+      "enabled": true,
+      "realm": "isolated"
+    },
+    "organizations": {
+      "fyberlabs": {
+        "organization_id": "00000000-0000-4000-8000-000000000200",
+        "roles": [
+          "admin",
+          "owner"
+        ],
+        "tenant_id": "00000000-0000-4000-8000-000000000103"
+      },
+      "hyperme.sh": {
+        "organization_id": "00000000-0000-4000-8000-000000000202",
+        "roles": [
+          "admin",
+          "owner"
+        ],
+        "tenant_id": "00000000-0000-4000-8000-000000000103"
+      },
+      "tennesseewindage": {
+        "organization_id": "00000000-0000-4000-8000-000000000201",
+        "roles": [
+          "admin",
+          "owner"
+        ],
+        "tenant_id": "00000000-0000-4000-8000-000000000103"
+      }
+    },
+    "platform_admin": {
+      "hyperme.sh": true,
+      "spanopticon": true
+    },
+    "sea_public_key": "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY.T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU",
+    "version": 1
+  },
+  "binding_sha256": "e543505e5d6e4e4b3d42ca0e3cff7f81b483fb10aed3ebc140a730d3c71b8974",
+  "owner": {
+    "broker": {
+      "audience": "startup-isolated",
+      "issuer": "https://startup-issuer.example.invalid/realms/isolated"
+    },
+    "network_id": "startup-isolated",
+    "profile": {
+      "email": "startup-operator@example.invalid"
+    },
+    "tenant_id": "00000000-0000-4000-8000-000000000103"
+  },
+  "schema_version": 1
 }

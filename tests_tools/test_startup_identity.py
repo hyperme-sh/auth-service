@@ -23,13 +23,12 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.config=json.loads(Path(__file__).with_name('startup-identity.json').read_text())
         self.person={'schema_version':1,'mapping_sha256':fingerprint(self.config),'status':'reconciled',
-            'person_id':'00000000-0000-4000-8000-000000000110','tenant_id':self.config['tenant_id'],
-            'network_id':self.config['network_id'],'broker_subject':None,
-            'organizations':[{'slug':slug,'id':f'00000000-0000-4000-8000-{i:012d}','roles':['owner','admin']}
-                for i,slug in enumerate(self.config['organizations'],200)]}
-        self.claims={'iss':self.config['issuer'],'aud':self.config['audience'],'azp':self.config['audience'],
-            'sub':self.person['person_id'],'login_provider':'microsoft','entra_tenant_id':self.config['entra_tenant_id'],
-            'entra_object_id':self.config['entra_account_id'],'email':self.config['email']}
+            'person_id':'00000000-0000-4000-8000-000000000110','tenant_id':self.config['owner']['tenant_id'],
+            'network_id':self.config['owner']['network_id'],'broker_subject':None,
+            'organizations':[{'slug':slug,'id':o['organization_id'],'tenant_id':o['tenant_id'],'roles':o['roles']} for slug,o in sorted(self.config['binding']['organizations'].items())]}
+        self.claims={'iss':self.config['owner']['broker']['issuer'],'aud':self.config['owner']['broker']['audience'],'azp':self.config['owner']['broker']['audience'],
+            'sub':self.person['person_id'],'login_provider':'startup-microsoft','entra_tenant_id':self.config['binding']['entra']['tenant_id'],
+            'entra_object_id':self.config['binding']['entra']['object_id'],'email':self.config['owner']['profile']['email']}
 
     async def test_bind_replays_without_session_privileges(self):
         for subject in [None,self.person['person_id']]:
