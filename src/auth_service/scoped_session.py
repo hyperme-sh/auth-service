@@ -41,6 +41,10 @@ def owner_configuration():
     token=os.environ.get('AUTH_SCOPE_AUTHORITY_TOKEN','')
     generation=os.environ.get('AUTH_SCOPE_GENERATION','')
     manifest=os.environ.get('AUTH_SCOPE_MANIFEST_SHA256','')
+    if os.environ.get('STARTUP_IDENTITY_ENABLED') == '1' and not generation and not manifest:
+        from auth_service.startup_identity import configuration
+        from auth_service._startup_contract import fingerprint
+        generation,manifest='startup-v1',fingerprint(configuration())
     if not all((url,token,generation,manifest)):raise ScopeUnavailable('Scope owner configuration required')
     try:
         parsed=urlsplit(url)
@@ -59,6 +63,10 @@ async def current_scope(subject,tenant_id,organization_id):
             r.raise_for_status();body=r.json()
         if body is None:return None
         grant=ScopeGrant.model_validate(body)
+        if grant.generation=='startup-v1' and os.environ.get('STARTUP_IDENTITY_ENABLED')=='1':
+            from auth_service.startup_identity import configuration
+            from auth_service._startup_contract import fingerprint
+            generation,manifest='startup-v1',fingerprint(configuration())
         if (grant.subject!=subject or grant.tenant_id!=tenant_id or grant.organization_id!=organization_id
                 or grant.generation!=generation or grant.manifest_sha256!=manifest):
             raise ValueError('Scope binding differs')

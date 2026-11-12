@@ -113,3 +113,22 @@ async def test_missing_or_conflicting_client_cannot_reach_scope_owner(app,http_c
         r=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-issuer'},json={'tenant_id':g['tenant_id'],'organization_id':g['organization_id']})
         assert r.status_code==403 and r.headers['cache-control']=='no-store'
     finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)
+
+
+@pytest.mark.parametrize('verification',[False,True])
+async def test_startup_mode_refuses_older_unscoped_context(monkeypatch,verification):
+    monkeypatch.delenv('AUTH_SCOPE_GENERATION',raising=False)
+    monkeypatch.setenv('STARTUP_IDENTITY_ENABLED','1')
+    subject='startup-subject';tid=str(uuid.uuid4());now=int(time.time())
+    tenant={'sub':subject,'tenant_id':tid,'spanopticon_auth':'tenant_session','azp':'controlplane-frontend'}
+    origin={'iss':context.settings.keycloak_issuer.rstrip('/'),'sub':subject,'azp':'controlplane-frontend',
+            'sid':'startup-session','exp':now+300,'iat':now,'auth_time':now,'acr':'1','amr':['pwd']}
+    monkeypatch.setattr(context,'try_decode_tenant_session_jwt',lambda t:tenant)
+    monkeypatch.setattr(context,'get_keycloak_jwt_validator',lambda:type('Validator',(),{'validate':AsyncMock(return_value=origin)})())
+    monkeypatch.setattr(context,'confidential_introspection_credentials',lambda:('local','secret'))
+    monkeypatch.setattr(context,'introspect_access_token',AsyncMock(return_value={'active':True,'sub':subject,'client_id':'controlplane-frontend'}))
+    fallback=AsyncMock(return_value='member');monkeypatch.setattr(context,'current_member',fallback)
+    request=Request({'type':'http','headers':[(b'authorization',b'Bearer old-tenant'),(b'x-tenant-id',tid.encode()),(b'x-auth-session-token',b'local-browser')]})
+    response=await context.session_context(request,verification=verification)
+    assert response.status_code==403
+    fallback.assert_not_called()
