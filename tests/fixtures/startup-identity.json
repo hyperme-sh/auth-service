@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "environment": "isolated",
+  "entra_tenant_id": "00000000-0000-4000-8000-000000000101",
+  "entra_account_id": "00000000-0000-4000-8000-000000000102",
+  "tenant_id": "00000000-0000-4000-8000-000000000103",
+  "network_id": "startup-isolated",
+  "email": "startup-operator@example.invalid",
+  "issuer": "https://startup-issuer.example.invalid/realms/isolated",
+  "audience": "startup-isolated",
+  "sea_public_key": "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY.T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU",
+  "organizations": [
+    "fyberlabs",
+    "tennesseewindage",
+    "hyperme.sh"
+  ]
+}

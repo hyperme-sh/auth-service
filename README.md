@@ -295,3 +295,24 @@ They install only the canonical `authority_*`/`organization_memberships` graph,
 not the earlier `identity_scope_*` prototype. Test-only dependencies do not change
 production package dependencies. Shared provisioning and rollout belong to the
 single reset controller; source qualification does not perform them.
+
+## Configured startup identity
+
+With `STARTUP_IDENTITY_ENABLED=1`, Auth reads the private mapping from
+`STARTUP_IDENTITY_CONFIG_FILE`. POST `/auth/startup/reconcile` requires
+`AUTH_STARTUP_TOKEN` and only the mapping SHA-256. It reads User with
+`USER_STARTUP_READ_TOKEN`, then binds the selected opaque person subject with
+`AUTH_IDENTITY_OWNER_TOKEN`. The owner URL is `AUTH_IDENTITY_OWNER_URL`;
+verified HTTPS is required except loopback in the isolated fixture.
+
+GET `/auth/startup/identity` uses the existing signature and MFA validator,
+then checks issuer, audience, Microsoft provider, immutable Entra tenant/account
+and the stored broker subject. It only reads the existing person. Matching
+email does not link an attacker. The response contains no platform permission;
+ACL owns separate grants. Startup mode disables the historical tenant-switch
+promotion path; organization sessions use the current scoped authority.
+
+The additive pure identity contract is copied exactly from the library revision
+in `startup_contract_source.json`, checked by unit tests. Dependency locks and
+package versions remain unchanged. FyberLabs/infra#923 owns combined scheduled
+registration; owner route contracts run through existing CI consumers.
