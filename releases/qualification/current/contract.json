@@ -17,7 +17,7 @@
     "auth_service/operator_binding.py": "881762859393b8d602fd2818eff10e1caff54f35a70f161a7a5d4b61c96fc7d7",
     "auth_service/routes.py": "331e4fe55c5b93c6716eb11d74aa95fe7cc6f7e686726390a293603cc3ceb313",
     "auth_service/schemas.py": "58317ffab4a4d4779e54c69eaa818b1bb0d06003fbf53e588d67c9d9c1489449",
-    "auth_service/scoped_session.py": "43309a78eca8a53055503df83e0f3ffb6e6c718770a1684b1e49ba5f00229e45",
+    "auth_service/scoped_session.py": "fe217cf7231c7c2b211ec721b01c0c65bef9bb118c9f59ea306c10aceb958b98",
     "auth_service/session_membership.py": "29af7ed60fc104aab4690d125e49e7493a93220c57e9736dea8b943e924e5f71",
     "auth_service/siwe.py": "29f5cade312cc2d71e8ff041358a885ae0de9ad5ce8ad17b273a400513460919",
     "auth_service/siwe_nonces.py": "5c591913aad46a3374e121bd1982c2e246fd116a7a5b883777784c5bdd12b8b6",

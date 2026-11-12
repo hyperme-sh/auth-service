@@ -61,6 +61,27 @@ def test_startup_scope_seal_comes_from_private_mapping(startup_config,monkeypatc
     from auth_service.scoped_session import owner_configuration
     monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_URL','https://scope.example.invalid')
     monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_TOKEN','scoped-reader')
-    monkeypatch.setenv('AUTH_SCOPE_GENERATION','unrelated')
-    monkeypatch.setenv('AUTH_SCOPE_MANIFEST_SHA256','0'*64)
+    monkeypatch.delenv('AUTH_SCOPE_GENERATION',raising=False)
+    monkeypatch.delenv('AUTH_SCOPE_MANIFEST_SHA256',raising=False)
     assert owner_configuration()==('https://scope.example.invalid','scoped-reader','startup-v1',fingerprint(startup_config))
+
+
+@pytest.mark.parametrize('generation',['existing-authority','startup-v1'])
+@respx.mock
+async def test_startup_scope_preserves_existing_owner_generation(startup_config,monkeypatch,generation):
+    import uuid
+    from auth_service.scoped_session import current_scope,ScopeUnavailable
+    c=startup_config;org=next(iter(c['binding']['organizations'].values()))
+    monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_URL','https://scope.example.invalid')
+    monkeypatch.setenv('AUTH_SCOPE_AUTHORITY_TOKEN','scoped-reader')
+    monkeypatch.setenv('AUTH_SCOPE_GENERATION','existing-authority')
+    monkeypatch.setenv('AUTH_SCOPE_MANIFEST_SHA256','1'*64)
+    grant={'subject':'selected','user_id':'00000000-0000-4000-8000-000000000110','tenant_id':org['tenant_id'],
+        'organization_id':org['organization_id'],'network_id':c['owner']['network_id'],'role':'admin','can_purchase':False,
+        'generation':generation,'manifest_sha256':fingerprint(c) if generation=='startup-v1' else '1'*64}
+    peer=respx.post('https://scope.example.invalid/api/v1/internal/organization-authority/check')
+    peer.mock(return_value=httpx.Response(200,json=grant))
+    result=await current_scope('selected',uuid.UUID(org['tenant_id']),uuid.UUID(org['organization_id']))
+    assert result.generation==generation
+    peer.mock(return_value=httpx.Response(200,json={**grant,'manifest_sha256':'0'*64}))
+    with pytest.raises(ScopeUnavailable):await current_scope('selected',uuid.UUID(org['tenant_id']),uuid.UUID(org['organization_id']))
