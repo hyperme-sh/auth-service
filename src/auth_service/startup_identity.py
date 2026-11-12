@@ -66,3 +66,9 @@ async def resolve(config, claims):
     if not person.get('broker_subject'): raise ValueError('Startup broker binding is incomplete')
     verify_claims(config,claims,expected_subject=person['broker_subject'])
     return {**person, 'status':'resolved', 'permissions':[]}
+
+
+async def status(config):
+    person = checked_person(config, await owner('status',config))
+    if not person.get('broker_subject'): raise ValueError('Startup broker binding is incomplete')
+    return {**person, 'status':'bound', 'permissions':[]}
