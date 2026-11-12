@@ -5,7 +5,7 @@
     "auth_service/_startup_contract.py": "0297031c46708bd81cc80d6074fd7eca61c4bfc336844beb06c2d71060541c79",
     "auth_service/app.py": "f34d638980ce4749019e44fcbcb51e0eb8c776d25ae77623a579da4ce66815af",
     "auth_service/claims.py": "49ec61ea25bdcbde6f3b64b258274cd57590a0bbd5c6e10212120795514316ce",
-    "auth_service/connect_session.py": "412d7adb25bb6b18c6dab9c8c255878bfa59981857de28cf3c7a21df32acc26d",
+    "auth_service/connect_session.py": "189295901de1dfea2a128234f32f9beb7c10a6c76be87f03be46bc4ffc11d0c2",
     "auth_service/deps.py": "e88f366956943ec4f78d24acc8311986c2df022f6c27aaa7d2a20cc89af98833",
     "auth_service/enrollment.py": "fed7a873074b26d57347e5be51d58973b996f4feede9af3dd2a14133fbeb25af",
     "auth_service/host_binding_client.py": "574ff9bc04bc109a1b21f66fa114b3c1a7c83fa0da5673fda447629b7baad250",
