@@ -22,7 +22,7 @@
     "auth_service/siwe.py": "29f5cade312cc2d71e8ff041358a885ae0de9ad5ce8ad17b273a400513460919",
     "auth_service/siwe_nonces.py": "5c591913aad46a3374e121bd1982c2e246fd116a7a5b883777784c5bdd12b8b6",
     "auth_service/smoke_oidc.py": "cd43577f2795081487b80230879f4e3142065745dc37aa7bde0a0b79876197e4",
-    "auth_service/startup_contract_source.json": "3894b868a20bf7cd400e6024ac343cdb6ba85e797743b724367c0479a1c224a7",
+    "auth_service/startup_contract_source.json": "5cd2de887b662e73a9459e9514a05da3a2cac5ebfa0abe14e0f738cadfe1bde8",
     "auth_service/startup_identity.py": "1fecbc6ca372a206311fbcceed23625141c2b1ad6903f8eacd5dc5cf3cfc5129",
     "auth_service/startup_routes.py": "7c8f611b1144e2c2796b35d166ff53fe1e1f4798ec999b6dde67478c16033d9a",
     "auth_service/tenant_switch.py": "53dbe380365dd14557e673d30f8858a0cf5f265ffc2b1a52d53051aa6530ddbb",
