@@ -20,7 +20,7 @@ Keycloak is the identity provider. This repository does not ship or run Keycloak
 
 Interactive Keycloak clients `controlplane-frontend`, `controlplane-mobile`, `controlplane-device`, and `hypermesh-native` must carry a positive `terms_and_conditions` timestamp. `account_type=service` is exempt. When `OIDC_REQUIRE_MFA=true`, a Keycloak token must include `amr` containing `otp`, `mfa`, `totp`, or `webauthn`. API-key and tenant-session JWTs skip that MFA check. Retired accounts are rejected on Keycloak tokens and on tenant-session JWTs.
 
-PostgreSQL (`DATABASE_URL`, `postgresql+asyncpg://...`) holds users, groups, wallet bindings, and API-key rows. `DbSessionMiddleware` sets the tenant row-level-security GUC from the session. Login and token issuance publish `auth.login.success.v1` and `auth.token.issued.v1` through `controlplane-events` (the Postgres events table, or Azure Service Bus when `AZURE_SERVICE_BUS_CONNECTION_STRING` is set).
+Auth uses its owner PostgreSQL database (`DATABASE_URL`, `postgresql+asyncpg://...`) for issuance decisions, outbox/inbox rows and optional SIWE challenges. User owns person, organization, group and wallet records. Auth request middleware sets the tenant scope and commits only successful responses. Login and token issuance write `auth.login.success.v1` and `auth.token.issued.v1` to the local outbox in that transaction; the HTTP relay delivers them.
 
 SIWE challenges use a shared store: Redis by default (`AUTH_SIWE_REDIS_URL`, or `REDIS_URL`), or PostgreSQL with `AUTH_SIWE_STORE=postgres`. One outstanding challenge per subject, 10-minute TTL, consumed once with Redis `GETDEL` or PostgreSQL `DELETE RETURNING`. A missing store or a store error returns 503 on `/auth/siwe/nonce` and `/auth/siwe/bind`. OIDC login still starts. The signature is checked and discarded. Only the checksum address is stored.
 
@@ -326,3 +326,18 @@ migration before selecting it. Both stores replace one outstanding challenge per
 subject, enforce 600-second expiry and consume once before signature validation.
 Unavailable storage never falls back to another adapter or process-local state.
 See [the comparison and TEST consumer inventory](docs/siwe-challenge-store.md).
+
+### Token issuance transactions
+
+Auth records a SHA-256 token digest and each derivative event in the same request
+transaction. The raw bearer token is never stored in that decision row or event.
+The response is released only after commit; a failed event insert or error response
+rolls back the local issuance decision and all events. An upstream OIDC exchange
+is external and cannot be rolled back by Auth; a failed local commit withholds its
+token response. This does not claim an atomic transaction with the issuer or User.
+
+The eight event producers use deterministic IDs derived from the issued token,
+tenant and event type. Repeating an operation cannot create a second event; a
+changed payload for the same event ID is refused. Auth no longer installs a shared
+publisher or selects Service Bus. Delivery remains the owner's HTTP outbox relay.
+The scheduled `auth-consumers` lane owns the combined SQL checks for all producers.

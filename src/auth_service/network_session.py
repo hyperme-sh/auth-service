@@ -80,9 +80,9 @@ async def network_session(body: NetworkRequest,request: Request,user: CurrentAut
     payload.update(scope_version=1,scope_kind='network',organization_id=None,network_id=grant.network_id,
                    scope_generation=grant.generation,scope_manifest_sha256=grant.manifest_sha256)
     token=jwt.encode(payload,settings.usable_api_key_exchange_secret(),algorithm='HS256')
-    from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
+    from auth_service import outbox
     from controlplane_api.event_types import AUTH_TOKEN_ISSUED_V1
-    await get_tenant_event_publisher().publish(tenant_id=body.tenant_id,event_type=AUTH_TOKEN_ISSUED_V1,payload={
+    await outbox.publish_auth_event(token=token,tenant_id=body.tenant_id,event_type=AUTH_TOKEN_ISSUED_V1,payload={
         'subject':user.sub,'grant_type':'network_scope','client_id':client,'network_id':grant.network_id,
         'scope_generation':grant.generation,'scope_manifest_sha256':grant.manifest_sha256})
     return JSONResponse({'access_token':token,'expires_in':payload['exp']-payload['iat'],'token_type':'Bearer'},headers=headers)

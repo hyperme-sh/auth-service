@@ -10,16 +10,11 @@ from controlplane_api.exceptions import ForbiddenException, UnauthorizedExceptio
 from controlplane_api.logging import configure_logging
 from controlplane_api.utils import get_logger
 from controlplane_api.config import settings
-from api.infrastructure.messaging.tenant_event_publisher import (
-    install_tenant_event_publisher,
-    set_tenant_event_publisher,
-    shutdown_tenant_event_publisher,
-)
 from api.infrastructure.persistence.db_session import configure_session_maker
 from controlplane_api.service_cors import add_optional_service_cors
 from controlplane_api.health import router as health_router
 from controlplane_api.version import router as version_router
-from api.interfaces.middlewares.database_middleware import DbSessionMiddleware
+from auth_service.transaction import AuthTransactionMiddleware
 from controlplane_db.session import normalize_database_url
 
 from auth_service.routes import router as auth_router
@@ -44,34 +39,9 @@ def create_app(
             configure_session_maker(maker)
             app.state.async_engine = engine
 
-        if test_event_sink is not None:
-
-            class _ListSink:
-                async def publish(
-                    self,
-                    *,
-                    tenant_id,
-                    event_type: str,
-                    payload: dict,
-                    correlation_id: str | None = None,
-                ) -> None:
-                    test_event_sink.append(
-                        {
-                            "tenant_id": tenant_id,
-                            "event_type": event_type,
-                            "payload": payload,
-                            "correlation_id": correlation_id,
-                        }
-                    )
-
-            set_tenant_event_publisher(_ListSink())
-        else:
-            await install_tenant_event_publisher(service_name=settings.service_name)
-
         try:
             yield
         finally:
-            await shutdown_tenant_event_publisher()
             if engine is not None:
                 await engine.dispose()
 
@@ -133,7 +103,7 @@ def create_app(
     app.openapi = custom_openapi
 
     if enable_db_middleware:
-        app.add_middleware(DbSessionMiddleware)
+        app.add_middleware(AuthTransactionMiddleware)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")

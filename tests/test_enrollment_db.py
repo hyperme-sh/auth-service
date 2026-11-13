@@ -966,7 +966,7 @@ async def test_switched_session_retains_target_renter_checkout_without_source_ro
         return await authorize_tenant_switch(user, tenant_id, session=db_session)
 
     monkeypatch.setattr(routes, "authorize_tenant_switch", target_grant)
-    monkeypatch.setattr(routes, "get_tenant_event_publisher", lambda: SimpleNamespace(publish=AsyncMock()))
+    monkeypatch.setattr(routes.outbox, "publish_auth_event", AsyncMock())
     monkeypatch.setattr(settings, "api_key_exchange_jwt_secret", "target-renter-regression-secret-at-least-32-chars")
     switched = await routes.auth_switch_tenant(
         SwitchTenantRequest(tenant_id=seed.tenant_id),
