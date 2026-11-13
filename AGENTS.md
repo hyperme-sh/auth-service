@@ -68,20 +68,6 @@ runner exceptions in this file. Keep dedicated infrastructure-convergence and
 trusted payment-smoke jobs on their existing specialized selectors. Reusable
 workflows must route private callers to debrunners. Do not add approval gates.
 
-## Authorized coordinated test bundles
-
-The owner authorized this service to join the `next: 0.24.0` test-bundle train.
-Successful main qualification may automatically publish `0.24.0-test.N` bundles
-through the pinned shared publisher. This supersedes the blanket publication
-prohibition only for that test channel. Embedded package versions and accepted
-component baselines stay unchanged. Select exact component commits and artifact
-digests in the coordinated manifest; local test counters need not match.
-Stable promotion still requires explicit owner selection of the gold candidate
-and destination. No new approval prerequisites or deployment authority are added.
-
-This authorization applies only to CI. Agents must not start or repeat
-these jobs by hand on shared hosts.
-
 ## Nightly integration batch
 
 No agent runs integration or end-to-end tests by hand on hosts
@@ -99,7 +85,7 @@ a new issue for that failure and links the closed issue when one exists.
 CI results and full integration output are not a Product Sign-off gate. Green
 CI and clean reviews are enough for Sign-off.
 
-Authorized CI workflows, including test-bundle publication and existing smoke
+Authorized CI workflows, including existing smoke
 or owner-integration jobs, may keep running in CI. Agents must not start or
 repeat those jobs by hand on shared hosts.
 

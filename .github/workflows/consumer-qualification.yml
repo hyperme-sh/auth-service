@@ -22,14 +22,6 @@ jobs:
       - run: bash scripts/check-package.sh --fixtures
       - name: Qualify standalone container with disposable issuer and database
         run: uv run --frozen python scripts/check-container.py --evidence "$TEST_EVIDENCE_DIR/container.json"
-      - name: Retain qualified PR artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: prepared-dist
-          path: ${{ env.RELEASE_ARTIFACT_DIR }}/*
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
       - name: Retain native consumer evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
