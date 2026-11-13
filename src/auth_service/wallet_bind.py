@@ -25,7 +25,7 @@ from auth_service.siwe import (
     configured_chain_id,
     verify_siwe_bind,
 )
-from auth_service.siwe_nonces import SiweNonceStore, SiweStoreUnavailable
+from auth_service.siwe_nonces import ChallengeStore, SiweStoreUnavailable
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +52,7 @@ async def issue_siwe_nonce(
     user: AuthMeResponse,
     *,
     address: str,
-    store: SiweNonceStore,
+    store: ChallengeStore,
     chain_id: int | None = None,
     now: datetime | None = None,
 ) -> SiweNonce:
@@ -117,7 +117,7 @@ async def bind_wallet(
     *,
     message: str,
     signature: str,
-    store: SiweNonceStore,
+    store: ChallengeStore,
 ) -> WalletBinding:
     if not user.sub or not str(user.sub).strip():
         raise SiweError("Keycloak subject is required to bind a wallet")

@@ -15,12 +15,13 @@
     "auth_service/main.py": "649d1d0b0db0f14aa1c37ff10c51ec5452b5668c6978d2f4de3a9fb9950bc10b",
     "auth_service/network_session.py": "a63dc27708d90be3ce70c05a616c6263b42b1498f88ddaf7cb4f4ee7221d20a1",
     "auth_service/operator_binding.py": "881762859393b8d602fd2818eff10e1caff54f35a70f161a7a5d4b61c96fc7d7",
-    "auth_service/routes.py": "331e4fe55c5b93c6716eb11d74aa95fe7cc6f7e686726390a293603cc3ceb313",
+    "auth_service/routes.py": "8e1e76ee26196f8fc95577608bcca0b5ebb251300e14da0b8169f7eb1136d6f0",
     "auth_service/schemas.py": "58317ffab4a4d4779e54c69eaa818b1bb0d06003fbf53e588d67c9d9c1489449",
     "auth_service/scoped_session.py": "fe217cf7231c7c2b211ec721b01c0c65bef9bb118c9f59ea306c10aceb958b98",
     "auth_service/session_membership.py": "29af7ed60fc104aab4690d125e49e7493a93220c57e9736dea8b943e924e5f71",
     "auth_service/siwe.py": "29f5cade312cc2d71e8ff041358a885ae0de9ad5ce8ad17b273a400513460919",
-    "auth_service/siwe_nonces.py": "5c591913aad46a3374e121bd1982c2e246fd116a7a5b883777784c5bdd12b8b6",
+    "auth_service/siwe_nonces.py": "6f7e71441fc04480ab5d7f20718a50a9acba59ede3f3275af766490a6fe79a0f",
+    "auth_service/siwe_postgres.py": "55f51e1e18f454cdfb76a51f6f0e2448dd1754f3d4dcdc4a84de00f33f2ce3b1",
     "auth_service/smoke_oidc.py": "cd43577f2795081487b80230879f4e3142065745dc37aa7bde0a0b79876197e4",
     "auth_service/startup_contract_source.json": "5cd2de887b662e73a9459e9514a05da3a2cac5ebfa0abe14e0f738cadfe1bde8",
     "auth_service/startup_identity.py": "1fecbc6ca372a206311fbcceed23625141c2b1ad6903f8eacd5dc5cf3cfc5129",
@@ -29,7 +30,7 @@
     "auth_service/test_operator_seed.py": "9618d19f7c4957f4bd2f97f9d54c2024f5562c7645cb87b6b658d99c9add92bc",
     "auth_service/token_validation.py": "de79e5543ac89fcd0c28615241dc7711fdb279771fd6a07d9324954aa36bd5e8",
     "auth_service/verification_evidence.py": "00ea629e6383c9eb9d7929d2feae664237ec7dc187341c01566f38b995611a2f",
-    "auth_service/wallet_bind.py": "364c558b27676672127d93f1949c6ed22ea44fc7b7bd37f5481e6d8869219419"
+    "auth_service/wallet_bind.py": "7e9ac8e0c6785c694d673c4017b87d73466f84663e874012c5d1269a1b0331cc"
   },
   "schema_version": 1
 }
