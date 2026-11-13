@@ -161,7 +161,7 @@ bash scripts/check-package.sh
 
 The package workflow (`.github/workflows/package.yml`) uses Python 3.13 and uv 0.11.26. All seven GitHub dependency owners are public. Qualification uses anonymous HTTPS fetches with ambient Git credentials disabled; it does not mint a dependency token or select a secret-bearing environment. Immutable dependency pins, read-only workflow permissions and private-runner routing remain in place.
 
-Release channels, test bundles, and stable tags are in [docs/releasing.md](docs/releasing.md). Admission checklist: [docs/release-policy.md](docs/release-policy.md).
+Release channels and container version tags are in [docs/releasing.md](docs/releasing.md). Admission checklist: [docs/release-policy.md](docs/release-policy.md).
 
 ## Standalone container
 
@@ -201,7 +201,7 @@ records completed #9 source and native regression adoption separately.
 
 ## Release and versioning
 
-The Python package version is **0.2.0**. Release admission uses line `0.2`. Successful validation on `main` can also publish immutable GitHub prereleases named `0.24.0-test.N`. Those prereleases keep package version 0.2.0 and are not a stable release. Stable publication runs on a `v*` tag after admission. Details, artifact layout, and the baseline variable are in [docs/releasing.md](docs/releasing.md).
+The Python package version is **0.2.0**. Release admission uses line `0.2`. Service releases are container images with channel or version tags, as described in [docs/releasing.md](docs/releasing.md). Automatic package prereleases are not published. Stable publication, when used, runs on a `v*` tag after admission.
 
 ## License
 
