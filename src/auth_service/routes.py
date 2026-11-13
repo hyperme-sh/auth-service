@@ -15,9 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from controlplane_api.event_types import AUTH_LOGIN_SUCCESS_V1, AUTH_TOKEN_ISSUED_V1
 from controlplane_api.exceptions import ForbiddenException
 from controlplane_api.config import settings
-from api.infrastructure.messaging.tenant_event_publisher import (
-    get_tenant_event_publisher,
-)
+from auth_service import outbox
 from api.domain.operator.population import (
     hosted_domains_from_claims,
     tenant_session_permissions,
@@ -162,9 +160,9 @@ async def auth_callback(code: str, state: str | None = None) -> TokenBundleRespo
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
     idp = identity_provider_from_claims(payload)
-    pub = get_tenant_event_publisher()
 
-    await pub.publish(
+    await outbox.publish_auth_event(
+        token=access,
         tenant_id=tid,
         event_type=AUTH_LOGIN_SUCCESS_V1,
         payload=AuthLoginSuccessPayload(
@@ -173,7 +171,8 @@ async def auth_callback(code: str, state: str | None = None) -> TokenBundleRespo
             tenant_id=tid,
         ).model_dump(mode="json"),
     )
-    await pub.publish(
+    await outbox.publish_auth_event(
+        token=access,
         tenant_id=tid,
         event_type=AUTH_TOKEN_ISSUED_V1,
         payload=AuthTokenIssuedPayload(
@@ -213,7 +212,8 @@ async def auth_refresh(body: RefreshTokenRequest) -> TokenBundleResponse:
     payload = _unsafe_payload(access)
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
-    await get_tenant_event_publisher().publish(
+    await outbox.publish_auth_event(
+        token=access,
         tenant_id=tid,
         event_type=AUTH_TOKEN_ISSUED_V1,
         payload=AuthTokenIssuedPayload(
@@ -309,7 +309,8 @@ async def auth_switch_tenant(
     )
     payload = _unsafe_payload(access)
     sub = unsafe_subject_from_token(access) or user.sub or "unknown"
-    await get_tenant_event_publisher().publish(
+    await outbox.publish_auth_event(
+        token=access,
         tenant_id=body.tenant_id,
         event_type=AUTH_TOKEN_ISSUED_V1,
         payload=AuthTokenIssuedPayload(
@@ -419,7 +420,8 @@ async def auth_smoke_session(
             tenant_id=MARKETPLACE_TENANT_ID,
             extra_roles=["renter"],
         )
-        await get_tenant_event_publisher().publish(
+        await outbox.publish_auth_event(
+            token=access,
             tenant_id=MARKETPLACE_TENANT_ID,
             event_type=AUTH_TOKEN_ISSUED_V1,
             payload=AuthTokenIssuedPayload(
@@ -664,7 +666,8 @@ async def host_setup_session(
     if grant is None:
         raise ForbiddenException("Active unbanned host membership required in this tenant")
     token = mint_host_setup_session(claims=claims, tenant_id=body.tenant_id)
-    await get_tenant_event_publisher().publish(
+    await outbox.publish_auth_event(
+        token=token,
         tenant_id=body.tenant_id,
         event_type=AUTH_TOKEN_ISSUED_V1,
         payload=AuthTokenIssuedPayload(

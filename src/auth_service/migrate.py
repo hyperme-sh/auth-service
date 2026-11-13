@@ -15,6 +15,7 @@ def install(engine):
         persistence = db.execute(text("SELECT relpersistence FROM pg_class WHERE oid=to_regclass('auth_siwe_challenges')")).scalar_one()
         if persistence != 'u':
             raise ValueError('SIWE challenges must use the non-durable owner table')
+        db.exec_driver_sql(files('auth_service').joinpath('migrations/0003_token_issuance.sql').read_text())
 
 
 def main():

@@ -50,6 +50,14 @@ def app(event_sink, monkeypatch):
         "test-api-key-exchange-secret-min-32-chars!!",
     )
 
+    from auth_service import outbox
+    from controlplane_events.contracts import validate_event_envelope
+    from controlplane_events.envelope import ControlPlaneEventEnvelope
+    async def observed(*, token, tenant_id, event_type, payload):
+        envelope = ControlPlaneEventEnvelope(service='auth-service', tenant_id=tenant_id, event_type=event_type, payload=payload)
+        validate_event_envelope(envelope)
+        event_sink.append({'tenant_id':tenant_id,'event_type':event_type,'payload':payload})
+    monkeypatch.setattr(outbox, 'publish_auth_event', observed)
     from auth_service.app import create_app
 
     return create_app(test_event_sink=event_sink, enable_db_middleware=False)
@@ -71,17 +79,6 @@ def tenant_uuid() -> uuid.UUID:
     return uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
 
-@pytest.fixture(autouse=True)
-def _published_payloads_follow_wire_contracts(monkeypatch):
-    """Validate actual application publications without enabling a live transport."""
-    from api.infrastructure.messaging.tenant_event_publisher import NoOpTenantEventPublisher
-    from controlplane_events.contracts import validate_event_envelope
-    from controlplane_events.envelope import ControlPlaneEventEnvelope
-    original = NoOpTenantEventPublisher.publish
-    async def checked(self, **kwargs):
-        validate_event_envelope(ControlPlaneEventEnvelope(service='contract-test', **kwargs))
-        return await original(self, **kwargs)
-    monkeypatch.setattr(NoOpTenantEventPublisher, 'publish', checked)
 
 
 @pytest.fixture

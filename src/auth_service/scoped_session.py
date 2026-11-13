@@ -94,9 +94,9 @@ async def scoped_session(body: ScopedRequest,request: Request,user: CurrentAuthU
     payload.update(scope_version=1,scope_kind='organization',organization_id=str(grant.organization_id),network_id=grant.network_id,
         scope_generation=grant.generation,scope_manifest_sha256=grant.manifest_sha256)
     access=jwt.encode(payload,settings.usable_api_key_exchange_secret(),algorithm='HS256')
-    from api.infrastructure.messaging.tenant_event_publisher import get_tenant_event_publisher
+    from auth_service import outbox
     from controlplane_api.event_types import AUTH_TOKEN_ISSUED_V1
-    await get_tenant_event_publisher().publish(tenant_id=body.tenant_id,event_type=AUTH_TOKEN_ISSUED_V1,
+    await outbox.publish_auth_event(token=access,tenant_id=body.tenant_id,event_type=AUTH_TOKEN_ISSUED_V1,
         payload={'subject':user.sub,'grant_type':'organization_scope','client_id':client_id,
                  'organization_id':str(grant.organization_id),'network_id':grant.network_id,
                  'scope_generation':grant.generation,'scope_manifest_sha256':grant.manifest_sha256})
