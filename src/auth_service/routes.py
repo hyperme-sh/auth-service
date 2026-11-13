@@ -70,7 +70,7 @@ from auth_service.smoke_oidc import (
     verify_github_actions_oidc,
 )
 from auth_service.siwe import SiweError
-from auth_service.siwe_nonces import SiweNonceStore, SiweStoreUnavailable
+from auth_service.siwe_nonces import ChallengeStore, SiweStoreUnavailable
 from auth_service.tenant_switch import authorize_tenant_switch
 from auth_service.host_setup import authorize_host_setup
 from auth_service.token_validation import unsafe_subject_from_token
@@ -454,7 +454,7 @@ async def auth_smoke_session(
     )
 
 
-def siwe_nonce_store(request: Request) -> SiweNonceStore:
+def siwe_nonce_store(request: Request) -> ChallengeStore:
     store = getattr(request.app.state, "siwe_nonce_store", None)
     if store is None:
         raise HTTPException(503, "SIWE nonce storage is not configured")
@@ -474,7 +474,7 @@ def siwe_nonce_store(request: Request) -> SiweNonceStore:
 async def auth_siwe_nonce(
     body: SiweNonceRequest,
     user: CurrentAuthUser,
-    store: SiweNonceStore = Depends(siwe_nonce_store),
+    store: ChallengeStore = Depends(siwe_nonce_store),
 ) -> SiweNonceResponse:
     try:
         issued = await issue_siwe_nonce(
@@ -509,7 +509,7 @@ async def auth_siwe_nonce(
 async def auth_siwe_bind(
     body: SiweBindRequest,
     user: CurrentAuthUser,
-    store: SiweNonceStore = Depends(siwe_nonce_store),
+    store: ChallengeStore = Depends(siwe_nonce_store),
     session: AsyncSession = Depends(get_db_session),
 ) -> WalletBindingResponse:
     try:

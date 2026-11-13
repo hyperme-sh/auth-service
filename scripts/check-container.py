@@ -210,14 +210,15 @@ def main():
                 command=['python', '-c', '''import os
 from sqlalchemy import create_engine, text
 from importlib.resources import files
-from controlplane_events.owner_schema import migrate
+from auth_service.migrate import install
 from controlplane_events.store import normalize_sync_url
 engine=create_engine(normalize_sync_url(os.environ['DATABASE_URL']))
 for _ in range(2):
-    migrate(engine, revision='0001_owner_schema', ddl=files('auth_service').joinpath('migrations/0001.sql').read_text())
+    install(engine)
 with engine.connect() as db:
     assert db.execute(text("SELECT to_regclass('users')")).scalar() is None
     assert db.execute(text("SELECT to_regclass('service_outbox')")).scalar() is not None
+    assert db.execute(text("SELECT relpersistence FROM pg_class WHERE oid=to_regclass('auth_siwe_challenges')")).scalar() == 'u'
 engine.dispose()
 '''])
             assert migration.wait(timeout=45)['StatusCode'] == 0, migration.logs().decode()

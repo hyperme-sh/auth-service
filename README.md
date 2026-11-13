@@ -22,7 +22,7 @@ Interactive Keycloak clients `controlplane-frontend`, `controlplane-mobile`, `co
 
 PostgreSQL (`DATABASE_URL`, `postgresql+asyncpg://...`) holds users, groups, wallet bindings, and API-key rows. `DbSessionMiddleware` sets the tenant row-level-security GUC from the session. Login and token issuance publish `auth.login.success.v1` and `auth.token.issued.v1` through `controlplane-events` (the Postgres events table, or Azure Service Bus when `AZURE_SERVICE_BUS_CONNECTION_STRING` is set).
 
-SIWE challenges live in Redis (`AUTH_SIWE_REDIS_URL`, or `REDIS_URL`). One outstanding challenge per subject, 10-minute TTL, consumed once with `GETDEL`. A missing store or a Redis error returns 503 on `/auth/siwe/nonce` and `/auth/siwe/bind`. OIDC login still starts. The signature is checked and discarded. Only the checksum address is stored.
+SIWE challenges use a shared store: Redis by default (`AUTH_SIWE_REDIS_URL`, or `REDIS_URL`), or PostgreSQL with `AUTH_SIWE_STORE=postgres`. One outstanding challenge per subject, 10-minute TTL, consumed once with Redis `GETDEL` or PostgreSQL `DELETE RETURNING`. A missing store or a store error returns 503 on `/auth/siwe/nonce` and `/auth/siwe/bind`. OIDC login still starts. The signature is checked and discarded. Only the checksum address is stored.
 
 | Method | Path | Role |
 | --- | --- | --- |
@@ -316,3 +316,13 @@ The additive pure identity contract is copied exactly from the library revision
 in `startup_contract_source.json`, checked by unit tests. Dependency locks and
 package versions remain unchanged. FyberLabs/infra#923 owns combined scheduled
 registration; owner route contracts run through existing CI consumers.
+
+### SIWE adapter choice
+
+Redis remains the compatibility default. `AUTH_SIWE_STORE=postgres` explicitly
+selects the owner PostgreSQL adapter using `AUTH_SIWE_DATABASE_URL`, or
+`DATABASE_URL` when the dedicated URL is unset. Apply the image-local additive
+migration before selecting it. Both stores replace one outstanding challenge per
+subject, enforce 600-second expiry and consume once before signature validation.
+Unavailable storage never falls back to another adapter or process-local state.
+See [the comparison and TEST consumer inventory](docs/siwe-challenge-store.md).
