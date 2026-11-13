@@ -1,5 +1,6 @@
 """Actual Auth producers and owner SQL in the central scheduled batch only."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -57,7 +58,18 @@ async def test_auth_transaction(producer,outcome,fixture,monkeypatch):
         try:
             if outcome=='insert_failure':
                 from sqlalchemy.exc import IntegrityError
-                with pytest.raises(IntegrityError): await invoke(producer)
+                if producer=='smoke':
+                    # Smoke exposes a typed refusal rather than raising through
+                    # the route. Keep the shared zero-row rollback checks below.
+                    response=await invoke(producer)
+                    assert response.status_code==503
+                    assert json.loads(response.body)=={
+                        'code':'smoke_session_failed',
+                        'detail':'smoke session failed',
+                        'error':'IntegrityError',
+                    }
+                else:
+                    with pytest.raises(IntegrityError): await invoke(producer)
                 await session.rollback()
             else:
                 response=await invoke(producer)
