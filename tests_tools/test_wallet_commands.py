@@ -73,3 +73,21 @@ async def test_owner_capability_negotiation(monkeypatch,status,body,supported):
     client=httpx.AsyncClient
     monkeypatch.setattr(httpx,'AsyncClient',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(status,json=body)),**kw))
     assert await identity_owner.supports_wallet_commands() is supported
+
+
+@pytest.mark.asyncio
+async def test_native_legacy_router_405_selects_supported_old_contract(monkeypatch):
+    import importlib.util,sys
+    from pathlib import Path
+    from fastapi import FastAPI
+    path=Path(__file__).parents[1]/'tests_artifacts/identity-owner/legacy_identity_api.py'
+    spec=importlib.util.spec_from_file_location('legacy_identity_api',path)
+    module=importlib.util.module_from_spec(spec)
+    sys.modules[spec.name]=module
+    spec.loader.exec_module(module)
+    app=FastAPI();app.include_router(module.router,prefix='/api/v1')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL','https://owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN','configured-token')
+    client=httpx.AsyncClient
+    monkeypatch.setattr(identity_owner,'httpx',SimpleNamespace(HTTPError=httpx.HTTPError,AsyncClient=lambda **kw:client(transport=httpx.ASGITransport(app=app),**kw)))
+    assert await identity_owner.supports_wallet_commands() is False

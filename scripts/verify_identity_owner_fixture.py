@@ -6,4 +6,7 @@ record=json.loads((root/'manifest.json').read_text())
 wheel=root/record['wheel']
 if wheel.parent != root or hashlib.sha256(wheel.read_bytes()).hexdigest()!=record['sha256']:
     raise ValueError('Identity owner fixture differs from qualified bytes')
+legacy=record.get('legacy_router')
+if legacy and hashlib.sha256((root/legacy['path']).read_bytes()).hexdigest()!=legacy['sha256']:
+    raise ValueError('Legacy identity router differs from recorded bytes')
 print(wheel)

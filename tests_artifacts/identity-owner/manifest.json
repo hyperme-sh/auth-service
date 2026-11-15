@@ -3,5 +3,10 @@
   "sha256": "66959eb1a02a1e751dbe2a20183013a5c3c4816145931d2c00b2dab6b64ecf99",
   "source_revision": "12ea31f4d951354537c33b2d2a1924f2c49f8af0",
   "purpose": "native identity-owner test fixture only; not an auth runtime dependency",
-  "source_url": "https://github.com/hyperme-sh/user-service/tree/12ea31f4d951354537c33b2d2a1924f2c49f8af0"
+  "source_url": "https://github.com/hyperme-sh/user-service/tree/12ea31f4d951354537c33b2d2a1924f2c49f8af0",
+  "legacy_router": {
+    "path": "legacy_identity_api.py",
+    "sha256": "598595e3b4fddf46448424cab5a25a0687aeeca34d600944764f2f90a28b94b1",
+    "source_revision": "01d2aa27ce25ac4e0d0fc469ca0004703a88c8e6"
+  }
 }

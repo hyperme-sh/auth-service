@@ -33,7 +33,7 @@ async def supports_wallet_commands():
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             response = await client.get(url+'/api/v1/internal/identity/wallet-command-contract',
                                         headers={'Authorization':'Bearer '+token})
-        if response.status_code == 404:
+        if response.status_code in (404, 405):
             return False
         response.raise_for_status()
         body = response.json()
