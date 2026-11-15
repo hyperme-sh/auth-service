@@ -135,6 +135,7 @@ async def nonce_store(siwe_postgres_url, monkeypatch):
         for name in ('0002_siwe_challenges.sql', '0004_siwe_nonce_attempts.sql'):
             ddl = Path(__file__).parent.joinpath('fixtures/siwe', name).read_text()
             # Wheel tests carry the test fixture DDL below.
+            ddl = '\n'.join(line for line in ddl.splitlines() if not line.lstrip().startswith('--'))
             for statement in ddl.split(';'):
                 if statement.strip(): await db.execute(text(statement))
         await db.execute(text('TRUNCATE auth_siwe_challenges,auth_wallet_commands'))
