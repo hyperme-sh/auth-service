@@ -1,0 +1,58 @@
+"""ASGI route contracts with substituted authorization and owner storage."""
+import asyncio
+import copy
+from fastapi import FastAPI
+import httpx
+import pytest
+from auth_service.pairing_routes import router
+from auth_service.pairing_state import apply, empty
+from auth_service.pairing_store import PairingUnavailable
+from auth_service.pairing_wire import b64
+from test_pairing_state import SCOPE, SESSION, REQUEST, RECEIVER
+
+
+class Store:
+    def __init__(self):self.state=empty();self.lock=asyncio.Lock();self.fail=False
+    async def execute(self,scope,**operation):
+        if self.fail:raise PairingUnavailable()
+        async with self.lock:return apply(self.state,scope=scope,now=100000,**operation)
+
+
+def make_app():
+    app=FastAPI();app.include_router(router)
+    app.state.pairing_store=Store();app.state.pairing_scopes=[SCOPE];app.state.pairing_slots=asyncio.Semaphore(8)
+    return app
+
+
+@pytest.mark.asyncio
+async def test_unauthenticated_receiver_bootstrap_and_refusals(monkeypatch):
+    app=make_app();headers={'Origin':SCOPE['destinationOrigin'],'X-Pairing-Role':'receiver','X-Pairing-Capability':RECEIVER}
+    body={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':b64(b'j'*32)}}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
+        path=f'/auth/sea-device-link/v1/sessions/{SESSION}/create'
+        r=await c.post(path,json=body,headers=headers)
+        assert r.status_code==200 and r.headers['cache-control']=='private, no-store'
+        assert (await c.post(path,json=body,headers={**headers,'Origin':'https://wrong.example'})).status_code==403
+        assert (await c.post(path,json={**body,'keyring':'private'},headers=headers)).status_code==400
+        assert (await c.post(path,json=body,headers={**headers,'X-Pairing-Role':'sender','Origin':SCOPE['sourceOrigin']})).status_code==401
+        assert (await c.post(path,content=b'x'*710001,headers={**headers,'Content-Type':'application/json'})).status_code==413
+        app.state.pairing_store.fail=True
+        assert (await c.post(path,json=body,headers=headers)).status_code==503
+        app.state.pairing_store=None
+        assert (await c.post(path,json=body,headers=headers)).status_code==503
+
+
+@pytest.mark.asyncio
+async def test_source_context_requires_tenant_permission_and_person(monkeypatch):
+    app=make_app()
+    claims={'sub':'person','iss':'https://issuer.example','tenant_id':SCOPE['tenant'],'scope':'auth:device:transfer'}
+    async def auth(_):return claims
+    monkeypatch.setattr('auth_service.pairing_routes.get_access_token_claims',auth)
+    headers={'Origin':SCOPE['sourceOrigin'],'X-Pairing-Role':'sender','X-Pairing-Capability':RECEIVER,'Authorization':'Bearer synthetic'}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
+        path=f'/auth/sea-device-link/v1/sessions/{SESSION}/completed'
+        assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==404
+        for patch in ({'tenant_id':'bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee'},{'scope':''},{'account_type':'service'},{'spanopticon_auth':'api_key'}):
+            original=copy.deepcopy(claims);claims.update(patch)
+            assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==401
+            claims.clear();claims.update(original)

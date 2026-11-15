@@ -17,6 +17,9 @@ def install(engine):
             raise ValueError('SIWE challenges must use the non-durable owner table')
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0003_token_issuance.sql').read_text())
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0004_siwe_nonce_attempts.sql').read_text())
+        db.exec_driver_sql(files('auth_service').joinpath('migrations/0005_sea_pairing.sql').read_text())
+        if db.execute(text("SELECT relpersistence FROM pg_class WHERE oid=to_regclass('auth_sea_pairing')")).scalar_one() != 'p':
+            raise ValueError('Pairing authority must be durable')
 
 
 def main():

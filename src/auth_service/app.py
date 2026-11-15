@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -48,8 +49,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from auth_service.siwe_nonces import nonce_runtime
+        from auth_service.pairing_runtime import pairing_runtime
 
-        async with nonce_runtime() as store:
+        async with nonce_runtime() as store, pairing_runtime() as (pairing_store, pairing_scopes):
+            app.state.pairing_store = pairing_store
+            app.state.pairing_scopes = pairing_scopes
             app.state.siwe_nonce_store = store
             try:
                 async with service_lifespan(app):
@@ -107,6 +111,11 @@ def create_app(
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")
+    from auth_service.pairing_routes import router as pairing_router
+    app.state.pairing_slots = asyncio.Semaphore(8)
+    app.state.pairing_store = None
+    app.state.pairing_scopes = ()
+    app.include_router(pairing_router)
     if enable_db_middleware:
         logger.info("Auth service middleware: DbSessionMiddleware (RLS GUC)")
     add_optional_service_cors(app, env_var="AUTH_SERVICE_CORS_ORIGINS")
