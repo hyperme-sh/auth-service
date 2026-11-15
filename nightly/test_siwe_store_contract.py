@@ -118,3 +118,26 @@ async def test_store_failure_returns_503_without_binding(store, fixture, monkeyp
                 assert result.status_code == 503, result.text
                 assert 'fixture-password' not in result.text
     save.assert_not_awaited()
+
+
+async def test_postgres_store_load(store):
+    """Bounded scheduled storage capacity check, without external RPC latency."""
+    import time
+    _, value = store
+    gate=asyncio.Semaphore(50)
+    samples=[]
+    async def pair(index):
+        async with gate:
+            started=time.perf_counter()
+            subject=f'load-{index}'
+            await value.put(subject,{'nonce':f'load-nonce-{index}'})
+            assert await value.peek(subject)=={'nonce':f'load-nonce-{index}'}
+            await value.consume_verified(subject,f'load-nonce-{index}')
+            samples.append(time.perf_counter()-started)
+    started=time.perf_counter()
+    await asyncio.gather(*(pair(i) for i in range(2000)))
+    elapsed=time.perf_counter()-started
+    p95=sorted(samples)[int(len(samples)*0.95)-1]
+    result={'pairs':len(samples),'workers':50,'pairs_per_second':len(samples)/elapsed,'p95_ms':p95*1000}
+    print(json.dumps(result,sort_keys=True))
+    assert p95<=0.1 and len(samples)/elapsed>=100, result

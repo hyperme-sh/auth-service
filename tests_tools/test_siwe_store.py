@@ -140,3 +140,10 @@ def test_no_redis_import_or_configuration_value_reads():
                 assert not any(isinstance(arg,ast.Constant) and arg.value in ('REDIS_URL','AUTH_SIWE_REDIS_URL') for arg in node.args)
     for name in ('pyproject.toml','core/auth-service/pyproject.toml'):
         assert '"redis>=' not in root.joinpath(name).read_text()
+
+
+def test_owner_migration_fixture_matches_packaged_source():
+    from pathlib import Path
+    root=Path(__file__).parents[1]
+    for name in ('0002_siwe_challenges.sql','0004_siwe_nonce_attempts.sql'):
+        assert root.joinpath('src/auth_service/migrations',name).read_bytes()==root.joinpath('tests/fixtures/siwe',name).read_bytes()
