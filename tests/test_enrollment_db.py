@@ -463,8 +463,8 @@ async def test_concurrent_enrollment_creates_one_tenant_role(migrated_sync_url, 
 
 
 @pytest.mark.asyncio
-async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier, siwe_redis_url):
-    monkeypatch.setenv("AUTH_SIWE_REDIS_URL", siwe_redis_url)
+async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier, nonce_store, siwe_postgres_url):
+    monkeypatch.setenv("AUTH_SIWE_DATABASE_URL", siwe_postgres_url)
     from api.core import config as api_config
     from asgi_lifespan import LifespanManager
     import httpx

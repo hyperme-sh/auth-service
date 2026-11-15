@@ -37,7 +37,7 @@ async def deliver(engine, command_id):
                 # The owner retained the idempotency decision. Remove the pending
                 # payload here so Auth does not retain completed personal records.
                 await db.execute(text('DELETE FROM auth_wallet_commands WHERE id=:id'), {'id': command_id})
-    except (SQLAlchemyError, PostgresError, OSError, TimeoutError, httpx.HTTPError, ValidationError, RuntimeError) as exc:
+    except (SQLAlchemyError, PostgresError, OSError, TimeoutError, httpx.HTTPError, ValidationError, RuntimeError, ValueError) as exc:
         raise SiweStoreUnavailable('Wallet binding delivery temporarily unavailable') from exc
     if rejected:
         raise SiweError('Wallet binding was rejected; request a new nonce')

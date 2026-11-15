@@ -23,7 +23,10 @@ The queue is logged and durable; it is separate from expiring challenges.
 
 ## Rollout
 
-Install User's additive command table and compatible API first. Install Auth's
+Install User's additive command table and compatible API to enable durable delivery.
+Older owners returning 404 (or version 0 before migration) retain the previous
+consume-before-remote-write path; uncertain writes require a fresh nonce. Auth
+checks the private capability endpoint before choosing the path. Install Auth's
 additive migrations, then update Auth. Nullable nonce and defaulted attempt
 columns preserve older PostgreSQL writers. Older Redis-backed instances cannot
 read PostgreSQL challenges; callers may need a fresh challenge during transition.

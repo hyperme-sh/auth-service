@@ -54,3 +54,22 @@ async def test_old_or_inconsistent_owner_does_not_ack_command(monkeypatch):
     monkeypatch.setattr(identity_owner,'call',AsyncMock(return_value={'status':'applied'}))
     with pytest.raises(SiweStoreUnavailable): await wallet_commands.deliver(engine,cid)
     assert not engine.deleted
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_retains_retryable_command(monkeypatch):
+    import json
+    engine=Engine();cid=uuid.uuid4()
+    monkeypatch.setattr(identity_owner,'call',AsyncMock(side_effect=json.JSONDecodeError('invalid','bad',0)))
+    with pytest.raises(SiweStoreUnavailable):await wallet_commands.deliver(engine,cid)
+    assert not engine.deleted
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status,body,supported',[(404,{},False),(200,{'wallet_command_version':0},False),(200,{'wallet_command_version':1},True)])
+async def test_owner_capability_negotiation(monkeypatch,status,body,supported):
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL','https://owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN','configured-token')
+    client=httpx.AsyncClient
+    monkeypatch.setattr(httpx,'AsyncClient',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(status,json=body)),**kw))
+    assert await identity_owner.supports_wallet_commands() is supported

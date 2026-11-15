@@ -132,3 +132,16 @@ class PostgresChallengeStore:
     @staticmethod
     async def _lock(db, subject):
         await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:subject,0))'), {'subject': subject})
+
+    async def consume_verified(self, subject, nonce):
+        try:
+            async with asyncio.timeout(5):
+                async with self.engine.begin() as db:
+                    row = (await db.execute(text("""DELETE FROM auth_siwe_challenges
+                        WHERE subject_hash=:subject AND challenge->>'nonce'=:nonce
+                        AND expires_at>clock_timestamp() AND attempts<5 RETURNING subject_hash"""),
+                        {'subject':self.key(subject),'nonce':nonce})).first()
+            if row is None:
+                raise SiweError('SIWE nonce is missing or expired; request a new nonce')
+        except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
+            raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc

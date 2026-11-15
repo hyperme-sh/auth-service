@@ -138,6 +138,13 @@ async def bind_wallet(
         await store.failed(user.sub, challenge.nonce)
         raise
     del signature
+    from auth_service.identity_owner import supports_wallet_commands
+    if not await supports_wallet_commands():
+        # Older owners remain supported. Consume the exact verified challenge
+        # before the legacy remote write; uncertain writes require a new nonce.
+        await store.consume_verified(user.sub, challenge.nonce)
+        return await upsert_wallet_binding(session, keycloak_sub=user.sub,
+                                          email=user.email, wallet_address=parsed.address)
     command_id = await store.enqueue(user.sub, challenge.nonce,
         dict(subject=user.sub, email=user.email, wallet_address=parsed.address))
     from auth_service.wallet_commands import deliver

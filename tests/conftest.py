@@ -139,16 +139,11 @@ async def nonce_store(siwe_postgres_url, monkeypatch):
             for statement in ddl.split(';'):
                 if statement.strip(): await db.execute(text(statement))
         await db.execute(text('TRUNCATE auth_siwe_challenges,auth_wallet_commands'))
-    # Wallet verifier tests isolate the HTTP delivery boundary. Dedicated command
-    # tests below exercise production delivery and uncertain response handling.
-    async def deliver(engine, command_id):
-        async with engine.begin() as db:
-            payload = await db.scalar(text('SELECT payload FROM auth_wallet_commands WHERE id=:id'), {'id':command_id})
-            result = await wallet_bind.upsert_wallet_binding(None, keycloak_sub=payload['subject'],
-                email=payload['email'], wallet_address=payload['wallet_address'])
-            await db.execute(text('DELETE FROM auth_wallet_commands WHERE id=:id'), {'id':command_id})
-            return result
-    monkeypatch.setattr(wallet_commands, 'deliver', deliver)
+    # Pure verifier cases use the supported older-owner path. Native owner and
+    # durable-command tests exercise the actual HTTP and delivery contracts.
+    from auth_service import identity_owner
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(identity_owner, 'supports_wallet_commands', AsyncMock(return_value=False))
     try:
         yield PostgresChallengeStore(engine)
     finally:
