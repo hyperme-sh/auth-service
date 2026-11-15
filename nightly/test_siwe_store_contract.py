@@ -11,11 +11,9 @@ import httpx
 import pytest
 from eth_account import Account
 from eth_account.messages import encode_defunct
-from redis.asyncio import Redis
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 from auth_service.siwe import SiweError
-from auth_service.siwe_nonces import RedisChallengeStore
 from auth_service.siwe_postgres import PostgresChallengeStore
 
 
@@ -32,20 +30,14 @@ async def fixture():
 @asynccontextmanager
 async def connect(backend, *, fault=False):
     config = json.loads((Path(os.environ['SIWE_FIXTURE_DIR'])/'stores.json').read_text())
-    if backend == 'redis':
-        url = make_url(config[backend])
-        if fault: url = url.set(password='deliberately-wrong-fixture-password')
-        async with Redis.from_url(url.render_as_string(hide_password=False), socket_timeout=5, socket_connect_timeout=5) as client:
-            yield RedisChallengeStore(client)
-    else:
-        url = make_url(config[backend]).set(drivername='postgresql+asyncpg')
-        if fault: url = url.set(password='deliberately-wrong-fixture-password')
-        engine = create_async_engine(url)
-        try: yield PostgresChallengeStore(engine)
-        finally: await engine.dispose()
+    url = make_url(config['postgres']).set(drivername='postgresql+asyncpg')
+    if fault: url = url.set(password='deliberately-wrong-fixture-password')
+    engine = create_async_engine(url)
+    try: yield PostgresChallengeStore(engine)
+    finally: await engine.dispose()
 
 
-@pytest.fixture(params=['redis', 'postgres'])
+@pytest.fixture(params=['postgres'])
 async def store(request, fixture):
     async with connect(request.param) as value:
         yield request.param, value
@@ -102,11 +94,6 @@ async def test_signature_then_checksum_write_and_no_replay(store, fixture, monke
         assert refused.status_code == 400, refused.text
         save.assert_not_awaited()
         good = Account.from_key(bytes.fromhex('33'*32)).sign_message(encode_defunct(text=message)).signature.hex()
-        assert (await client.post('/auth/siwe/bind', json={'message':message, 'signature':good})).status_code == 400
-        response = await client.post('/auth/siwe/nonce', json={'address':address.lower()})
-        assert response.status_code == 200
-        message = response.json()['message']
-        good = Account.from_key(bytes.fromhex('33'*32)).sign_message(encode_defunct(text=message)).signature.hex()
         async with connect(backend) as second:
             app.state.siwe_nonce_store = second
             accepted = await client.post('/auth/siwe/bind', json={'message':message, 'signature':good})
@@ -131,3 +118,26 @@ async def test_store_failure_returns_503_without_binding(store, fixture, monkeyp
                 assert result.status_code == 503, result.text
                 assert 'fixture-password' not in result.text
     save.assert_not_awaited()
+
+
+async def test_postgres_store_load(store):
+    """Bounded scheduled storage capacity check, without external RPC latency."""
+    import time
+    _, value = store
+    gate=asyncio.Semaphore(50)
+    samples=[]
+    async def pair(index):
+        async with gate:
+            started=time.perf_counter()
+            subject=f'load-{index}'
+            await value.put(subject,{'nonce':f'load-nonce-{index}'})
+            assert await value.peek(subject)=={'nonce':f'load-nonce-{index}'}
+            await value.consume_verified(subject,f'load-nonce-{index}')
+            samples.append(time.perf_counter()-started)
+    started=time.perf_counter()
+    await asyncio.gather(*(pair(i) for i in range(2000)))
+    elapsed=time.perf_counter()-started
+    p95=sorted(samples)[int(len(samples)*0.95)-1]
+    result={'pairs':len(samples),'workers':50,'pairs_per_second':len(samples)/elapsed,'p95_ms':p95*1000}
+    print(json.dumps(result,sort_keys=True))
+    assert p95<=0.1 and len(samples)/elapsed>=100, result

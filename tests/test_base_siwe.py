@@ -117,7 +117,7 @@ async def test_subject_and_expiry_checks(
             message=challenge.message,
             signature=sign(challenge.message),
         )
-    await nonce_store.redis.expire(nonce_store.key(PERSON.sub), 0)
+    await nonce_store.expire(PERSON.sub)
     with pytest.raises(SiweError, match="expired"):
         await wallet_bind.bind_wallet(
             None,
@@ -242,7 +242,7 @@ def test_chain_defaults_and_invalid_configuration(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_failed_proof_also_consumes_nonce(
+async def test_failed_proof_allows_retry_until_attempt_cap(
     base_wallet_verifier, monkeypatch, nonce_store
 ):
     challenge = await wallet_bind.issue_siwe_nonce(
@@ -259,15 +259,12 @@ async def test_failed_proof_also_consumes_nonce(
         await wallet_bind.bind_wallet(
             None, PERSON, store=nonce_store, message=challenge.message, signature=wrong
         )
-    with pytest.raises(SiweError, match="missing"):
-        await wallet_bind.bind_wallet(
-            None,
-            PERSON,
-            store=nonce_store,
-            message=challenge.message,
-            signature=sign(challenge.message),
-        )
-    persist.assert_not_awaited()
+    await wallet_bind.bind_wallet(
+        None, PERSON, store=nonce_store, message=challenge.message,
+        signature=sign(challenge.message),
+    )
+    persist.assert_awaited_once()
+
 
 
 @pytest.mark.asyncio

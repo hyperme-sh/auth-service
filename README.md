@@ -20,9 +20,14 @@ Keycloak is the identity provider. This repository does not ship or run Keycloak
 
 Interactive Keycloak clients `controlplane-frontend`, `controlplane-mobile`, `controlplane-device`, and `hypermesh-native` must carry a positive `terms_and_conditions` timestamp. `account_type=service` is exempt. When `OIDC_REQUIRE_MFA=true`, a Keycloak token must include `amr` containing `otp`, `mfa`, `totp`, or `webauthn`. API-key and tenant-session JWTs skip that MFA check. Retired accounts are rejected on Keycloak tokens and on tenant-session JWTs.
 
-Auth uses its owner PostgreSQL database (`DATABASE_URL`, `postgresql+asyncpg://...`) for issuance decisions, outbox/inbox rows and optional SIWE challenges. User owns person, organization, group and wallet records. Auth request middleware sets the tenant scope and commits only successful responses. Login and token issuance write `auth.login.success.v1` and `auth.token.issued.v1` to the local outbox in that transaction; the HTTP relay delivers them.
+Auth uses its owner PostgreSQL database (`DATABASE_URL`, `postgresql+asyncpg://...`) for issuance decisions, outbox/inbox rows and SIWE challenges. User owns person, organization, group and wallet records. Auth request middleware sets the tenant scope and commits only successful responses. Login and token issuance write `auth.login.success.v1` and `auth.token.issued.v1` to the local outbox in that transaction; the HTTP relay delivers them.
 
-SIWE challenges use a shared store: Redis by default (`AUTH_SIWE_REDIS_URL`, or `REDIS_URL`), or PostgreSQL with `AUTH_SIWE_STORE=postgres`. One outstanding challenge per subject, 10-minute TTL, consumed once with Redis `GETDEL` or PostgreSQL `DELETE RETURNING`. A missing store or a store error returns 503 on `/auth/siwe/nonce` and `/auth/siwe/bind`. OIDC login still starts. The signature is checked and discarded. Only the checksum address is stored.
+SIWE challenges use Auth PostgreSQL with a 10-minute expiry. Verification runs
+before an atomic nonce deletion and durable binding command. User owns the
+binding and deduplicates command delivery. Invalid proofs have five attempts;
+replay and expired challenges require a new nonce. Missing storage returns 503;
+OIDC remains available. EOA and configured smart-wallet verification are retained.
+Signatures are discarded, never stored in the command.
 
 | Method | Path | Role |
 | --- | --- | --- |
@@ -47,7 +52,7 @@ SIWE challenges use a shared store: Redis by default (`AUTH_SIWE_REDIS_URL`, or 
 
 ## Practical use
 
-Python 3.13 and [uv](https://docs.astral.sh/uv/) 0.11.26 (the version the package workflow installs). `uv.lock` pins `httpx` 0.28.1, `redis` 6.4.0, `bcrypt` 5.0.0, `eth-account` 0.14.0, `eth-utils` 6.0.0, and, via the control-plane libraries, `fastapi` 0.162.0 and `uvicorn` 0.54.0. Direct floors are `httpx>=0.28.1`, `redis>=5.0.0`, `bcrypt>=4.2.0`, `eth-account>=0.13.0`, `eth-utils>=5.0.0`.
+Python 3.13 and [uv](https://docs.astral.sh/uv/) 0.11.26 (the version the package workflow installs). `uv.lock` pins `httpx` 0.28.1, `bcrypt` 5.0.0, `eth-account` 0.14.0, `eth-utils` 6.0.0, and, via the control-plane libraries, `fastapi` 0.162.0 and `uvicorn` 0.54.0. Direct floors are `httpx>=0.28.1`, `bcrypt>=4.2.0`, `eth-account>=0.13.0`, `eth-utils>=5.0.0`.
 
 Git dependencies are exact commits. `uv sync --frozen` needs read access to:
 
@@ -81,7 +86,6 @@ export KEYCLOAK_ALLOWED_CLIENT_IDS=controlplane-frontend,controlplane-mobile,con
 export AUTH_OIDC_REDIRECT_URI=http://localhost:5173/auth/callback
 export AUTH_TOKEN_VALIDATION_MODE=jwt
 export API_KEY_EXCHANGE_JWT_SECRET=replace-with-32-plus-chars-not-a-published-default
-export AUTH_SIWE_REDIS_URL=redis://localhost:6379/0
 export AUTH_SIWE_CHAIN_ID=84532
 export AUTH_SIWE_DOMAIN=localhost
 export AUTH_SIWE_URI=http://localhost:3000
@@ -317,15 +321,14 @@ in `startup_contract_source.json`, checked by unit tests. Dependency locks and
 package versions remain unchanged. FyberLabs/infra#923 owns combined scheduled
 registration; owner route contracts run through existing CI consumers.
 
-### SIWE adapter choice
+### SIWE PostgreSQL storage
 
-Redis remains the compatibility default. `AUTH_SIWE_STORE=postgres` explicitly
-selects the owner PostgreSQL adapter using `AUTH_SIWE_DATABASE_URL`, or
-`DATABASE_URL` when the dedicated URL is unset. Apply the image-local additive
-migration before selecting it. Both stores replace one outstanding challenge per
-subject, enforce 600-second expiry and consume once before signature validation.
-Unavailable storage never falls back to another adapter or process-local state.
-See [the comparison and TEST consumer inventory](docs/siwe-challenge-store.md).
+Apply the additive owner migration before this build. The connection uses
+`AUTH_SIWE_DATABASE_URL`, `DATABASE_URL`, or `DATABASE_URL_FILE`. Legacy store
+selectors and Redis URLs are ignored with a warning that names only the variable.
+User must support command IDs and have its command table installed before Auth
+adopts this build. [Storage and retry contracts](docs/siwe-challenge-store.md)
+describe rollout compatibility, expiry and durable binding delivery.
 
 ### Token issuance transactions
 

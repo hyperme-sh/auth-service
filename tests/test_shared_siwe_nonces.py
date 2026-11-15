@@ -1,4 +1,4 @@
-"""Real Redis replica/restart, replay, replacement, expiry and outage checks."""
+"""Real PostgreSQL replica/restart, replay, replacement, expiry and outage checks."""
 
 import asyncio
 from dataclasses import asdict
@@ -10,11 +10,12 @@ import pytest
 from auth_service import wallet_bind
 from auth_service.schemas import AuthMeResponse
 from auth_service.siwe import SiweError
-from auth_service.siwe_nonces import SiweNonceStore, SiweStoreUnavailable, nonce_runtime
+from auth_service.siwe_nonces import SiweStoreUnavailable, nonce_runtime
 from eth_account import Account
 from fastapi import FastAPI
-from redis.asyncio import Redis
-from redis.exceptions import ConnectionError as RedisConnectionError
+from sqlalchemy import text
+from auth_service.siwe_postgres import PostgresChallengeStore
+from sqlalchemy.exc import OperationalError
 
 PERSON = AuthMeResponse(sub="shared-siwe-person")
 ADDRESS = Account.from_key(bytes.fromhex("33" * 32)).address
@@ -22,21 +23,15 @@ ADDRESS = Account.from_key(bytes.fromhex("33" * 32)).address
 
 @pytest.mark.asyncio
 async def test_other_replica_consumes_once_and_does_not_expose_subject_keys(
-    nonce_store, siwe_redis_url
+    nonce_store, siwe_postgres_url
 ):
     challenge = await wallet_bind.issue_siwe_nonce(
         PERSON, address=ADDRESS, store=nonce_store
     )
     key = nonce_store.key(PERSON.sub)
     assert PERSON.sub not in key
-    assert 0 < await nonce_store.redis.ttl(key) <= 600
-    async with Redis.from_url(siwe_redis_url) as client:
-        second = SiweNonceStore(client)
-        outcomes = await asyncio.gather(
-            nonce_store.consume(PERSON.sub),
-            second.consume(PERSON.sub),
-            return_exceptions=True,
-        )
+    second = PostgresChallengeStore(nonce_store.engine)
+    outcomes = await asyncio.gather(nonce_store.consume(PERSON.sub), second.consume(PERSON.sub), return_exceptions=True)
     assert sum(isinstance(value, dict) for value in outcomes) == 1
     assert sum(isinstance(value, SiweError) for value in outcomes) == 1
     assert asdict(challenge) in outcomes
@@ -59,14 +54,15 @@ async def test_new_challenge_replaces_prior_and_other_subject_cannot_consume(
 @pytest.mark.asyncio
 async def test_expired_challenge_is_unusable(nonce_store):
     await wallet_bind.issue_siwe_nonce(PERSON, address=ADDRESS, store=nonce_store)
-    await nonce_store.redis.expire(nonce_store.key(PERSON.sub), 0)
+    await nonce_store.expire(PERSON.sub)
     with pytest.raises(SiweError, match="expired"):
         await nonce_store.consume(PERSON.sub)
 
 
 @pytest.mark.asyncio
 async def test_corrupt_storage_fails_closed(nonce_store):
-    await nonce_store.redis.set(nonce_store.key(PERSON.sub), "not-json")
+    async with nonce_store.engine.begin() as db:
+        await db.execute(text("INSERT INTO auth_siwe_challenges VALUES(:subject, '[]'::jsonb, clock_timestamp()+interval '1 minute',NULL,0)"), {'subject':nonce_store.key(PERSON.sub)})
     with pytest.raises(SiweStoreUnavailable):
         await nonce_store.consume(PERSON.sub)
     with pytest.raises(SiweError):
@@ -75,10 +71,9 @@ async def test_corrupt_storage_fails_closed(nonce_store):
 
 @pytest.mark.asyncio
 async def test_outage_never_creates_or_consumes_local_fallback():
-    redis = AsyncMock()
-    redis.set.side_effect = RedisConnectionError("private dependency detail")
-    redis.getdel.side_effect = RedisConnectionError("private dependency detail")
-    store = SiweNonceStore(redis)
+    store = AsyncMock()
+    store.put.side_effect = SiweStoreUnavailable('unavailable')
+    store.consume.side_effect = SiweStoreUnavailable('unavailable')
     with pytest.raises(SiweStoreUnavailable):
         await wallet_bind.issue_siwe_nonce(PERSON, address=ADDRESS, store=store)
     with pytest.raises(SiweStoreUnavailable):
@@ -87,8 +82,8 @@ async def test_outage_never_creates_or_consumes_local_fallback():
 
 @pytest.mark.asyncio
 async def test_missing_storage_does_not_prevent_oidc_startup(monkeypatch, app):
-    monkeypatch.delenv("AUTH_SIWE_REDIS_URL", raising=False)
-    monkeypatch.delenv("REDIS_URL", raising=False)
+    for name in ('AUTH_SIWE_DATABASE_URL','DATABASE_URL','DATABASE_URL_FILE'):
+        monkeypatch.delenv(name, raising=False)
     async with nonce_runtime() as store:
         assert store is None
     from asgi_lifespan import LifespanManager
@@ -116,9 +111,8 @@ async def test_http_storage_outage_returns_503_without_dependency_details(monkey
     app = FastAPI()
     app.include_router(routes.router, prefix="/auth")
     app.dependency_overrides[get_current_auth_user] = lambda: PERSON
-    redis = AsyncMock()
-    redis.set.side_effect = RedisConnectionError("private dependency detail")
-    app.state.siwe_nonce_store = SiweNonceStore(redis)
+    app.state.siwe_nonce_store = AsyncMock()
+    app.state.siwe_nonce_store.put.side_effect = SiweStoreUnavailable('private dependency detail')
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://auth.test"
     ) as client:
@@ -129,7 +123,7 @@ async def test_http_storage_outage_returns_503_without_dependency_details(monkey
 
 @pytest.mark.asyncio
 async def test_http_challenge_can_bind_on_another_replica(
-    nonce_store, siwe_redis_url, base_wallet_verifier, monkeypatch
+    nonce_store, siwe_postgres_url, base_wallet_verifier, monkeypatch
 ):
     from auth_service import routes
     from auth_service.deps import get_current_auth_user
@@ -154,28 +148,9 @@ async def test_http_challenge_can_bind_on_another_replica(
             .sign_message(encode_defunct(text=message))
             .signature.hex()
         )
-        async with Redis.from_url(siwe_redis_url) as second:
-            app.state.siwe_nonce_store = SiweNonceStore(second)
-            accepted = await client.post(
-                "/auth/siwe/bind", json={"message": message, "signature": signature}
-            )
-            assert accepted.status_code == 200, accepted.text
-            replay = await client.post(
-                "/auth/siwe/bind", json={"message": message, "signature": signature}
-            )
-            assert replay.status_code == 400
+        app.state.siwe_nonce_store = PostgresChallengeStore(nonce_store.engine)
+        accepted = await client.post('/auth/siwe/bind', json={'message':message,'signature':signature})
+        assert accepted.status_code == 200, accepted.text
+        replay = await client.post('/auth/siwe/bind', json={'message':message,'signature':signature})
+        assert replay.status_code == 400
     save.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_runtime_closes_redis_when_service_fails(monkeypatch):
-    from auth_service import siwe_nonces
-
-    redis = AsyncMock()
-    redis.__aenter__.return_value = redis
-    monkeypatch.setenv("AUTH_SIWE_REDIS_URL", "redis://nonce.test:6379/0")
-    monkeypatch.setattr(siwe_nonces.Redis, "from_url", lambda *a, **kw: redis)
-    with pytest.raises(RuntimeError):
-        async with nonce_runtime():
-            raise RuntimeError("service failed")
-    redis.__aexit__.assert_awaited_once()

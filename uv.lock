@@ -205,7 +205,6 @@ dependencies = [
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "httpx" },
-    { name = "redis" },
 ]
 
 [package.dev-dependencies]
@@ -230,7 +229,6 @@ requires-dist = [
     { name = "eth-account", specifier = ">=0.13.0" },
     { name = "eth-utils", specifier = ">=5.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "redis", specifier = ">=5.0.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -1,0 +1,93 @@
+"""Delivery retries retain a stable ID and never store a signature."""
+from contextlib import asynccontextmanager
+from datetime import UTC,datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+import uuid
+import httpx
+import pytest
+from auth_service import wallet_commands,identity_owner
+from auth_service.siwe_nonces import SiweStoreUnavailable
+from auth_service.siwe import SiweError
+
+
+class Engine:
+    def __init__(self):
+        self.deleted=False
+        self.payload=dict(subject='person',email=None,wallet_address='0x'+'11'*20)
+    @asynccontextmanager
+    async def begin(self):
+        try: yield self
+        except BaseException:
+            self.deleted=False
+            raise
+    async def execute(self,sql,params):
+        if str(sql).startswith('DELETE'): self.deleted=True
+        return SimpleNamespace(mappings=lambda:SimpleNamespace(one_or_none=lambda:{'payload':self.payload}))
+
+
+@pytest.mark.asyncio
+async def test_lost_response_retains_command_for_same_id_retry(monkeypatch):
+    engine=Engine(); cid=uuid.uuid4()
+    result=dict(command_id=str(cid),status='applied',binding=dict(keycloak_sub='person',email=None,wallet_address=engine.payload['wallet_address'],bound_at=datetime.now(UTC)))
+    call=AsyncMock(side_effect=[httpx.ReadTimeout('private'),result])
+    monkeypatch.setattr(identity_owner,'call',call)
+    with pytest.raises(SiweStoreUnavailable): await wallet_commands.deliver(engine,cid)
+    assert not engine.deleted
+    bound=await wallet_commands.deliver(engine,cid)
+    assert bound.keycloak_sub=='person' and engine.deleted
+    assert call.call_args_list[0]==call.call_args_list[1]
+    assert 'signature' not in call.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_definitive_rejection_removes_pending_command(monkeypatch):
+    engine=Engine();cid=uuid.uuid4()
+    monkeypatch.setattr(identity_owner,'call',AsyncMock(return_value={'command_id':str(cid),'status':'rejected'}))
+    with pytest.raises(SiweError): await wallet_commands.deliver(engine,cid)
+    assert engine.deleted
+
+
+@pytest.mark.asyncio
+async def test_old_or_inconsistent_owner_does_not_ack_command(monkeypatch):
+    engine=Engine();cid=uuid.uuid4()
+    monkeypatch.setattr(identity_owner,'call',AsyncMock(return_value={'status':'applied'}))
+    with pytest.raises(SiweStoreUnavailable): await wallet_commands.deliver(engine,cid)
+    assert not engine.deleted
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_retains_retryable_command(monkeypatch):
+    import json
+    engine=Engine();cid=uuid.uuid4()
+    monkeypatch.setattr(identity_owner,'call',AsyncMock(side_effect=json.JSONDecodeError('invalid','bad',0)))
+    with pytest.raises(SiweStoreUnavailable):await wallet_commands.deliver(engine,cid)
+    assert not engine.deleted
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status,body,supported',[(404,{},False),(200,{'wallet_command_version':0},False),(200,{'wallet_command_version':1},True)])
+async def test_owner_capability_negotiation(monkeypatch,status,body,supported):
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL','https://owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN','configured-token')
+    client=httpx.AsyncClient
+    monkeypatch.setattr(httpx,'AsyncClient',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(status,json=body)),**kw))
+    assert await identity_owner.supports_wallet_commands() is supported
+
+
+@pytest.mark.asyncio
+async def test_native_legacy_router_405_selects_supported_old_contract(monkeypatch):
+    import importlib.util,sys
+    from pathlib import Path
+    from fastapi import FastAPI
+    path=Path(__file__).parents[1]/'tests_artifacts/identity-owner/legacy_identity_api.py'
+    spec=importlib.util.spec_from_file_location('legacy_identity_api',path)
+    module=importlib.util.module_from_spec(spec)
+    sys.modules[spec.name]=module
+    spec.loader.exec_module(module)
+    app=FastAPI();app.include_router(module.router,prefix='/api/v1')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_URL','https://owner.test')
+    monkeypatch.setenv('AUTH_IDENTITY_OWNER_TOKEN','configured-token')
+    client=httpx.AsyncClient
+    monkeypatch.setattr(identity_owner,'httpx',SimpleNamespace(HTTPError=httpx.HTTPError,AsyncClient=lambda **kw:client(transport=httpx.ASGITransport(app=app),**kw)))
+    assert await identity_owner.supports_wallet_commands() is False

@@ -463,8 +463,8 @@ async def test_concurrent_enrollment_creates_one_tenant_role(migrated_sync_url, 
 
 
 @pytest.mark.asyncio
-async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier, siwe_redis_url):
-    monkeypatch.setenv("AUTH_SIWE_REDIS_URL", siwe_redis_url)
+async def test_enrollment_http_bind_and_grant(migrated_sync_url, seed, monkeypatch, base_wallet_verifier, nonce_store, siwe_postgres_url):
+    monkeypatch.setenv("AUTH_SIWE_DATABASE_URL", siwe_postgres_url)
     from api.core import config as api_config
     from asgi_lifespan import LifespanManager
     import httpx
@@ -1197,3 +1197,27 @@ async def test_scoped_session_uses_actual_owner_http_and_postgres(migrated_sync_
             db.exec_driver_sql(f'DROP SCHEMA "{name}" CASCADE')
             for role in (reader,name):db.exec_driver_sql(f'DROP OWNED BY "{role}"');db.exec_driver_sql(f'DROP ROLE "{role}"')
         root.dispose()
+
+
+async def test_native_owner_durable_binding_and_replay(db_session, migrated_sync_url, nonce_store, base_wallet_verifier, monkeypatch):
+    from auth_service import identity_owner
+    from user_service.wallet_command_schema import DDL
+    # Restore production capability negotiation after the isolated verifier fixture.
+    monkeypatch.setattr(identity_owner, 'supports_wallet_commands', native_supports_wallet_commands)
+    await db_session.execute(text(DDL))
+    assert await identity_owner.supports_wallet_commands()
+    person=AuthMeResponse(sub='durable-'+uuid.uuid4().hex,email='durable@example.test')
+    account=Account.create()
+    challenge=await issue_siwe_nonce(person,address=account.address,store=nonce_store)
+    signed=account.sign_message(encode_defunct(text=challenge.message)).signature.hex()
+    bound=await bind_wallet(db_session,person,store=nonce_store,message=challenge.message,signature=signed)
+    assert bound.wallet_address==account.address
+    from auth_service.siwe import SiweError
+    with pytest.raises(SiweError):
+        await bind_wallet(db_session,person,store=nonce_store,message=challenge.message,signature=signed)
+    assert await db_session.scalar(text('SELECT count(*) FROM user_wallet_commands'))>=1
+    async with nonce_store.engine.connect() as connection:
+        assert await connection.scalar(text('SELECT count(*) FROM auth_wallet_commands'))==0
+
+
+from auth_service.identity_owner import supports_wallet_commands as native_supports_wallet_commands

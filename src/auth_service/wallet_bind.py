@@ -122,29 +122,33 @@ async def bind_wallet(
     if not user.sub or not str(user.sub).strip():
         raise SiweError("Keycloak subject is required to bind a wallet")
     try:
-        challenge = SiweNonce(**await store.consume(user.sub))
+        challenge = SiweNonce(**await store.peek(user.sub))
     except TypeError as exc:
         raise SiweStoreUnavailable("SIWE nonce storage returned invalid data") from exc
-    if message != challenge.message:
-        raise SiweError("SIWE message must match the server-issued challenge")
-    async with wallet_verifier() as verifier:
-        parsed = await verify_siwe_bind(
-            message=message,
-            signature=signature,
-            expected_nonce=challenge.nonce,
-            verifier=verifier,
-            expected_chain_id=configured_chain_id(),
-            expected_domain=challenge.domain,
-            expected_uri=challenge.uri,
-        )
-    # Drop the signature immediately. Do not assign it onto the row.
+    try:
+        if message != challenge.message:
+            raise SiweError("SIWE message must match the server-issued challenge")
+        async with wallet_verifier() as verifier:
+            parsed = await verify_siwe_bind(
+                message=message, signature=signature, expected_nonce=challenge.nonce,
+                verifier=verifier, expected_chain_id=configured_chain_id(),
+                expected_domain=challenge.domain, expected_uri=challenge.uri,
+            )
+    except SiweError:
+        await store.failed(user.sub, challenge.nonce)
+        raise
     del signature
-    return await upsert_wallet_binding(
-        session,
-        keycloak_sub=user.sub,
-        email=user.email,
-        wallet_address=parsed.address,
-    )
+    from auth_service.identity_owner import supports_wallet_commands
+    if not await supports_wallet_commands():
+        # Older owners remain supported. Consume the exact verified challenge
+        # before the legacy remote write; uncertain writes require a new nonce.
+        await store.consume_verified(user.sub, challenge.nonce)
+        return await upsert_wallet_binding(session, keycloak_sub=user.sub,
+                                          email=user.email, wallet_address=parsed.address)
+    command_id = await store.enqueue(user.sub, challenge.nonce,
+        dict(subject=user.sub, email=user.email, wallet_address=parsed.address))
+    from auth_service.wallet_commands import deliver
+    return await deliver(store.engine, command_id)
 
 
 async def upsert_wallet_binding(session, *, keycloak_sub, email, wallet_address):

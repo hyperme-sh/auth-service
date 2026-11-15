@@ -117,18 +117,34 @@ async def base_wallet_verifier(monkeypatch):
 
 
 @pytest.fixture(scope="session")
-def siwe_redis_url():
-    from testcontainers.redis import RedisContainer
-
-    with RedisContainer("redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065") as container:
-        yield f"redis://{container.get_container_host_ip()}:{container.get_exposed_port(6379)}/0"
+def siwe_postgres_url():
+    from testcontainers.postgres import PostgresContainer
+    with PostgresContainer("postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416", driver="psycopg") as container:
+        yield container.get_connection_url().replace('+psycopg', '+asyncpg')
 
 
 @pytest.fixture
-async def nonce_store(siwe_redis_url):
-    from redis.asyncio import Redis
-    from auth_service.siwe_nonces import SiweNonceStore
-
-    async with Redis.from_url(siwe_redis_url, socket_timeout=5) as redis:
-        await redis.flushdb()
-        yield SiweNonceStore(redis)
+async def nonce_store(siwe_postgres_url, monkeypatch):
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy import text
+    from pathlib import Path
+    from auth_service.siwe_postgres import PostgresChallengeStore
+    from auth_service import wallet_commands, wallet_bind
+    engine = create_async_engine(siwe_postgres_url)
+    async with engine.begin() as db:
+        for name in ('0002_siwe_challenges.sql', '0004_siwe_nonce_attempts.sql'):
+            ddl = Path(__file__).parent.joinpath('fixtures/siwe', name).read_text()
+            # Wheel tests carry the test fixture DDL below.
+            ddl = '\n'.join(line for line in ddl.splitlines() if not line.lstrip().startswith('--'))
+            for statement in ddl.split(';'):
+                if statement.strip(): await db.execute(text(statement))
+        await db.execute(text('TRUNCATE auth_siwe_challenges,auth_wallet_commands'))
+    # Pure verifier cases use the supported older-owner path. Native owner and
+    # durable-command tests exercise the actual HTTP and delivery contracts.
+    from auth_service import identity_owner
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(identity_owner, 'supports_wallet_commands', AsyncMock(return_value=False))
+    try:
+        yield PostgresChallengeStore(engine)
+    finally:
+        await engine.dispose()

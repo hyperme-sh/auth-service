@@ -16,6 +16,7 @@ def install(engine):
         if persistence != 'u':
             raise ValueError('SIWE challenges must use the non-durable owner table')
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0003_token_issuance.sql').read_text())
+        db.exec_driver_sql(files('auth_service').joinpath('migrations/0004_siwe_nonce_attempts.sql').read_text())
 
 
 def main():
