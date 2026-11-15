@@ -60,3 +60,22 @@ async def test_refused_capability_attempts_are_committed_not_rolled_back():
     op={**operation(b64(b'x'*32)),'action':'receive','payload':{}}
     assert (await store.execute(SCOPE,**op))[0]==403
     assert engine.state['sessions'][SESSION]['attempts']==1
+
+@pytest.mark.asyncio
+async def test_cleanup_covers_removed_scopes_and_preserves_current_bucket():
+    removed=empty();removed['window']=0
+    live=empty();live['window']=1
+    class Rows:
+        def mappings(self):return self
+        def all(self):return [{'scope_id':'removed','state':removed},{'scope_id':'live','state':live}]
+    queries=[]
+    class DB:
+        async def execute(self,q,p=None):queries.append((str(q),p));return Rows()
+        async def scalar(self,q):return 100000
+    class SweepEngine:
+        @asynccontextmanager
+        async def begin(self):yield DB()
+    await PostgresPairingStore(SweepEngine()).cleanup_all()
+    assert 'FOR UPDATE SKIP LOCKED' in queries[0][0]
+    assert any(q.startswith('DELETE') and p['id']=='removed' for q,p in queries)
+    assert any(q.startswith('UPDATE') and p['id']=='live' for q,p in queries)
