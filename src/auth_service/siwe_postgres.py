@@ -11,10 +11,10 @@ from auth_service.siwe import SiweError
 from auth_service.siwe_nonces import SiweStoreUnavailable, TTL_SECONDS
 
 _PUT = text("""
-INSERT INTO auth_siwe_challenges(subject_hash, challenge, expires_at)
-VALUES (:subject, :challenge, clock_timestamp() + :ttl * interval '1 second')
+INSERT INTO auth_siwe_challenges(subject_hash, nonce, attempts, challenge, expires_at)
+VALUES (:subject, :nonce, 0, :challenge, clock_timestamp() + :ttl * interval '1 second')
 ON CONFLICT (subject_hash) DO UPDATE
-SET challenge=EXCLUDED.challenge, expires_at=EXCLUDED.expires_at
+SET nonce=EXCLUDED.nonce, attempts=0, challenge=EXCLUDED.challenge, expires_at=EXCLUDED.expires_at
 """).bindparams(bindparam('challenge', type_=JSONB))
 _CONSUME = text("""
 DELETE FROM auth_siwe_challenges WHERE subject_hash=:subject
@@ -43,8 +43,11 @@ class PostgresChallengeStore:
         try:
             async with asyncio.timeout(5):
                 async with self.engine.begin() as connection:
-                    await connection.execute(_CLEANUP)
-                    await connection.execute(_PUT, {'subject': self.key(subject), 'challenge': value, 'ttl': TTL_SECONDS})
+                    await self._lock(connection, self.key(subject))
+                    pending = await connection.scalar(text('SELECT count(*) FROM auth_wallet_commands WHERE subject_hash=:subject'), {'subject': self.key(subject)})
+                    if pending:
+                        raise SiweStoreUnavailable('Wallet binding is pending; retry later')
+                    await connection.execute(_PUT, {'subject': self.key(subject), 'nonce': value['nonce'], 'challenge': value, 'ttl': TTL_SECONDS})
         except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
             raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
 
@@ -70,3 +73,62 @@ class PostgresChallengeStore:
                     await connection.execute(text('DELETE FROM auth_siwe_challenges WHERE subject_hash=:subject'), {'subject': self.key(subject)})
         except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
             raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
+
+    async def cleanup(self) -> None:
+        try:
+            async with asyncio.timeout(5):
+                async with self.engine.begin() as connection:
+                    await connection.execute(_CLEANUP)
+        except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
+            raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
+
+    async def peek(self, subject: str) -> dict:
+        try:
+            async with asyncio.timeout(5):
+                async with self.engine.connect() as connection:
+                    row = (await connection.execute(text('''SELECT challenge FROM auth_siwe_challenges
+                        WHERE subject_hash=:subject AND expires_at>clock_timestamp() AND attempts<5'''),
+                        {'subject': self.key(subject)})).mappings().one_or_none()
+        except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
+            raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
+        if row is None:
+            raise SiweError('SIWE nonce is missing or expired; request a new nonce')
+        if not isinstance(row['challenge'], dict):
+            raise SiweStoreUnavailable('SIWE nonce storage returned invalid data')
+        return row['challenge']
+
+    async def failed(self, subject: str, nonce: str) -> None:
+        params = {'subject': self.key(subject), 'nonce': nonce}
+        try:
+            async with asyncio.timeout(5):
+                async with self.engine.begin() as db:
+                    await db.execute(text('''UPDATE auth_siwe_challenges SET attempts=attempts+1
+                        WHERE subject_hash=:subject AND challenge->>'nonce'=:nonce'''), params)
+                    await db.execute(text('''DELETE FROM auth_siwe_challenges
+                        WHERE subject_hash=:subject AND challenge->>'nonce'=:nonce AND attempts>=5'''), params)
+        except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
+            raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
+
+    async def enqueue(self, subject: str, nonce: str, payload: dict):
+        import uuid
+        command_id = uuid.uuid4()
+        params = {'subject': self.key(subject), 'nonce': nonce}
+        try:
+            async with asyncio.timeout(5):
+                async with self.engine.begin() as db:
+                    await self._lock(db, params['subject'])
+                    row = (await db.execute(text('''DELETE FROM auth_siwe_challenges
+                        WHERE subject_hash=:subject AND challenge->>'nonce'=:nonce
+                        AND expires_at>clock_timestamp() AND attempts<5 RETURNING subject_hash'''), params)).first()
+                    if row is None:
+                        raise SiweError('SIWE nonce is missing or expired; request a new nonce')
+                    await db.execute(text('''INSERT INTO auth_wallet_commands(id,subject_hash,payload)
+                        VALUES(:id,:subject,CAST(:payload AS jsonb))'''),
+                        {'id': command_id, 'subject': params['subject'], 'payload': json.dumps(payload)})
+        except (SQLAlchemyError, PostgresError, OSError, TimeoutError) as exc:
+            raise SiweStoreUnavailable('SIWE nonce storage unavailable') from exc
+        return command_id
+
+    @staticmethod
+    async def _lock(db, subject):
+        await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:subject,0))'), {'subject': subject})

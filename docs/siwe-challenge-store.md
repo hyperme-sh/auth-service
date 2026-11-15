@@ -1,60 +1,49 @@
-# SIWE challenge store decision
+# SIWE PostgreSQL storage and wallet binding
 
-Recommendation: use PostgreSQL for SIWE after the additive owner migration and
-registered nightly contracts are available. Auth already operates an owner
-database, and this workload needs a keyed, ten-minute, consume-once value rather
-than a separate cache service. No load measurement or capacity claim was made.
-Redis remains the default adapter for patch compatibility; deployments opt in
-with `AUTH_SIWE_STORE=postgres` and `AUTH_SIWE_DATABASE_URL` (or `DATABASE_URL`).
-There is no fallback between stores. Missing configuration leaves SIWE unavailable;
-store failures return 503 without binding an address. Other login routes remain
-available. An unknown adapter refuses startup.
+Auth owns one outstanding, subject-hashed challenge per person. The UNLOGGED
+table expires challenges after 600 seconds using database time. A bounded cleanup
+task removes at most 1,000 expired rows per pass with `SKIP LOCKED` every minute.
+Crash or failover may empty this table; callers then request a new nonce.
 
-| Concern | Redis | PostgreSQL |
-|---|---|---|
-| Operation | SET with 600-second TTL replaces the subject value; GETDEL consumes once | UPSERT replaces the subject row; DELETE RETURNING consumes once in its own committed transaction |
-| Expiry | Redis enforces TTL | Database clock enforces expires_at at consume time; issuance removes at most 1000 expired rows per call |
-| Restart/failure | Current TEST disables AOF and snapshots; losing challenges requires a new nonce | UNLOGGED owner table is non-durable; crash/failover loss requires a new nonce; application restarts may retain unexpired rows |
-| Operations | Separate process, patching, monitoring and connection configuration; this short-lived use needs no backup | Reuses the owner database and operational controls; additive table/index and bounded cleanup |
-| Complexity | Small Redis adapter and native TTL | Small SQL adapter, expiry predicate and cleanup; committed deletion stays separate from wallet binding |
+Verification, including the configured Base RPC, occurs outside the database
+transaction. A failed proof increments the matching nonce's attempts; the fifth
+failure removes it. Replacement challenges are not affected by an older attempt.
+After verification, one transaction deletes the matching unexpired challenge and
+inserts a durable binding command. Duplicate consumers have one winner. A failed
+transaction restores the challenge and leaves no command.
 
-Consumed challenges are not restored when signature verification or wallet binding
-fails. Subjects are hashed before becoming keys in either adapter. Both adapters
-expose put, consume and explicit expire operations. The table must stay UNLOGGED;
-the migration refuses an existing durable table instead of silently changing its
-semantics. Normal deployments run the existing image-local migration entry point,
-which preserves the recorded baseline and applies the additive table idempotently.
-Rollback can select Redis again; in-flight challenges must be reissued rather than
-copied or replayed between stores.
+User owns wallet bindings. Auth delivers its command ID and verified subject,
+email and checksum address to the private owner endpoint. User commits the
+binding and ID decision together. Auth retries uncertain outcomes with that ID;
+it never restores a consumed nonce after an uncertain remote call. A pending
+command prevents another binding for that subject from overtaking it. Owner
+rejection clears the pending command and requires a fresh nonce. Successful
+delivery removes the pending personal payload. Signatures are never queued.
+The queue is logged and durable; it is separate from expiring challenges.
 
-## Checked-in TEST consumer inventory
+## Rollout
 
-Inspected Infra `terraform/panopticon-test/owner-compose/compose.yaml`: the canonical
-owner stack configures Redis only for Auth SIWE and disables AOF/snapshot
-persistence. This is short-lived, expiring and loss-tolerant. No other owner in that
-Compose file receives a Redis URL. This is configuration inspection, not a claim
-about installed/shared TEST state.
+Install User's additive command table and compatible API first. Install Auth's
+additive migrations, then update Auth. Nullable nonce and defaulted attempt
+columns preserve older PostgreSQL writers. Older Redis-backed instances cannot
+read PostgreSQL challenges; callers may need a fresh challenge during transition.
+Never copy or replay challenges across stores. Drain pending binding commands
+before rolling Auth back to a build without command delivery.
 
-The retained `owner-compose/operator-smoke/legacy-deployment` files still mention
-Redis/Celery across archived services and a payout Redis setting. They are legacy
-operator-smoke inputs, not the canonical owner stack. They must not be used to
-justify durable payment/workflow state in Redis. The metrics collector contains a
-Redis exporter endpoint for monitoring; it does not store business data. Removing
-legacy service definitions belongs to their existing migration queue, not an Auth
-runtime switch.
+The service accepts `AUTH_SIWE_DATABASE_URL`, `DATABASE_URL`, or its file-based
+form `DATABASE_URL_FILE`. Redis configuration and the old adapter switch are
+ignored with fixed variable-name warnings. There is no local fallback. Storage
+or delivery failure returns 503. The pending command retries in the background;
+the caller can check `/auth/siwe/me` for the resulting binding.
 
-## Validation and references
+## Checks
 
-A shared scheduled contract runs against actual Redis and PostgreSQL adapters:
-replacement, subject isolation, consume-once, concurrent consumption, 600-second
-expiry, explicit invalidation, store failures and signature-gated checksum writes.
-Infra owns disposable setup/readiness/reset/teardown. PR tests use offline adapter
-and HTTP failure contracts; no load test or manual integration is performed.
+PR unit/contract coverage checks nonce uniqueness, expiry, concurrent enqueue,
+rollback, attempt limits, empty storage, rejected delivery and response-loss
+retries. The scheduled Infra matrix uses PostgreSQL only. Load measurements are
+not yet available; no throughput or p95 claim is made by this change. Infra owns
+the scheduled load case and records results when the batch runs.
 
-The SQL design uses PostgreSQL's documented
-[DELETE RETURNING](https://www.postgresql.org/docs/current/sql-delete.html) and
-[UNLOGGED table](https://www.postgresql.org/docs/current/sql-createtable.html)
-semantics. Redis's [GETDEL](https://redis.io/docs/latest/commands/getdel/) is the
-corresponding consume operation. The recommendation is an engineering inference
-from those contracts and the existing owner database, not a measured performance
-comparison.
+Infra removes the Auth Redis configuration after the compatible owner build.
+Legacy workloads and exporter removal remain separately inventoried; source
+configuration alone does not establish that every deployed Redis is retired.

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.exc import OperationalError
 from auth_service.siwe import SiweError
-from auth_service.siwe_nonces import nonce_runtime, SiweStoreUnavailable, SiweNonceStore
+from auth_service.siwe_nonces import nonce_runtime, SiweStoreUnavailable
 from auth_service.siwe_postgres import PostgresChallengeStore
 
 
@@ -18,6 +18,11 @@ class Engine:
     async def begin(self):
         yield self
         self.committed = True
+    @asynccontextmanager
+    async def connect(self):
+        yield self
+    async def scalar(self, *args, **kwargs):
+        return 0
     async def execute(self, statement, params=None):
         if self.fail: raise OperationalError('private statement', {}, RuntimeError('private password'))
         self.calls.append((str(statement), params))
@@ -68,23 +73,9 @@ async def test_missing_selected_database_does_not_fallback_to_redis(monkeypatch)
     monkeypatch.setenv('AUTH_SIWE_STORE', 'postgres')
     monkeypatch.delenv('AUTH_SIWE_DATABASE_URL', raising=False)
     monkeypatch.delenv('DATABASE_URL', raising=False)
+    monkeypatch.delenv('DATABASE_URL_FILE', raising=False)
     monkeypatch.setenv('REDIS_URL', 'redis://must-not-be-used/0')
     async with nonce_runtime() as store: assert store is None
-
-
-@pytest.mark.asyncio
-async def test_unknown_backend_refuses_startup(monkeypatch):
-    monkeypatch.setenv('AUTH_SIWE_STORE', 'unsupported')
-    with pytest.raises(ValueError):
-        async with nonce_runtime(): pass
-
-
-@pytest.mark.asyncio
-async def test_redis_expire_uses_the_same_subject_key():
-    client = AsyncMock()
-    store = SiweNonceStore(client)
-    await store.expire('person')
-    client.delete.assert_awaited_once_with(store.key('person'))
 
 
 @pytest.mark.asyncio
@@ -115,3 +106,37 @@ async def test_http_database_failure_returns_503_without_binding(path, monkeypat
     assert response.status_code == 503, response.text
     assert 'private' not in response.text
     save.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_database_url_file_and_legacy_values_are_not_logged(monkeypatch, tmp_path, caplog):
+    import sqlalchemy.ext.asyncio
+    for name in ('AUTH_SIWE_DATABASE_URL','DATABASE_URL'):
+        monkeypatch.delenv(name, raising=False)
+    secret = tmp_path/'database-url'
+    secret.write_text('postgresql://user:secret@db/owner\n')
+    monkeypatch.setenv('DATABASE_URL_FILE', str(secret))
+    monkeypatch.setenv('AUTH_SIWE_REDIS_URL', 'redis://private-secret@old')
+    engine = Engine()
+    monkeypatch.setattr(sqlalchemy.ext.asyncio, 'create_async_engine', lambda url, **kw: engine)
+    async with nonce_runtime() as store:
+        assert isinstance(store, PostgresChallengeStore)
+    assert 'AUTH_SIWE_REDIS_URL' in caplog.text
+    assert 'private-secret' not in caplog.text
+    engine.dispose.assert_awaited_once()
+
+
+def test_no_redis_import_or_configuration_value_reads():
+    import ast
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    for source in root.joinpath('src/auth_service').glob('*.py'):
+        tree = ast.parse(source.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert all(not alias.name.startswith('redis') for alias in node.names)
+            if isinstance(node, ast.ImportFrom):
+                assert not (node.module or '').startswith('redis')
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr=='get':
+                assert not any(isinstance(arg,ast.Constant) and arg.value in ('REDIS_URL','AUTH_SIWE_REDIS_URL') for arg in node.args)
+    for name in ('pyproject.toml','core/auth-service/pyproject.toml'):
+        assert '"redis>=' not in root.joinpath(name).read_text()

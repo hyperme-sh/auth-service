@@ -117,18 +117,38 @@ async def base_wallet_verifier(monkeypatch):
 
 
 @pytest.fixture(scope="session")
-def siwe_redis_url():
-    from testcontainers.redis import RedisContainer
-
-    with RedisContainer("redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065") as container:
-        yield f"redis://{container.get_container_host_ip()}:{container.get_exposed_port(6379)}/0"
+def siwe_postgres_url():
+    from testcontainers.postgres import PostgresContainer
+    with PostgresContainer("postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416", driver="psycopg") as container:
+        yield container.get_connection_url().replace('+psycopg', '+asyncpg')
 
 
 @pytest.fixture
-async def nonce_store(siwe_redis_url):
-    from redis.asyncio import Redis
-    from auth_service.siwe_nonces import SiweNonceStore
-
-    async with Redis.from_url(siwe_redis_url, socket_timeout=5) as redis:
-        await redis.flushdb()
-        yield SiweNonceStore(redis)
+async def nonce_store(siwe_postgres_url, monkeypatch):
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy import text
+    from pathlib import Path
+    from auth_service.siwe_postgres import PostgresChallengeStore
+    from auth_service import wallet_commands, wallet_bind
+    engine = create_async_engine(siwe_postgres_url)
+    async with engine.begin() as db:
+        for name in ('0002_siwe_challenges.sql', '0004_siwe_nonce_attempts.sql'):
+            ddl = Path(__file__).parent.joinpath('fixtures/siwe', name).read_text()
+            # Wheel tests carry the test fixture DDL below.
+            for statement in ddl.split(';'):
+                if statement.strip(): await db.execute(text(statement))
+        await db.execute(text('TRUNCATE auth_siwe_challenges,auth_wallet_commands'))
+    # Wallet verifier tests isolate the HTTP delivery boundary. Dedicated command
+    # tests below exercise production delivery and uncertain response handling.
+    async def deliver(engine, command_id):
+        async with engine.begin() as db:
+            payload = await db.scalar(text('SELECT payload FROM auth_wallet_commands WHERE id=:id'), {'id':command_id})
+            result = await wallet_bind.upsert_wallet_binding(None, keycloak_sub=payload['subject'],
+                email=payload['email'], wallet_address=payload['wallet_address'])
+            await db.execute(text('DELETE FROM auth_wallet_commands WHERE id=:id'), {'id':command_id})
+            return result
+    monkeypatch.setattr(wallet_commands, 'deliver', deliver)
+    try:
+        yield PostgresChallengeStore(engine)
+    finally:
+        await engine.dispose()
