@@ -63,6 +63,16 @@ async def reconcile(config):
 async def resolve(config, claims):
     # This function accepts claims only from the existing signature-verifying
     # dependency. Check the immutable tuple before contacting the owner.
+    from controlplane_identity.nightly import current_binding, require, require_original_run
+    require_original_run(claims)
+    binding = current_binding()
+    if binding is not None:
+        scope = binding['scope']
+        require(scope['suite'] == 'flags-s3rch-browser'
+                and config['owner']['tenant_id'] == scope['tenant']
+                and config['owner']['broker']['issuer'] == scope['issuer']
+                and config['owner']['broker']['audience'] in scope['clients']
+                and config['binding']['sea_public_key'] in scope['identities']['sea'])
     verify_claims(config,claims)
     person = checked_person(config,await owner('status',config))
     if not person.get('broker_subject'): raise ValueError('Startup broker binding is incomplete')
