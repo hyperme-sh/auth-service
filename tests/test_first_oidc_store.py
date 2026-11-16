@@ -23,9 +23,8 @@ async def test_atomic_exact_retry_restart_cancel_and_config_rollback(siwe_postgr
     monkeypatch.setattr(core,'issue',counted)
     async def issue(current=lambda:None):return await FirstOidcStore(engine).issue(r,proof,b,j,k,signer,current)
     try:
-        from importlib.resources import files
         async with engine.begin() as db:
-            for statement in files('auth_service').joinpath('migrations/0008_first_oidc_link.sql').read_text().split(';'):
+            for statement in Path(__file__).with_name('fixtures').joinpath('first-oidc/0008_first_oidc_link.sql').read_text().split(';'):
                 if statement.strip():await db.execute(text(statement))
             await db.execute(text('TRUNCATE auth_first_oidc_link,auth_first_oidc_cancel'))
         count=0
