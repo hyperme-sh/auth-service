@@ -1286,5 +1286,21 @@
     "start": 133,
     "end": 133,
     "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential"
+  },
+  {
+    "file": "26b271acb222d5b20a4a3be6993eeddaa9b2ab2b.txt",
+    "sha256": "a308dcf9cca7ad5dea90d5a48d06f864d0a4e1350cf6506005b0017f4c2e3e8a",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential"
+  },
+  {
+    "file": "f9a155f6cb672cac99e26bec5aa9efdcfc3d638d.txt",
+    "sha256": "3cc42ddf46ec7b3200244b47c439cd1f95dab4d6e065a2e66dc329fbcaa9a4c0",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential"
   }
 ]

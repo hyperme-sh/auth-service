@@ -124,6 +124,9 @@ def create_app(
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")
+    from auth_service.first_oidc_routes import router as first_oidc_router
+    app.state.first_oidc_slots = asyncio.Semaphore(2)
+    app.include_router(first_oidc_router)
     from auth_service.linked_oidc_routes import router as linked_oidc_router
     app.state.linked_oidc_slots = asyncio.Semaphore(4)
     app.include_router(linked_oidc_router)

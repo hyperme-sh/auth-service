@@ -27,6 +27,7 @@ class NightlyMiddleware:
             # No unrelated enrollment, SIWE or host mutation is admitted by a browser grant.
             state.require((scope['method'], scope['path']) in {('GET', '/auth/me'), ('GET', '/auth/startup/identity'), ('POST', '/auth/switch-tenant'), ('POST', '/auth/scoped-session')}
                           or scope['path'].startswith('/auth/sea-device-link/v1/sessions/')
+                          or (scope['method']=='POST' and scope['path'] in {f'/auth/first-oidc-link/v1/{action}' for action in ('issue','cancel')})
                           or scope['path'] in {f'/auth/linked-oidc/v1/{action}' for action in ('start','exchange','result','cancel')})
             store = app.state.nightly_store; state.require(store is not None)
             binding = await store.command(dict(version=1, owner='auth', action='admit', grant=grants[0].decode('ascii')))
