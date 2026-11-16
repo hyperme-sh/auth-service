@@ -45,6 +45,12 @@ async def test_startup_native_read_is_bound_before_user_lookup(monkeypatch,refus
             'organizations':[{'slug':s,'id':o['organization_id'],'tenant_id':o['tenant_id'],'roles':o['roles']}
                              for s,o in sorted(config['binding']['organizations'].items())]}
     peer=respx.post('https://owner.example.invalid/api/v1/internal/startup/status').mock(return_value=httpx.Response(200,json=person))
+    native_errors=[];native_resolve=startup_identity.resolve
+    async def observed_resolve(*args):
+        try:return await native_resolve(*args)
+        except Exception as error:
+            native_errors.append(repr(error));raise
+    monkeypatch.setattr(startup_identity,'resolve',observed_resolve)
     app=FastAPI();app.include_router(router,prefix='/auth');app.add_middleware(NightlyMiddleware)
     app.state.nightly_config={'scopes':{scope['suite']:scope}}
     store=app.state.nightly_store=PostgresNightlyStore(Engine(),app.state.nightly_config['scopes'])
@@ -55,7 +61,7 @@ async def test_startup_native_read_is_bound_before_user_lookup(monkeypatch,refus
         headers={'X-Nightly-Run-Grant':registration['grant']}
         response=await client.get('/auth/startup/identity',headers=headers)
         row=store.engine.rows[('auth',registration['run'])]
-        assert response.status_code==(409 if refusal else 200),response.text
+        assert response.status_code==(409 if refusal else 200),(response.text,native_errors,peer.call_count)
         assert list(row['operations'].values())==(['pending'] if refusal else ['done'])
         assert peer.call_count==(0 if refusal else 1)
         if not refusal:
