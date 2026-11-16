@@ -1278,5 +1278,13 @@
     "start": 133,
     "end": 133,
     "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "21e2c57086eadff6557223e9fcfcbe665ffc8cc0.txt",
+    "sha256": "9efbbdc2f9c3f052d8d9f00aabeb029541e8104065153b57ac7195b17f7043e1",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential"
   }
 ]
