@@ -17,7 +17,7 @@ from test_nightly_store import Engine
 
 def setup():
     app=FastAPI();app.include_router(router);app.add_middleware(NightlyMiddleware)
-    config=dict(version=1,ownerKeys={owner:hex(index+10)[2:]*64 for index,owner in enumerate(sorted(state.OWNERS))},
+    config=dict(version=1,ownerKeys={owner:f'{index+10:064x}' for index,owner in enumerate(sorted(state.OWNERS))},
                 scopes={SCOPE['suite']:SCOPE})
     app.state.nightly_config=config;app.state.nightly_store=PostgresNightlyStore(Engine(),config['scopes'])
     calls=[]
@@ -101,3 +101,30 @@ async def test_closed_native_context_is_never_reused(monkeypatch):
     try:
         with pytest.raises(state.Refused):await verify_claims({'sub':SCOPE['subject'],'nightly_run':{'run':REGISTER['run'],'generation':REGISTER['generation']}})
     finally:admission.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_native_tenant_token_preserves_original_admission(monkeypatch):
+    import uuid
+    from jwt import InvalidTokenError
+    from controlplane_identity.nightly import admitted_run
+    from controlplane_identity.security.tenant_session_jwt import mint_tenant_session_jwt, try_decode_tenant_session_jwt
+    app,config,_=setup()
+    claims={'sub':SCOPE['subject'],'nightly_run':{k:REGISTER[k] for k in ('run','generation')}}
+    @app.post('/auth/switch-tenant')
+    async def mint():
+        # Substitute membership and provider only; native signing and verification remain real.
+        await verify_claims(claims)
+        token=mint_tenant_session_jwt(claims=claims,tenant_id=uuid.UUID(SCOPE['tenant']))
+        assert try_decode_tenant_session_jwt(token)['nightly_run']==claims['nightly_run']
+        with pytest.raises(InvalidTokenError):
+            mint_tenant_session_jwt(claims=claims,tenant_id=uuid.uuid4())
+        return {'access_token':token}
+    await app.state.nightly_store.command(REGISTER)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as client:
+        response=await client.post('/auth/switch-tenant',headers={'X-Nightly-Run-Grant':REGISTER['grant']})
+    assert response.status_code==200,response.text
+    token=response.json()['access_token']
+    assert try_decode_tenant_session_jwt(token) is None
+    binding=dict(version=1,run='124-1-portal-device-transfer',generation=REGISTER['generation'],scope=SCOPE,operation=str(uuid.uuid4()))
+    with admitted_run(binding):assert try_decode_tenant_session_jwt(token) is None

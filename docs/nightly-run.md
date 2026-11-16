@@ -36,3 +36,10 @@ origins and identities.sea. Only private owner keys can submit commands.
 CI covers actual PostgreSQL commit locks, rollback and reopened adapters as well
 as HTTP and native middleware units. HTTP tests substitute the issuer/transport;
 they are not deployed TEST qualification. Activation remains with Infra #1635.
+
+The registry accepts optional independent ACL, Edge and User owner keys in addition
+ to its four browser owners. An absent owner key cannot authenticate a command.
+Auth enters the shared identity admission before native dispatch. Tenant switching
+checks the exact admitted tenant before any membership or provisioning operation;
+the shared signer preserves the original run in derived tokens. Other consumers
+must provide their own durable admission before verifying those tokens.

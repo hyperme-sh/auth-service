@@ -43,6 +43,8 @@ def create_app(
             from auth_service.nightly_store import PostgresNightlyStore
             app.state.nightly_config = configuration()
             if app.state.nightly_config is not None:
+                from controlplane_identity.nightly import configure_subjects
+                configure_subjects([s['subject'] for s in app.state.nightly_config['scopes'].values()])
                 app.state.nightly_store = PostgresNightlyStore(engine, app.state.nightly_config['scopes'])
 
         try:

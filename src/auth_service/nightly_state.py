@@ -4,7 +4,8 @@ import hashlib
 import re
 import uuid
 
-OWNERS = {'auth', 'portal', 's3rch', 'hypermesh'}
+BASE_OWNERS = {'auth', 'portal', 's3rch', 'hypermesh'}
+OWNERS = BASE_OWNERS | {'acl', 'edge', 'user'}
 SUITES = {'flags-hypermesh-browser', 'flags-portal-browser', 'flags-s3rch-browser',
           'portal-device-transfer', 's3rch-device-transfer'}
 HEX = re.compile(r'[a-f0-9]{64}')

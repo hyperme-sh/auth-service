@@ -253,6 +253,10 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
+    from controlplane_identity.nightly import current_binding, require
+    binding = current_binding()
+    if binding is not None:
+        require(str(body.tenant_id) == binding['scope']['tenant'])
     if (__import__("os").environ.get("AUTH_SCOPE_GENERATION") or
         __import__("os").environ.get("STARTUP_IDENTITY_ENABLED") == "1"):
         raise HTTPException(403,"Use the explicit scoped-session endpoint",headers={"Cache-Control":"no-store"})

@@ -19,9 +19,9 @@ def configuration():
         value = json.loads(raw)
         state.fields(value, 'version ownerKeys scopes')
         state.require(type(value['version']) is int and value['version'] == 1)
-        state.require(type(value['ownerKeys']) is dict and set(value['ownerKeys']) == state.OWNERS)
+        state.require(type(value['ownerKeys']) is dict and state.BASE_OWNERS <= set(value['ownerKeys']) <= state.OWNERS)
         state.require(all(isinstance(k, str) and state.HEX.fullmatch(k) for k in value['ownerKeys'].values()))
-        state.require(len(set(value['ownerKeys'].values())) == len(state.OWNERS))
+        state.require(len(set(value['ownerKeys'].values())) == len(value['ownerKeys']))
         state.require(type(value['scopes']) is dict and 0 < len(value['scopes']) <= 5)
         for suite, scope in value['scopes'].items():
             state.scope(scope); state.require(scope['suite'] == suite)
@@ -41,6 +41,10 @@ def authenticate(config, raw, signature):
 
 async def verify_claims(claims):
     """Called only after cryptographic token validation; never decode-only identity."""
+    from controlplane_identity.nightly import current_binding, require_original_run
+    if current_binding() is not None:
+        require_original_run(claims)
+        return claims
     config = configuration()
     if config is None:
         state.require('nightly_run' not in claims)

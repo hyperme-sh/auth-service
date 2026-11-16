@@ -2,6 +2,7 @@
 import json
 from auth_service import nightly_state as state
 from auth_service.nightly_runtime import admission
+from controlplane_identity.nightly import admitted_run
 
 
 class NightlyMiddleware:
@@ -24,11 +25,13 @@ class NightlyMiddleware:
         try:
             state.require(len(grants) == 1 and scope['path'].startswith('/auth/'))
             # No unrelated enrollment, SIWE or host mutation is admitted by a browser grant.
-            state.require(scope['path'] == '/auth/me' or scope['path'].startswith('/auth/sea-device-link/v1/sessions/'))
+            state.require((scope['method'], scope['path']) in {('GET', '/auth/me'), ('POST', '/auth/switch-tenant')}
+                          or scope['path'].startswith('/auth/sea-device-link/v1/sessions/'))
             store = app.state.nightly_store; state.require(store is not None)
             binding = await store.command(dict(version=1, owner='auth', action='admit', grant=grants[0].decode('ascii')))
             token = admission.set(binding)
-            await self.app(scope, receive, buffer)
+            with admitted_run(binding):
+                await self.app(scope, receive, buffer)
             starts = [m for m in messages if m['type'] == 'http.response.start']
             state.require(len(starts) == 1 and 200 <= starts[0]['status'] < 400
                           and messages[-1]['type'] == 'http.response.body' and not messages[-1].get('more_body', False))
