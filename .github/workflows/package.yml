@@ -28,14 +28,16 @@ jobs:
         run: >-
           bash scripts/anonymous-command.sh env
           UV_PROJECT_ENVIRONMENT="$QUALIFICATION_VENV"
+          UV_PYTHON_INSTALL_DIR="$QUALIFICATION_VENV-python"
           RELEASE_ARTIFACT_DIR="$RELEASE_ARTIFACT_DIR"
           TEST_EVIDENCE_DIR="$TEST_EVIDENCE_DIR" bash scripts/check-package.sh
       - name: Qualify standalone container with disposable issuer and database
         run: >-
           bash scripts/anonymous-command.sh env
           UV_PROJECT_ENVIRONMENT="$QUALIFICATION_VENV"
+          UV_PYTHON_INSTALL_DIR="$QUALIFICATION_VENV-python"
           RELEASE_ARTIFACT_DIR="$RELEASE_ARTIFACT_DIR"
           uv run --no-sync python scripts/check-container.py --evidence "$TEST_EVIDENCE_DIR/container.json"
       - name: Remove job-local qualification output
         if: always()
-        run: rm -rf -- "$QUALIFICATION_VENV" "$RELEASE_ARTIFACT_DIR" "$TEST_EVIDENCE_DIR"
+        run: rm -rf -- "$QUALIFICATION_VENV" "$QUALIFICATION_VENV-python" "$RELEASE_ARTIFACT_DIR" "$TEST_EVIDENCE_DIR"
