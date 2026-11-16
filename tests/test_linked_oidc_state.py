@@ -2,12 +2,17 @@
 import copy
 import unittest
 from urllib.parse import parse_qs, urlsplit
-import importlib.util
-from pathlib import Path
-package = importlib.util.find_spec('auth_service')
-spec = importlib.util.spec_from_file_location('linked_oidc_state_units', Path(package.origin).parent / 'linked_oidc_state.py')
-s = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(s)
+try:
+    from auth_service import linked_oidc_state as s
+except ModuleNotFoundError:
+    # A minimal local interpreter can run this pure module without installing
+    # the service. CI imports the real package and measures its coverage.
+    import importlib.util
+    from pathlib import Path
+    package = importlib.util.find_spec('auth_service')
+    spec = importlib.util.spec_from_file_location('linked_oidc_state_units', Path(package.origin).parent / 'linked_oidc_state.py')
+    s = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(s)
 
 class LinkedProofTests(unittest.TestCase):
     def setUp(self):
