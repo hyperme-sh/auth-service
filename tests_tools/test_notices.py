@@ -53,3 +53,20 @@ def test_supplement_is_bound_to_version_and_bytes(tmp_path, change):
     else:
         with pytest.raises(ValueError):
             notices.prepare(tmp_path / 'out', root.parent, [dist])
+
+
+@pytest.mark.parametrize('changed', [False, True, 'extra'])
+def test_later_license_source_requires_matching_runtime(tmp_path, changed):
+    root = tmp_path / 'supplements/example'; root.mkdir(parents=True)
+    (root / 'LICENSE').write_bytes(b'owner terms')
+    (root / 'source.json').write_text(json.dumps({'distribution': 'example', 'version': '1.0',
+        'files': {'LICENSE': hashlib.sha256(b'owner terms').hexdigest()},
+        'runtime_sha256': {'example/__init__.py': hashlib.sha256(b'licensed code').hexdigest()}}))
+    dist = distribution(tmp_path / 'installed', {'example/__init__.py': b'changed' if changed is True else b'licensed code'})
+    if changed == 'extra':
+        dist.files.append('example/extra.py')
+    if changed:
+        with pytest.raises(ValueError, match='licensed runtime'):
+            notices.prepare(tmp_path / 'out', root.parent, [dist])
+    else:
+        assert notices.prepare(tmp_path / 'out', root.parent, [dist])[0]['texts']

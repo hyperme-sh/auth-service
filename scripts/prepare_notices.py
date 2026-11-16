@@ -49,6 +49,21 @@ def prepare(output, supplements, distributions=None):
             source, record = supplements_by_name[key]
             if record['version'] != dist.version:
                 raise ValueError('Notice supplement version mismatch: ' + name)
+            runtime = record.get('runtime_sha256', {})
+            if runtime:
+                roots = {PurePosixPath(path).parts[0] for path in runtime}
+                installed = {str(path) for path in dist.files or []
+                             if PurePosixPath(str(path)).parts[0] in roots
+                             and '__pycache__' not in PurePosixPath(str(path)).parts
+                             and not str(path).endswith('.pyc')}
+                if installed != set(runtime):
+                    raise ValueError('Supplemental licensed runtime inventory changed: ' + name)
+            for filename, digest in runtime.items():
+                path = PurePosixPath(filename)
+                if path.is_absolute() or '..' in path.parts:
+                    raise ValueError('Unsafe supplemental runtime path')
+                if hashlib.sha256(Path(dist.locate_file(filename)).read_bytes()).hexdigest() != digest:
+                    raise ValueError('Supplemental licensed runtime changed: ' + name)
             for filename, digest in record['files'].items():
                 if Path(filename).name != filename:
                     raise ValueError('Unsafe supplement filename')
