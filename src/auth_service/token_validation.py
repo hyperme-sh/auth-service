@@ -21,6 +21,14 @@ from auth_service.keycloak_oidc import introspect_access_token
 
 
 async def validate_access_token(access_token: str) -> dict[str, Any]:
+    from auth_service.nightly_runtime import verify_claims
+    try:
+        return await verify_claims(await _validate_access_token(access_token))
+    except Exception as exc:
+        raise UnauthorizedException('Invalid or expired access token') from exc
+
+
+async def _validate_access_token(access_token: str) -> dict[str, Any]:
     ex = await asyncio.to_thread(try_decode_api_key_session_jwt, access_token)
     if ex is not None:
         return ex

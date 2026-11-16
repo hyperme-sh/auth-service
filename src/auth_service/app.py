@@ -39,6 +39,13 @@ def create_app(
             maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
             configure_session_maker(maker)
             app.state.async_engine = engine
+            from auth_service.nightly_runtime import configuration
+            from auth_service.nightly_store import PostgresNightlyStore
+            app.state.nightly_config = configuration()
+            if app.state.nightly_config is not None:
+                from controlplane_identity.nightly import configure_subjects
+                configure_subjects([s['subject'] for s in app.state.nightly_config['scopes'].values()])
+                app.state.nightly_store = PostgresNightlyStore(engine, app.state.nightly_config['scopes'])
 
         try:
             yield
@@ -108,6 +115,12 @@ def create_app(
 
     if enable_db_middleware:
         app.add_middleware(AuthTransactionMiddleware)
+    from auth_service.nightly_middleware import NightlyMiddleware
+    from auth_service.nightly_routes import router as nightly_router
+    app.state.nightly_config = None
+    app.state.nightly_store = None
+    app.add_middleware(NightlyMiddleware)
+    app.include_router(nightly_router)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")

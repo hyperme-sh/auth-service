@@ -25,6 +25,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from auth_service.keycloak_oidc import introspect_access_token
+from auth_service.nightly_runtime import verify_claims
 from auth_service.session_membership import authorize_session_member, MemberAuthorityUnavailable
 
 router = APIRouter()
@@ -166,7 +167,7 @@ async def connect_session_end_context(request: Request):
     headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
     try:
         original = credential(request.headers.get("x-auth-session-token"))
-        origin = await get_keycloak_jwt_validator().validate(original)
+        origin = await verify_claims(await get_keycloak_jwt_validator().validate(original))
         client_id, client_secret = confidential_introspection_credentials()
         async with httpx.AsyncClient(
             timeout=5, trust_env=False, follow_redirects=False
@@ -229,11 +230,12 @@ async def session_context(request: Request, *, verification=False):
         tenant = await asyncio.to_thread(try_decode_tenant_session_jwt, credential(authorization[7:]))
         if not tenant:
             raise SessionDenied()
+        await verify_claims(tenant)
         tid = uuid.UUID(tenant["tenant_id"])
         if uuid.UUID(request.headers.get("x-tenant-id", "")) != tid:
             raise SessionDenied()
         original = credential(request.headers.get("x-auth-session-token"))
-        origin = await get_keycloak_jwt_validator().validate(original)
+        origin = await verify_claims(await get_keycloak_jwt_validator().validate(original))
         client_id, client_secret = confidential_introspection_credentials()
         async with httpx.AsyncClient(
             timeout=5, trust_env=False, follow_redirects=False

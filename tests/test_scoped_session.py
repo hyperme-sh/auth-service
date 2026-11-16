@@ -132,3 +132,23 @@ async def test_startup_mode_refuses_older_unscoped_context(monkeypatch,verificat
     response=await context.session_context(request,verification=verification)
     assert response.status_code==403
     fallback.assert_not_called()
+
+
+@pytest.mark.parametrize('foreign',['tenant','organization'])
+async def test_admitted_scoped_session_refuses_foreign_selection_before_owner(app,http_client,scoped_owner,monkeypatch,foreign):
+    from controlplane_identity.nightly import admitted_run
+    from test_nightly_state import REGISTER, SCOPE
+    SCOPE = {**SCOPE, 'organization': str(uuid.uuid4())}
+    g=scoped_owner
+    g.update(subject=SCOPE['subject'],tenant_id=SCOPE['tenant'],organization_id=SCOPE['organization'])
+    async def claims():return {'sub':g['subject'],'azp':'controlplane-frontend','nightly_run':{k:REGISTER[k] for k in ('run','generation')}}
+    app.dependency_overrides[deps.get_access_token_claims]=claims
+    async def unexpected(*args):raise AssertionError('Foreign selection reached membership owner')
+    monkeypatch.setattr('auth_service.scoped_session.current_scope',unexpected)
+    body={'tenant_id':g['tenant_id'],'organization_id':g['organization_id']}
+    body[foreign+'_id']=str(uuid.uuid4())
+    try:
+        with admitted_run(dict(version=1,run=REGISTER['run'],generation=REGISTER['generation'],scope=SCOPE,operation=str(uuid.uuid4()))):
+            response=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json=body)
+        assert response.status_code==403
+    finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)

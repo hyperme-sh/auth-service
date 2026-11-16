@@ -157,6 +157,11 @@ async def auth_callback(code: str, state: str | None = None) -> TokenBundleRespo
         )
 
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
     idp = identity_provider_from_claims(payload)
@@ -210,6 +215,11 @@ async def auth_refresh(body: RefreshTokenRequest) -> TokenBundleResponse:
             detail="Token response missing access_token",
         )
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
     await outbox.publish_auth_event(
@@ -253,6 +263,10 @@ async def auth_switch_tenant(
     user: CurrentAuthUser,
     claims: Annotated[dict, Depends(get_access_token_claims)],
 ) -> TokenBundleResponse:
+    from controlplane_identity.nightly import current_binding, require
+    binding = current_binding()
+    if binding is not None:
+        require(str(body.tenant_id) == binding['scope']['tenant'])
     if (__import__("os").environ.get("AUTH_SCOPE_GENERATION") or
         __import__("os").environ.get("STARTUP_IDENTITY_ENABLED") == "1"):
         raise HTTPException(403,"Use the explicit scoped-session endpoint",headers={"Cache-Control":"no-store"})
@@ -308,6 +322,11 @@ async def auth_switch_tenant(
         ),
     )
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or user.sub or "unknown"
     await outbox.publish_auth_event(
         token=access,

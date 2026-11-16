@@ -81,6 +81,14 @@ async def execute_pairing(session, action, request):
         body = json.loads(data.decode('utf8'), object_pairs_hook=unique, parse_constant=bad_constant)
         fields(body, 'scope payload'); current_scope = scope(body['scope'])
         if current_scope not in request.app.state.pairing_scopes: return response(403, {'error':'pairing-refused'})
+        from auth_service.nightly_runtime import admission
+        config = getattr(request.app.state, 'nightly_config', None)
+        if config is not None and any(s['tenant'] == current_scope['tenant'] for s in config['scopes'].values()):
+            bound = admission.get()
+            if (bound is None or bound['scope']['tenant'] != current_scope['tenant']
+                    or current_scope['sourceOrigin'] not in bound['scope']['origins']
+                    or current_scope['destinationOrigin'] not in bound['scope']['origins']):
+                return response(403, {'error':'pairing-refused'})
         expected_origin = current_scope['sourceOrigin' if role == 'sender' else 'destinationOrigin']
         if request.headers.get('origin') != expected_origin: return response(403, {'error':'pairing-refused'})
         subject = None
