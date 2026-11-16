@@ -415,3 +415,26 @@ when configured and verifies provider claims through that same terminal barrier;
 no reader scenario is registered. Source units, synthetic provider/HTTP contracts,
 and PostgreSQL concurrent consumption/rollback tests are in CI. No live provider
 or database setup is implied by this implementation.
+
+## First OIDC link candidate contract
+
+`auth_service.first_oidc_link` verifies a fresh provider ID token and a native
+current-genesis SEA signature before preparing `sociacl-oidc-attest-v1` output.
+It has no installed route or configuration loader. Its binding is protected owner
+input: exact principal, issuer, tenant, subject, clientId, optional tenantClaim,
+sequence zero and expiry. Sequence is never added to the native record. The tenant
+comes from that mapping; a tenantClaim requires a deployed provider mapper.
+
+Persist the canonical signed request (issuedAt and alphanumeric nonce) before
+starting explicit fresh authentication. Both provider iat and auth_time must be at
+least issuedAt; no clock skew or freshness extension is allowed on retry. Provider
+and attestation JWKS need explicit authorization windows. Missing, rotated or
+expired keys refuse. ACL independently performs final native/current-head admission.
+
+`issue` returns a candidate for an atomic first-link transaction, not an HTTP
+response. The caller must preserve an existing credential-to-principal binding,
+commit the exact fingerprint/attestation/original deadline, and return byte-identical
+saved output on identical retry. Changed proof/request/trust or expiry refuses.
+`replay` implements that exact saved-output decision. Durable orchestration,
+protected configuration and HTTP installation remain tracked in #71. This primitive
+cannot create genesis attestations, select a replacement principal or sign in.
