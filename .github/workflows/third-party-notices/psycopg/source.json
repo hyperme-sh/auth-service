@@ -1,0 +1,10 @@
+{
+  "distribution": "psycopg",
+  "version": "3.3.6",
+  "repository": "https://github.com/spdx/license-list-data",
+  "commit": "31846481de7ea17d92f2f46fad76abe58b2e9bb0",
+  "files": {
+    "GPL-3.0.txt": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+  },
+  "purpose": "Full GPL-3.0 text incorporated by the upstream LGPL-3.0 terms"
+}

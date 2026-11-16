@@ -79,7 +79,7 @@ def main():
     args = parser.parse_args()
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     identity = uuid.uuid4().hex
-    image = args.image or 'auth-container-qualification:' + identity
+    image = args.image or 'ghcr.io/hyperme-sh/auth-service/runtime:preparation-' + identity
     client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
     client.ping()
     containers = []
@@ -93,6 +93,7 @@ def main():
         built = client.images.get(image)
         built_here = not args.image
         assert built.attrs['Config']['User'] == '65532:65532'
+        subprocess.run(['bash', 'scripts/audit-container.sh', image], cwd=ROOT, check=True)
         network = client.networks.create('auth-qualification-' + identity)
 
         def start(selected_image, *, name, environment=None, command=None, port=None):
