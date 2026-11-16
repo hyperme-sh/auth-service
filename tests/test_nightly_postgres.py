@@ -14,7 +14,7 @@ async def registry(siwe_postgres_url):
     async with engine.begin() as db:
         await db.execute(text(Path(__file__).with_name('fixtures').joinpath('nightly/0006_nightly_run.sql').read_text()))
         await db.execute(text('TRUNCATE auth_nightly_run'))
-        assert (await db.execute(text("SELECT relpersistence FROM pg_class WHERE oid=to_regclass('auth_nightly_run')"))).scalar_one()=='p'
+        assert (await db.execute(text("SELECT relpersistence::text FROM pg_class WHERE oid=to_regclass('auth_nightly_run')"))).scalar_one()=='p'
     try:yield engine,PostgresNightlyStore(engine)
     finally:await engine.dispose()
 
