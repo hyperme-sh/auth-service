@@ -344,3 +344,11 @@ tenant and event type. Repeating an operation cannot create a second event; a
 changed payload for the same event ID is refused. Auth no longer installs a shared
 publisher or selects Service Bus. Delivery remains the owner's HTTP outbox relay.
 The scheduled `auth-consumers` lane owns the combined SQL checks for all producers.
+
+## SEA pairing relay
+
+The opt-in [versioned SEA pairing relay](docs/sea-device-relay.md) offers anonymous
+receiver bootstrap and authorized sender exchange through bounded owner PostgreSQL
+state. It carries opaque ciphertext only and does not issue identity sessions.
+The independently packaged `browser/sea-relay` adapter consumes the shared SDK's
+Transport contract. Enable only explicit scopes after applying the owner migration.

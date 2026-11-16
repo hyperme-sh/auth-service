@@ -20,6 +20,22 @@ jobs:
           version: '0.11.26'
           python-version: '3.13'
       - run: bash scripts/check-package.sh --fixtures
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/controlplane-sdk
+          ref: 006611d80fe60b303288447204271cde5ba35332
+          path: sdk-relay-source
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --prefix sdk-relay-source/packages/sea-device-link && npm run --prefix sdk-relay-source/packages/sea-device-link build
+      - name: Packed browser relay and ASGI handler contracts
+        run: node browser/sea-relay/check.mjs
+        env:
+          SDK_SOURCE: ${{ github.workspace }}/sdk-relay-source
+          CONTRACT_PYTHON: ${{ github.workspace }}/.venv/bin/python
       - name: Qualify standalone container with disposable issuer and database
         run: uv run --frozen python scripts/check-container.py --evidence "$TEST_EVIDENCE_DIR/container.json"
       - name: Retain native consumer evidence
