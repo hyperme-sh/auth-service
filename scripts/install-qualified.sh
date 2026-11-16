@@ -3,7 +3,8 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 if [[ $# != 2 ]]; then echo 'Usage: install-qualified.sh PYTHON APPLICATION_WHEEL' >&2; exit 2; fi
-python3 "$root/scripts/verify_dependency_fixtures.py" "$root" >/dev/null
+qualified_paths=$(python3 "$root/scripts/verify_dependency_fixtures.py" "$root")
+mapfile -t qualified_wheels <<< "$qualified_paths"
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 python3 - "$root" "$scratch/overrides.txt" <<'PY'
@@ -13,4 +14,4 @@ rows=json.loads((directory/'manifest.json').read_text())['dependencies']
 pathlib.Path(sys.argv[2]).write_text(''.join(row['distribution']+' @ '+(directory/row['wheel']).resolve().as_uri()+'\n' for row in rows))
 PY
 # Dependency resolution remains enabled; only the audited private sources change.
-uv pip install --no-config --python "$1" --overrides "$scratch/overrides.txt" "$2"
+uv pip install --no-config --python "$1" --overrides "$scratch/overrides.txt" "$2" "${qualified_wheels[@]}"

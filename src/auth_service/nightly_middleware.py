@@ -25,7 +25,7 @@ class NightlyMiddleware:
         try:
             state.require(len(grants) == 1 and scope['path'].startswith('/auth/'))
             # No unrelated enrollment, SIWE or host mutation is admitted by a browser grant.
-            state.require((scope['method'], scope['path']) in {('GET', '/auth/me'), ('POST', '/auth/switch-tenant')}
+            state.require((scope['method'], scope['path']) in {('GET', '/auth/me'), ('POST', '/auth/switch-tenant'), ('POST', '/auth/scoped-session')}
                           or scope['path'].startswith('/auth/sea-device-link/v1/sessions/'))
             store = app.state.nightly_store; state.require(store is not None)
             binding = await store.command(dict(version=1, owner='auth', action='admit', grant=grants[0].decode('ascii')))

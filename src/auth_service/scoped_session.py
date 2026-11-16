@@ -86,6 +86,11 @@ async def scoped_session(body: ScopedRequest,request: Request,user: CurrentAuthU
         raise HTTPException(403,'Unambiguous verified issuer client required',headers=headers)
     selected=request.headers.get('X-Tenant-ID')
     if selected and selected!=str(body.tenant_id):raise HTTPException(403,'Tenant selection differs',headers=headers)
+    from controlplane_identity.nightly import current_binding
+    binding = current_binding()
+    if binding is not None and (user.sub != binding['scope']['subject'] or str(body.tenant_id) != binding['scope']['tenant']
+                                or str(body.organization_id) != binding['scope']['organization']):
+        raise HTTPException(403, 'Nightly scope differs', headers=headers)
     try:grant=await current_scope(user.sub,body.tenant_id,body.organization_id)
     except ScopeUnavailable as exc:raise HTTPException(503,'Scope authority unavailable',headers=headers) from exc
     if grant is None:raise HTTPException(403,'Current organization membership required',headers=headers)
