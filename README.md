@@ -352,3 +352,12 @@ receiver bootstrap and authorized sender exchange through bounded owner PostgreS
 state. It carries opaque ciphertext only and does not issue identity sessions.
 The independently packaged `browser/sea-relay` adapter consumes the shared SDK's
 Transport contract. Enable only explicit scopes after applying the owner migration.
+
+## Publication preparation
+
+Package and container qualification use fresh home/cache environments without
+inherited credentials and a job-owned project environment. Existing browser
+relay and native checks consume that same qualified environment. Build outputs
+stay within the job and are cleaned afterward; no Actions artifacts are uploaded.
+GHCR preparation follows separately. TEST remains moving and integration/e2e
+remains nightly.

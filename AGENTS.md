@@ -37,7 +37,7 @@ the same write credential; do not claim that they can.
 
 Read README.md. Preserve tenant/issuer/subject binding, nonce lifetime and replay
 checks, MFA behavior and fail-closed authentication. Run bash scripts/check-package.sh
-with read access to pinned dependencies. Keep private pins in distribution metadata
+with anonymous read access to public pinned dependencies. Keep pins in distribution metadata
 and uv.lock. Original provider/deployment integration tests remain separate from
 standalone tests. No live identity provider or payment operation is part of checks.
 
@@ -58,7 +58,8 @@ The user is the sole developer. Never add or enable GitHub required reviewers, b
 
 Credential-free PR consumers may run on disposable hosted Ubuntu with Docker
 and verified dependency wheel fixtures. Keep mandatory native tests and the
-no-skips assertion. Main private dependency access and runner scope stay unchanged.
+no-skips assertion. Main public-source qualification uses no inherited credentials;
+runner scope remains unchanged.
 
 ## Private CI runner policy
 
