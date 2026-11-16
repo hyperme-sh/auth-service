@@ -25,8 +25,7 @@ class PostgresNightlyStore:
                 else:
                     query = 'SELECT state FROM auth_nightly_run WHERE owner=:owner AND run=:run FOR UPDATE'
                     params = dict(owner=value['owner'], run=value['run'])
-                state.require(not binding.get('_closed', False))
-        raw = (await db.execute(text(query), params)).scalar_one_or_none()
+                raw = (await db.execute(text(query), params)).scalar_one_or_none()
                 state.require(raw is not None)
                 row = copy.deepcopy(raw)
                 if self.scopes is not None: state.require(self.scopes.get(row['scope']['suite']) == row['scope'])
