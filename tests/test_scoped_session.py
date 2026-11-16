@@ -138,6 +138,7 @@ async def test_startup_mode_refuses_older_unscoped_context(monkeypatch,verificat
 async def test_admitted_scoped_session_refuses_foreign_selection_before_owner(app,http_client,scoped_owner,monkeypatch,foreign):
     from controlplane_identity.nightly import admitted_run
     from test_nightly_state import REGISTER, SCOPE
+    SCOPE = {**SCOPE, 'organization': str(uuid.uuid4())}
     g=scoped_owner
     g.update(subject=SCOPE['subject'],tenant_id=SCOPE['tenant'],organization_id=SCOPE['organization'])
     async def claims():return {'sub':g['subject'],'azp':'controlplane-frontend','nightly_run':{k:REGISTER[k] for k in ('run','generation')}}
