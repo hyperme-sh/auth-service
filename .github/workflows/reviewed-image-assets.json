@@ -1,0 +1,17 @@
+[
+  {
+    "wheel_url": "https://files.pythonhosted.org/packages/6f/34/3998411437aff304a9ed4fa37a6fe1ef3132bcd2b5eac59851b80c86123c/pydeck-0.9.3-py2.py3-none-any.whl",
+    "wheel_sha256": "d8a47c11c81fb12d51b1feb42427ff4f0e13cb599e48931021b2cba98b6849a6",
+    "member": "pydeck-0.9.3.data/data/share/jupyter/nbextensions/pydeck/index.js.map",
+    "member_sha256": "1ef6c893f0577fdbe521570ecd9a94526cc982cdf46b6d85c9e5236d792811ba",
+    "path": "app/.venv/share/jupyter/nbextensions/pydeck/index.js.map",
+    "rule": "generic-api-key",
+    "start": 6,
+    "end": 6,
+    "symbols": [
+      "GLTFV1Normalizer",
+      "getS2QuadkeyFromCellId"
+    ],
+    "classification": "Public upstream JavaScript class/function names, not credentials"
+  }
+]
