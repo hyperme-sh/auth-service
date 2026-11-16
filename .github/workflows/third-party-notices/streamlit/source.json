@@ -1,0 +1,11 @@
+{
+  "distribution": "streamlit",
+  "version": "1.66.1",
+  "repository": "https://github.com/streamlit/streamlit",
+  "tag": "1.66.1",
+  "commit": "ca6718b7d3d788c31c97d1bc9144fd8388168f57",
+  "files": {
+    "LICENSE": "c95bae1d1ce0235ecccd3560b772ec1efb97f348a79f0fbe0a634f0c2ccefe2c",
+    "NOTICES": "01249c3fa050d1a2450513b610d2520c7b91739b370d50fcd2567019b9afdc15"
+  }
+}
