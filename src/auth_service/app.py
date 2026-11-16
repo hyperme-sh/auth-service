@@ -127,6 +127,9 @@ def create_app(
     from auth_service.first_oidc_routes import router as first_oidc_router
     app.state.first_oidc_slots = asyncio.Semaphore(2)
     app.include_router(first_oidc_router)
+    from auth_service.first_genesis_routes import router as first_genesis_router
+    app.state.first_genesis_slots = asyncio.Semaphore(2)
+    app.include_router(first_genesis_router)
     from auth_service.linked_oidc_routes import router as linked_oidc_router
     app.state.linked_oidc_slots = asyncio.Semaphore(4)
     app.include_router(linked_oidc_router)

@@ -22,6 +22,7 @@ def install(engine):
             raise ValueError('Pairing authority must be durable')
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0007_linked_oidc.sql').read_text())
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0008_first_oidc_link.sql').read_text())
+        db.exec_driver_sql(files('auth_service').joinpath('migrations/0009_first_genesis.sql').read_text())
         if db.execute(text("SELECT relpersistence FROM pg_class WHERE oid=to_regclass('auth_first_oidc_link')")).scalar_one() != 'p':
             raise ValueError('First OIDC binding must be durable')
         db.exec_driver_sql(files('auth_service').joinpath('migrations/0006_nightly_run.sql').read_text())
