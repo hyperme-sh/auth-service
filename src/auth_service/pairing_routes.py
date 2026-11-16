@@ -59,13 +59,14 @@ async def pairing(session: str, action: Literal['create','join','offer','send','
 async def execute_pairing(session, action, request):
     store = request.app.state.pairing_store
     if store is None: return response(503, {'error':'pairing-unavailable'})
-    if request.headers.get('x-pairing-role') != 'sender' or not request.headers.get('authorization'):
-        limiter = getattr(request.app.state, 'pairing_anonymous_limiter', None)
-        if limiter is None:
-            limiter = request.app.state.pairing_anonymous_limiter = AnonymousLimiter()
-        # ASGI client identity only: never read untrusted forwarding headers.
-        client = request.client.host if request.client else 'unknown'
-        if not limiter.allow(client): return response(429, {'error':'pairing-busy'})
+    # Every caller is untrusted here, including claimed senders with a bearer.
+    # Charge before reading bodies or invoking token validation.
+    limiter = getattr(request.app.state, 'pairing_anonymous_limiter', None)
+    if limiter is None:
+        limiter = request.app.state.pairing_anonymous_limiter = AnonymousLimiter()
+    # ASGI client identity only: never read untrusted forwarding headers.
+    client = request.client.host if request.client else 'unknown'
+    if not limiter.allow(client): return response(429, {'error':'pairing-busy'})
     try:
         binary(session, 32)
         role = request.headers.get('x-pairing-role')

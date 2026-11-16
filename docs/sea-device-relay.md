@@ -71,8 +71,8 @@ by the SDK's 512 KiB plaintext envelope limit. JSON requests are capped at 71000
 bytes, with 12-second work deadlines and eight concurrent requests per worker.
 Scope operation charges occur only after session/capability admission; missing
 sessions and invalid capabilities cannot consume other sessions' delivery budget.
-Anonymous creates use their separate creation budget. Anonymous requests are
-additionally limited to 120/minute per ASGI client address per worker, with at most
+Anonymous creates use their separate creation budget. Every request, including
+claimed sender traffic, is limited before body parsing and token validation to 120/minute per ASGI client address per worker, with at most
 1024 client buckets/minute. The limiter does not read forwarding headers; configure
 the ASGI server to trust only the actual gateway for client-address forwarding.
 Clients behind one address share this allowance. These worker-local bounds protect

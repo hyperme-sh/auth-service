@@ -83,3 +83,26 @@ def test_anonymous_limiter_is_bounded_and_resets(monkeypatch):
     monkeypatch.setattr('auth_service.pairing_routes.monotonic',lambda: 160)
     assert limiter.allow('new')
     assert len(limiter.clients)==1
+
+
+@pytest.mark.asyncio
+async def test_forged_sender_headers_cannot_bypass_pre_auth_allowance(monkeypatch):
+    monkeypatch.setattr('auth_service.pairing_routes.monotonic',lambda: 100)
+    calls=0
+    async def refuse(_):
+        nonlocal calls
+        calls+=1
+        raise ValueError()
+    monkeypatch.setattr('auth_service.pairing_routes.get_access_token_claims',refuse)
+    app=make_app()
+    headers={'Origin':SCOPE['sourceOrigin'],'X-Pairing-Role':'sender',
+             'X-Pairing-Capability':RECEIVER,'Authorization':'Bearer invalid'}
+    path=f'/auth/sea-device-link/v1/sessions/{SESSION}/completed'
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
+        for _ in range(120):
+            assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==401
+        assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==429
+        assert calls==120
+        # Refuse before body parsing as well as authentication.
+        assert (await c.post(path,content=b'x'*710001,headers=headers)).status_code==429
+    assert app.state.pairing_store.state['operations']==0
