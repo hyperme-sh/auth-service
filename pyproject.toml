@@ -37,7 +37,7 @@ packages = ["src/auth_service"]
 exclude = ["src/auth_service/migrations/**", "src/auth_service/migrate.py"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/Dockerfile", "/.dockerignore", "/LICENSE", "/NOTICE", "/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
+include = ["/.github/workflows/third-party-notices", "/Dockerfile", "/.dockerignore", "/LICENSE", "/NOTICE", "/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

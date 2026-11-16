@@ -74,6 +74,11 @@ uv run --frozen "${run_options[@]}" python - "$scratch" <<'PY'
 import pathlib, sys, tarfile
 root = pathlib.Path(sys.argv[1])
 with tarfile.open(next((root / 'dist').glob('*.tar.gz'))) as archive:
+    prefix = pathlib.PurePosixPath(archive.getnames()[0]).parts[0]
+    for source in pathlib.Path('.github/workflows/third-party-notices').rglob('*'):
+        if source.is_file():
+            packaged = archive.extractfile(f'{prefix}/{source.as_posix()}')
+            assert packaged is not None and packaged.read() == source.read_bytes(), source
     archive.extractall(root / 'sdist', filter='data')
 PY
 uv build --wheel "$scratch"/sdist/* --out-dir "$scratch/rebuilt"
