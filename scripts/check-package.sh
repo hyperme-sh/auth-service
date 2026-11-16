@@ -61,7 +61,7 @@ fi
 uv venv --python 3.13 "$scratch/venv"
 uv pip sync --python "$scratch/venv/bin/python" "$scratch/requirements.txt"
 if (( ${#fixture_wheels[@]} )); then
-  uv pip install --no-config --python "$scratch/venv/bin/python" --no-deps "${fixture_wheels[@]}" "$scratch"/dist/*.whl
+  bash scripts/install-qualified.sh "$scratch/venv/bin/python" "$scratch"/dist/*.whl
 else
 uv pip uninstall --python "$scratch/venv/bin/python" controlplane-core controlplane-api controlplane-tenancy controlplane-identity controlplane-db controlplane-events operator-ban-store
 uv pip install --python "$scratch/venv/bin/python" "${install_options[@]}" "$scratch"/dist/*.whl

@@ -352,3 +352,10 @@ receiver bootstrap and authorized sender exchange through bounded owner PostgreS
 state. It carries opaque ciphertext only and does not issue identity sessions.
 The independently packaged `browser/sea-relay` adapter consumes the shared SDK's
 Transport contract. Enable only explicit scopes after applying the owner migration.
+
+Standalone wheel consumers use the qualified graph bundled in the source archive:
+`bash scripts/install-qualified.sh /path/to/venv/bin/python /path/to/application.whl`.
+This verifies the private dependency manifest and wheel digests, then resolves the
+application wheel with explicit audited artifact overrides. CI uses this installer
+for external-wheel contracts; bare wheel installation without the qualified graph
+is not the supported contract for independently advancing shared libraries.
