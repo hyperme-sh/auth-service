@@ -2,6 +2,7 @@
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 import stat
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -25,7 +26,7 @@ def configuration():
     value=json.loads(raw,object_pairs_hook=unique,parse_constant=lambda _:core.require(False))
     core.exact(value,'version serviceToken bindings providerJwks signer signingKeyPem')
     core.require(type(value['version']) is int and value['version']==1)
-    core.require(type(value['serviceToken']) is str and 43<=len(value['serviceToken'])<=128 and value['serviceToken'].isascii())
+    core.require(type(value['serviceToken']) is str and re.fullmatch(r'[A-Za-z0-9_-]{43,128}',value['serviceToken']))
     core.require(type(value['bindings']) is list and 1<=len(value['bindings'])<=128)
     identities=set()
     for b in value['bindings']:

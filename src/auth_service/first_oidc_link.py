@@ -104,20 +104,21 @@ def provider_claims(token, record, binding, jwks, now):
     require('nbf' not in claims or type(claims['nbf']) is int and claims['nbf'] <= now)
     if binding['tenantClaim'] is not None:
         require(claims.get(binding['tenantClaim']) == binding['tenant'])
-    return claims
+    require(key['notBefore'] <= claims['iat'] < key['notAfter'])
+    return claims, key['notAfter']
 
 
 def validate(record, token, binding, provider_jwks, signer, signer_key, now):
     """Verify a request and derive its immutable transaction identity without signing."""
     try:
         record = prepare(record, binding, now)
-        claims = provider_claims(token, record, binding, provider_jwks, now)
+        claims, provider_until = provider_claims(token, record, binding, provider_jwks, now)
         exact(signer, 'kid notBefore notAfter')
         require(type(signer['kid']) is str and 1 <= len(signer['kid']) <= 128)
         require(type(signer['notBefore']) is int and type(signer['notAfter']) is int
                 and signer['notBefore'] <= record['issuedAt'] <= now < signer['notAfter'])
         require(isinstance(signer_key, ec.EllipticCurvePrivateKey) and isinstance(signer_key.curve, ec.SECP256R1))
-        deadline = min(record['issuedAt'] + 120, claims['exp'], binding['expiresAt'], signer['notAfter'])
+        deadline = min(record['issuedAt'] + 120, claims['exp'], binding['expiresAt'], signer['notAfter'], provider_until)
         require(now < deadline)
         digest = fingerprint(dict(record=record, proof=hashlib.sha256(token.encode()).hexdigest(),
                     binding=binding, provider=provider_jwks, signer=signer,

@@ -57,3 +57,14 @@ def test_native_record_and_trust_mutations_refuse():
         bad=copy.deepcopy(j);bad['keys'][0].update(key_changes)
         with pytest.raises(s.FirstLinkRefused):s.issue(r,token(),b,bad,k,signer,101)
     with pytest.raises(s.FirstLinkRefused):s.issue(r,token(),b,j,k,signer,220)
+
+
+def test_provider_authorization_window_bounds_attestation_and_original_retry():
+    r,b,j,k,signer,token,c=fixture();j['keys'][0]['notAfter']=102
+    out=s.issue(r,token(),b,j,k,signer,101)
+    assert out['expiresAt']==102
+    claims=jwt.decode(out['attestation'],signer.public_key(),algorithms=['ES256'],options={'verify_exp':False,'verify_aud':False})
+    assert claims['exp']==102
+    with pytest.raises(s.FirstLinkRefused):s.replay(out,out['fingerprint'],r['principal'],102)
+    j['keys'][0]['notAfter']=200;j['keys'][0]['notBefore']=101
+    with pytest.raises(s.FirstLinkRefused):s.issue(r,token(),b,j,k,signer,101)

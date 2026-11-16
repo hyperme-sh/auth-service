@@ -15,7 +15,7 @@ fixture_module=importlib.util.module_from_spec(spec);spec.loader.exec_module(fix
 @pytest.mark.asyncio
 async def test_atomic_exact_retry_restart_cancel_and_config_rollback(siwe_postgres_url,monkeypatch):
     engine=create_async_engine(siwe_postgres_url)
-    r,b,j,k,signer,token,_=fixture_module.fixture(int(time.time()))
+    r,b,j,k,signer,token,claims=fixture_module.fixture(int(time.time()))
     proof=token();store=FirstOidcStore(engine);calls=0;original=core.issue
     def counted(*args,**kwargs):
         nonlocal calls
@@ -39,7 +39,7 @@ async def test_atomic_exact_retry_restart_cancel_and_config_rollback(siwe_postgr
         first,second=await asyncio.gather(issue(),issue());assert first==second and calls==1
         assert await issue()==first and calls==1
         assert await store.cancel(r,b,lambda:None)=='already-issued'
-        with pytest.raises(core.FirstLinkRefused):await store.issue(r,token(),b,j,k,signer,lambda:None)
+        with pytest.raises(core.FirstLinkRefused):await store.issue(r,token(claims|{'exp':claims['exp']+1}),b,j,k,signer,lambda:None)
         async with engine.begin() as db:await db.execute(text('TRUNCATE auth_first_oidc_link,auth_first_oidc_cancel'))
         assert await store.cancel(r,b,lambda:None)=='cancelled'
         assert await store.cancel(r,b,lambda:None)=='cancelled'
