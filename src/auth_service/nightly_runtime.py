@@ -47,7 +47,7 @@ async def verify_claims(claims):
         return claims
     managed = any(scope['subject'] == claims.get('sub') for scope in config['scopes'].values())
     if not managed and 'nightly_run' not in claims: return claims
-    binding = admission.get(); state.require(binding is not None)
+    binding = admission.get(); state.require(binding is not None and not binding.get('_closed', False))
     state.fields(claims.get('nightly_run'), 'run generation')
     state.require(claims['nightly_run'] == {k: binding[k] for k in ('run', 'generation')}
                   and claims.get('sub') == binding['scope']['subject'])

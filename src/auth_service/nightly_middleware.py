@@ -13,7 +13,7 @@ class NightlyMiddleware:
         app = scope['app']; config = app.state.nightly_config
         if config is None: return await self.app(scope, receive, send)
         headers = scope.get('headers', [])
-        grants = [v.decode('ascii') for k, v in headers if k.lower() == b'x-nightly-run-grant']
+        grants = [v for k, v in headers if k.lower() == b'x-nightly-run-grant']
         if not grants: return await self.app(scope, receive, send)
         binding = None; token = None; messages = []; size = 0
         async def buffer(message):
@@ -26,7 +26,7 @@ class NightlyMiddleware:
             # No unrelated enrollment, SIWE or host mutation is admitted by a browser grant.
             state.require(scope['path'] == '/auth/me' or scope['path'].startswith('/auth/sea-device-link/v1/sessions/'))
             store = app.state.nightly_store; state.require(store is not None)
-            binding = await store.command(dict(version=1, owner='auth', action='admit', grant=grants[0]))
+            binding = await store.command(dict(version=1, owner='auth', action='admit', grant=grants[0].decode('ascii')))
             token = admission.set(binding)
             await self.app(scope, receive, buffer)
             starts = [m for m in messages if m['type'] == 'http.response.start']
@@ -40,4 +40,5 @@ class NightlyMiddleware:
             await send(dict(type='http.response.start', status=409, headers=[(b'content-type', b'application/json'), (b'cache-control', b'private, no-store')]))
             await send(dict(type='http.response.body', body=body))
         finally:
+            if binding is not None: binding['_closed'] = True
             if token is not None: admission.reset(token)
