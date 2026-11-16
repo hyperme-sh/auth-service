@@ -17,8 +17,8 @@ from test_nightly_store import Engine
 
 
 @pytest.mark.parametrize('refusal',[None,'subject','generation','tenant','sea','suite','issuer','client'])
-@respx.mock(assert_all_called=False)
-async def test_startup_native_read_is_bound_before_user_lookup(monkeypatch,refusal):
+@pytest.mark.respx(assert_all_called=False)
+async def test_startup_native_read_is_bound_before_user_lookup(monkeypatch,refusal,respx_mock):
     config=json.loads(Path(__file__).with_name('fixtures').joinpath('startup-identity.json').read_text())
     config['owner']['broker']={'issuer':SCOPE['issuer'],'audience':'s3rch'}
     scope={**copy.deepcopy(SCOPE),'suite':'flags-s3rch-browser','tenant':config['owner']['tenant_id'],
@@ -44,7 +44,7 @@ async def test_startup_native_read_is_bound_before_user_lookup(monkeypatch,refus
             'tenant_id':config['owner']['tenant_id'],'network_id':config['owner']['network_id'],
             'organizations':[{'slug':s,'id':o['organization_id'],'tenant_id':o['tenant_id'],'roles':o['roles']}
                              for s,o in sorted(config['binding']['organizations'].items())]}
-    peer=respx.post('https://owner.example.invalid/api/v1/internal/startup/status').mock(return_value=httpx.Response(200,json=person))
+    peer=respx_mock.post('https://owner.example.invalid/api/v1/internal/startup/status').mock(return_value=httpx.Response(200,json=person))
     native_errors=[];native_resolve=startup_identity.resolve
     async def observed_resolve(*args):
         try:return await native_resolve(*args)
