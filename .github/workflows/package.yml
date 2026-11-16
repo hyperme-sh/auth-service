@@ -2,14 +2,19 @@ name: Standalone package
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ghcr-auth-runtime-test
+  cancel-in-progress: false
 jobs:
   package:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'hyperme-sh/auth-service' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Prepare release output
         run: |
@@ -31,13 +36,71 @@ jobs:
           UV_PYTHON_INSTALL_DIR="$QUALIFICATION_VENV-python"
           RELEASE_ARTIFACT_DIR="$RELEASE_ARTIFACT_DIR"
           TEST_EVIDENCE_DIR="$TEST_EVIDENCE_DIR" bash scripts/check-package.sh
+      - name: Build exact owner image
+        run: |
+          image="ghcr.io/hyperme-sh/auth-service/runtime:preparation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "QUALIFIED_IMAGE=$image" >> "$GITHUB_ENV"
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$image" .
+          python3 - "$image" "$RELEASE_ARTIFACT_DIR/image.json" <<'PYTHON'
+          import json, subprocess, sys
+          image_id = subprocess.check_output(['docker', 'image', 'inspect', '--format', '{{.Id}}', sys.argv[1]], text=True).strip()
+          with open(sys.argv[2], 'w') as stream:
+              json.dump({'image': sys.argv[1], 'image_id': image_id}, stream)
+          PYTHON
       - name: Qualify standalone container with disposable issuer and database
         run: >-
           bash scripts/anonymous-command.sh env
           UV_PROJECT_ENVIRONMENT="$QUALIFICATION_VENV"
           UV_PYTHON_INSTALL_DIR="$QUALIFICATION_VENV-python"
           RELEASE_ARTIFACT_DIR="$RELEASE_ARTIFACT_DIR"
-          uv run --no-sync python scripts/check-container.py --evidence "$TEST_EVIDENCE_DIR/container.json"
+          uv run --no-sync python scripts/check-container.py --image "$QUALIFIED_IMAGE" --evidence "$TEST_EVIDENCE_DIR/container.json"
+      - name: Publish qualified current main to moving TEST
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(python3 - <<'PYTHON'
+          import json, os, urllib.request
+          class NoRedirects(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  raise ValueError('Authenticated main-ref redirects are refused')
+          request = urllib.request.Request('https://api.github.com/repos/hyperme-sh/auth-service/git/ref/heads/main',
+              headers={'Authorization': 'Bearer ' + os.environ['GHCR_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          with urllib.request.build_opener(NoRedirects()).open(request, timeout=30) as response:
+              print(json.load(response)['object']['sha'])
+          PYTHON
+          )
+          if [[ "$current" != "$GITHUB_SHA" ]]; then
+            echo 'Newer main exists; skip stale TEST publication'
+            exit 0
+          fi
+          export DOCKER_CONFIG="$RELEASE_ARTIFACT_DIR/docker-auth"
+          mkdir -m 700 "$DOCKER_CONFIG"
+          trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          unset GHCR_TOKEN
+          image_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RELEASE_ARTIFACT_DIR/image.json")
+          python3 scripts/publish_container.py --revision "$GITHUB_SHA" --image-id "$image_id" --channel test --publish
+      - name: Review retained registry versions after publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REQUIRE_REGISTRY_INVENTORY=1 python3 scripts/inventory_registry.py "$RELEASE_ARTIFACT_DIR/registry-output"
+          python3 -c 'import json,sys; rows=dict(line.rstrip().split("=",1) for line in open(sys.argv[1])); print("\n".join(r["digest"] for r in json.loads(rows["matrix"])["include"]))' "$RELEASE_ARTIFACT_DIR/registry-output" > "$RELEASE_ARTIFACT_DIR/digests"
+          while IFS= read -r digest; do
+            [[ -z "$digest" ]] || HISTORICAL_REPOSITORY=hyperme-sh/auth-service/runtime bash scripts/check-older-image.sh "$digest"
+          done < "$RELEASE_ARTIFACT_DIR/digests"
+      - name: Remove qualified local image
+        if: always()
+        run: |
+          if [[ -f "$RELEASE_ARTIFACT_DIR/image.json" ]]; then
+            image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RELEASE_ARTIFACT_DIR/image.json")
+            docker image rm "$image" || true
+          fi
       - name: Remove job-local qualification output
         if: always()
         run: rm -rf -- "$QUALIFICATION_VENV" "$QUALIFICATION_VENV-python" "$RELEASE_ARTIFACT_DIR" "$TEST_EVIDENCE_DIR"
