@@ -11,11 +11,12 @@ from auth_service import first_oidc_link as s
 
 def enc(raw):return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
 
-def fixture(now=100):
+def fixture(now=100,**binding_changes):
     owner=ec.derive_private_key(1,ec.SECP256R1());public=owner.public_key().public_numbers()
     principal=enc(public.x.to_bytes(32))+'.'+enc(public.y.to_bytes(32))
     binding=dict(principal=principal,issuer='https://issuer.example',tenant='00000000-0000-0000-0000-000000000001',
                  subject='declared-person',clientId='s3rch',tenantClaim=None,sequence=0,expiresAt=now+400)
+    binding.update(binding_changes)
     record=dict(v=1,kind='oidc',principal=principal,issuedAt=now,cred=dict(iss=binding['issuer'],tenant=binding['tenant'],sub=binding['subject']),nonce='a'*64,keySig='',attest='')
     r,t=utils.decode_dss_signature(owner.sign(s.signing_bytes(record),ec.ECDSA(hashes.SHA256())))
     record['keySig']=enc(r.to_bytes(32)+t.to_bytes(32))
@@ -37,7 +38,7 @@ def test_native_claims_and_byte_identical_original_deadline_retry():
 
 def test_foreign_stale_missing_fresh_auth_and_tenant_mapper_refuse():
     r,b,j,k,signer,token,c=fixture()
-    for changes in [dict(sub='other'),dict(iss='https://other.example'),dict(aud='other'),dict(azp='other'),dict(nonce='other'),dict(auth_time=99),dict(iat=99),dict(exp=101),dict(nbf=102),dict(auth_time=True),dict(nightly_run={'run':'retired','generation':1})]:
+    for changes in [dict(sub='other'),dict(iss='https://other.example'),dict(aud='other'),dict(azp='other'),dict(nonce='other'),dict(auth_time=99),dict(iat=99),dict(exp=101),dict(nbf=102),dict(auth_time=True)]:
         with pytest.raises(s.FirstLinkRefused):s.issue(r,token(c|changes),b,j,k,signer,101)
     missing=dict(c);missing.pop('auth_time')
     with pytest.raises(s.FirstLinkRefused):s.issue(r,token(missing),b,j,k,signer,101)

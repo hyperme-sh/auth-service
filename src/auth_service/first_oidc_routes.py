@@ -22,8 +22,6 @@ async def first_oidc(action:str,request:Request):
         runtime.authenticate(config,request.headers.get('authorization'))
         core.require(request.headers.get('content-type','').split(';')[0].strip().lower()=='application/json'
                      and request.headers.get('content-encoding','identity')=='identity')
-        # No terminal first-enrollment operation is registered by this source.
-        core.require(not request.headers.get('x-nightly-run-grant'))
         slots=request.app.state.first_oidc_slots;core.require(not slots.locked())
         async with slots,asyncio.timeout(20):
             raw=bytearray()
@@ -33,13 +31,22 @@ async def first_oidc(action:str,request:Request):
             core.exact(body,'record idToken' if action=='issue' else 'record')
             binding=runtime.select(config,body['record'])
             nightly_config=nightly.configuration()
-            core.require(nightly.admission.get() is None)
+            bound=nightly.admission.get()
+            managed=nightly_config is not None and any(s['subject']==binding['subject'] for s in nightly_config['scopes'].values())
+            core.require(not request.headers.get('x-nightly-run-grant') or bound is not None)
+            if managed or bound is not None:
+                core.require(bound is not None and not bound.get('_closed',False) and nightly_config is not None)
+                scope=bound['scope']
+                core.require(nightly_config['scopes'].get(scope['suite'])==scope
+                             and scope['subject']==binding['subject'] and scope['tenant']==binding['tenant']
+                             and scope['issuer']==binding['issuer'] and binding['clientId'] in scope['clients'])
             if action=='issue':
                 claims,_=core.provider_claims(body['idToken'],body['record'],binding,config['providerJwks'],int(time.time()))
                 await nightly.verify_claims(claims)
             def current():
                 core.require(runtime.configuration()==config and nightly.configuration()==nightly_config
-                             and nightly.admission.get() is None)
+                             and nightly.admission.get() is bound
+                             and (bound is None or not bound.get('_closed',False)))
             store=FirstOidcStore(request.app.state.async_engine)
             if action=='cancel':
                 status=await store.cancel(body['record'],binding,current)
