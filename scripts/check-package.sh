@@ -33,13 +33,13 @@ if (( $# > 1 )); then echo 'Unexpected arguments' >&2; exit 2; fi
 sync_environment() {
   uv sync --frozen --python 3.13 "${sync_options[@]}"
   if (( ${#fixture_wheels[@]} )); then
-    uv pip install --no-config --python .venv/bin/python --no-deps --reinstall "${fixture_wheels[@]}"
+    uv pip install --no-config --python "${UV_PROJECT_ENVIRONMENT:-$PWD/.venv}/bin/python" --no-deps --reinstall "${fixture_wheels[@]}"
   fi
-  .venv/bin/python scripts/verify_preparation_environment.py "$PWD"
+  "${UV_PROJECT_ENVIRONMENT:-$PWD/.venv}/bin/python" scripts/verify_preparation_environment.py "$PWD"
 }
 sync_environment
 identity_wheel=$(python3 scripts/verify_identity_owner_fixture.py)
-uv pip install --python .venv/bin/python --no-deps "$identity_wheel"
+uv pip install --python "${UV_PROJECT_ENVIRONMENT:-$PWD/.venv}/bin/python" --no-deps "$identity_wheel"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 docker info >/dev/null
