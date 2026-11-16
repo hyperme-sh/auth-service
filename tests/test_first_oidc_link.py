@@ -37,7 +37,7 @@ def test_native_claims_and_byte_identical_original_deadline_retry():
 
 def test_foreign_stale_missing_fresh_auth_and_tenant_mapper_refuse():
     r,b,j,k,signer,token,c=fixture()
-    for changes in [dict(sub='other'),dict(iss='https://other.example'),dict(aud='other'),dict(azp='other'),dict(nonce='other'),dict(auth_time=99),dict(iat=99),dict(exp=101),dict(nbf=102),dict(auth_time=True)]:
+    for changes in [dict(sub='other'),dict(iss='https://other.example'),dict(aud='other'),dict(azp='other'),dict(nonce='other'),dict(auth_time=99),dict(iat=99),dict(exp=101),dict(nbf=102),dict(auth_time=True),dict(nightly_run={'run':'retired','generation':1})]:
         with pytest.raises(s.FirstLinkRefused):s.issue(r,token(c|changes),b,j,k,signer,101)
     missing=dict(c);missing.pop('auth_time')
     with pytest.raises(s.FirstLinkRefused):s.issue(r,token(missing),b,j,k,signer,101)

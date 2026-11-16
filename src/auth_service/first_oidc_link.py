@@ -96,6 +96,8 @@ def provider_claims(token, record, binding, jwks, now):
         issuer=binding['issuer'], audience=binding['clientId'],
         options={'require':['iss','sub','aud','iat','exp','nonce','auth_time'],
                  'verify_iat':False,'verify_exp':False,'verify_nbf':False})
+    # First-enrollment terminal operations are not registered by this source.
+    require('nightly_run' not in claims)
     require(claims['sub'] == binding['subject'] and claims['nonce'] == record['nonce'])
     require(claims['aud'] in (binding['clientId'], [binding['clientId']]) and claims.get('azp', binding['clientId']) == binding['clientId'])
     for name in ('iat', 'auth_time'):

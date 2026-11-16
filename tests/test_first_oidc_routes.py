@@ -18,6 +18,7 @@ fixtures=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixtures)
 async def test_default_off_private_file_and_bounded_route(tmp_path,monkeypatch):
     app=FastAPI();app.include_router(router);app.state.first_oidc_slots=asyncio.Semaphore(2);app.state.async_engine=object()
     monkeypatch.delenv('AUTH_FIRST_OIDC_LINK_CONFIG_FILE',raising=False)
+    monkeypatch.delenv('AUTH_NIGHTLY_RUN_CONFIG_FILE',raising=False)
     async with AsyncClient(transport=ASGITransport(app=app),base_url='https://auth.example') as client:
         for action in ('issue','cancel'):assert (await client.post('/auth/first-oidc-link/v1/'+action,json={})).status_code==503
         r,b,j,k,signer,token,_=fixtures.fixture(int(time.time()))

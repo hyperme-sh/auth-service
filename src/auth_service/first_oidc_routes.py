@@ -1,11 +1,13 @@
 """Protected first-link issuance. No identity/session creation or reader registration."""
 import asyncio
 import json
+import time
 from fastapi import APIRouter,Request
 from fastapi.responses import JSONResponse
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from auth_service import first_oidc_link as core, first_oidc_runtime as runtime
 from auth_service.first_oidc_store import FirstOidcStore
+from auth_service import nightly_runtime as nightly
 from auth_service.pairing_routes import PRIVATE,bad_constant
 
 router=APIRouter(prefix='/auth/first-oidc-link/v1',tags=['First OIDC link'])
@@ -30,7 +32,14 @@ async def first_oidc(action:str,request:Request):
             body=json.loads(raw,object_pairs_hook=runtime.unique,parse_constant=bad_constant)
             core.exact(body,'record idToken' if action=='issue' else 'record')
             binding=runtime.select(config,body['record'])
-            def current():core.require(runtime.configuration()==config)
+            nightly_config=nightly.configuration()
+            core.require(nightly.admission.get() is None)
+            if action=='issue':
+                claims,_=core.provider_claims(body['idToken'],body['record'],binding,config['providerJwks'],int(time.time()))
+                await nightly.verify_claims(claims)
+            def current():
+                core.require(runtime.configuration()==config and nightly.configuration()==nightly_config
+                             and nightly.admission.get() is None)
             store=FirstOidcStore(request.app.state.async_engine)
             if action=='cancel':
                 status=await store.cancel(body['record'],binding,current)
