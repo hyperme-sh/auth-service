@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 import httpx
+from jwt import InvalidTokenError
 from auth_service import startup_identity as identity
 from auth_service._startup_contract import fingerprint
 from auth_service.deps import get_access_token_claims
@@ -33,7 +34,7 @@ async def reconcile(command: Command, request: Request):
 async def resolve(claims: dict = Depends(get_access_token_claims)):
     try:
         return await identity.resolve(identity.configuration(),claims)
-    except (ValueError,OSError,httpx.HTTPError):
+    except (ValueError,OSError,httpx.HTTPError,InvalidTokenError):
         raise HTTPException(403,'Configured startup identity is not available for this login') from None
 
 
