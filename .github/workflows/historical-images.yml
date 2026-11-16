@@ -1,0 +1,51 @@
+name: Historical image review
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: auth-historical-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  packages: read
+jobs:
+  inventory:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.inventory.outputs.matrix }}
+      review-needed: ${{ steps.inventory.outputs.review-needed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: inventory
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          HISTORICAL_REPOSITORY=hyperme-sh/auth-service/runtime python3 scripts/inventory_registry.py "$GITHUB_OUTPUT"
+  image:
+    needs: inventory
+    if: needs.inventory.outputs.review-needed == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 35
+    name: Review ${{ matrix.repository }} ${{ matrix.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Inspect every image layer without executing it
+        env:
+          DIGEST: ${{ matrix.digest }}
+          HISTORICAL_REPOSITORY: ${{ matrix.repository }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: bash scripts/check-older-image.sh "$DIGEST"

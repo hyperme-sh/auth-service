@@ -1,0 +1,1266 @@
+[
+  {
+    "file": "0f8a4d7dc7238d10959fececa61dfe19a79f761c.txt",
+    "sha256": "8d26f9fa31ff23ba0422cc1f3be82653b45df2f3209107a1ce77585a11259140",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "1001430bc554b86afabf7b241e70c6a964af2517.txt",
+    "sha256": "8332db98a0aa918075f6fc15bfd6d1cea04648edf28e3351e038510102262bd7",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "001ddc5fab45694564446a25105bf06107bddcfd.txt",
+    "sha256": "d9ea2a8f578f3a204909899c13b6c4ef6d035a52c0f0472a3098e371972adfca",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "18a756f791ed35ce462ad675966cf434a18ca4cc.txt",
+    "sha256": "3c847c6cacc586f240f59fd4591ebe8c1718aee2d21e1aa36d387a99833af561",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "268310712c120ef0423dac397ca99aa09adec412.txt",
+    "sha256": "1f9de65bdce60b28314f3d4ec4c2bbcb09620b0b673a69dce67be97bd1df3237",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "27729645b08947ad51ecdc3b2ccee0db3b38349e-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "27729645b08947ad51ecdc3b2ccee0db3b38349e-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "27729645b08947ad51ecdc3b2ccee0db3b38349e-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "27729645b08947ad51ecdc3b2ccee0db3b38349e-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "16737e23c3901cf6b2bcccbfade39072b9d2a6c6-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "16737e23c3901cf6b2bcccbfade39072b9d2a6c6-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "16737e23c3901cf6b2bcccbfade39072b9d2a6c6-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "16737e23c3901cf6b2bcccbfade39072b9d2a6c6-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "2a3ce49e423bb886b437a6417f5d4fd7b2d81bc3.txt",
+    "sha256": "8050bdfed97da5be2a2df1e03f910fd13b271c8705d19bfb97e440c3f2f35802",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "2a3ce49e423bb886b437a6417f5d4fd7b2d81bc3.txt",
+    "sha256": "8050bdfed97da5be2a2df1e03f910fd13b271c8705d19bfb97e440c3f2f35802",
+    "rule": "generic-api-key",
+    "start": 26,
+    "end": 26,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "3d3e6e7f5cb8fdd4595364588b828c046de4c199-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "3d3e6e7f5cb8fdd4595364588b828c046de4c199-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "3d3e6e7f5cb8fdd4595364588b828c046de4c199-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "3d3e6e7f5cb8fdd4595364588b828c046de4c199-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "37bdaadb86d6348dc03ad46c41ba8fda9f9c198f.txt",
+    "sha256": "c8965efe1a0b66709adf98511666a5010dff94614b8279b93a8226f7a2558378",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "445e1e87cf2b4057f142a3451c334f9321efeec0.txt",
+    "sha256": "6ce1bf507ecdeefd47fa7de51d1b0a7aa133748b0c0026484ef4807b54a1a051",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "4518115912d5ceeba78888cf8f1989953f34c76e-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "4518115912d5ceeba78888cf8f1989953f34c76e-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "4518115912d5ceeba78888cf8f1989953f34c76e-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "4518115912d5ceeba78888cf8f1989953f34c76e-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "4ce24b65d34e30473a7cac56767e7ce69fdcb2a7-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "4ce24b65d34e30473a7cac56767e7ce69fdcb2a7-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "4ce24b65d34e30473a7cac56767e7ce69fdcb2a7-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "4ce24b65d34e30473a7cac56767e7ce69fdcb2a7-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "5eccd07e53664d604b0460732d97cc631b3e6642.txt",
+    "sha256": "ff4af9b4152d5b969342360c1ead14ca2df6eb38903fec8a15ecd42b60b8b7ff",
+    "rule": "generic-api-key",
+    "start": 11,
+    "end": 11,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "5eccd07e53664d604b0460732d97cc631b3e6642.txt",
+    "sha256": "ff4af9b4152d5b969342360c1ead14ca2df6eb38903fec8a15ecd42b60b8b7ff",
+    "rule": "generic-api-key",
+    "start": 21,
+    "end": 21,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "44df8d6a8dca65ce8814c37f0876cb832edc16f3",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "6240130fe38c3cce3ac09de4647b7aa79ba5154f-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "6240130fe38c3cce3ac09de4647b7aa79ba5154f-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "6240130fe38c3cce3ac09de4647b7aa79ba5154f-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "6240130fe38c3cce3ac09de4647b7aa79ba5154f-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "6cbaa72c64014b5f169ae9f79c271328745bce10.txt",
+    "sha256": "733a4ab01864f4da1c9ed4148d37c63947c2c97d5ada410437fa3544d11a5216",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "6cbaa72c64014b5f169ae9f79c271328745bce10.txt",
+    "sha256": "733a4ab01864f4da1c9ed4148d37c63947c2c97d5ada410437fa3544d11a5216",
+    "rule": "generic-api-key",
+    "start": 24,
+    "end": 24,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "767c6f07b30976eb876eb1c64bce1e8a4a117b7a.txt",
+    "sha256": "e147d18a671293709f4f8eca90e1f7735e8f5f568fc7ccf14d2ffed972fb1757",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "7da29c58f70bf6952af5071352ef6a1450acfa62-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "7da29c58f70bf6952af5071352ef6a1450acfa62-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "7da29c58f70bf6952af5071352ef6a1450acfa62-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "7da29c58f70bf6952af5071352ef6a1450acfa62-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "8353467f450afc8d013bd6166997cf8d00c11391.txt",
+    "sha256": "157a9edd2ec67415cdc837fa38d6a09f079756049401287cb64222fe6865e484",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "8353467f450afc8d013bd6166997cf8d00c11391.txt",
+    "sha256": "157a9edd2ec67415cdc837fa38d6a09f079756049401287cb64222fe6865e484",
+    "rule": "generic-api-key",
+    "start": 26,
+    "end": 26,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "843e9cc2c27ad6792392e186bcf9597fca514c28.txt",
+    "sha256": "0d4216edefce9a7ff86c7a9d4f62b5515a786c65112f014cbbc789f735c8d00a",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "843e9cc2c27ad6792392e186bcf9597fca514c28.txt",
+    "sha256": "0d4216edefce9a7ff86c7a9d4f62b5515a786c65112f014cbbc789f735c8d00a",
+    "rule": "generic-api-key",
+    "start": 24,
+    "end": 24,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "8405ab8edeba907e7b9aa24566c3816391948f58-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "8405ab8edeba907e7b9aa24566c3816391948f58-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "8405ab8edeba907e7b9aa24566c3816391948f58-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "8405ab8edeba907e7b9aa24566c3816391948f58-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "86fe87c3ba68c354f0a2d3707d5b02be629dd4dc-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "86fe87c3ba68c354f0a2d3707d5b02be629dd4dc-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "86fe87c3ba68c354f0a2d3707d5b02be629dd4dc-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "86fe87c3ba68c354f0a2d3707d5b02be629dd4dc-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "89d0c5fd826dad51f6f1e6eaa3003d922b916794.txt",
+    "sha256": "25c60832e535717852cf950191a25b4b340d695a90756aaa05a1ccb01fa9f372",
+    "rule": "generic-api-key",
+    "start": 12,
+    "end": 12,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "89d0c5fd826dad51f6f1e6eaa3003d922b916794.txt",
+    "sha256": "25c60832e535717852cf950191a25b4b340d695a90756aaa05a1ccb01fa9f372",
+    "rule": "generic-api-key",
+    "start": 22,
+    "end": 22,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "8b3a6d520f9866fcacac664f5f4c7b66a815d675.txt",
+    "sha256": "76dbd2a5f7f471611276d72a07ea2b1d96c4097fee67407558e7d525ee3d75cb",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "8b3a6d520f9866fcacac664f5f4c7b66a815d675.txt",
+    "sha256": "76dbd2a5f7f471611276d72a07ea2b1d96c4097fee67407558e7d525ee3d75cb",
+    "rule": "generic-api-key",
+    "start": 25,
+    "end": 25,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "88540eba828499c5e2cccb4f9714e93693b3f74d.txt",
+    "sha256": "6f07eb4276603c576ba89116d62f1fc488d7f8af75a82b8d5a5d2eaf9a28d0fd",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "8c6b275b40bd90dc4bd779799462859209e1ed7b.txt",
+    "sha256": "e2572a3a33c38e9e680f40a4ed4cc0e0086ebf5e66abae0ada97ac1ad372a4dc",
+    "rule": "generic-api-key",
+    "start": 11,
+    "end": 11,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "8c6b275b40bd90dc4bd779799462859209e1ed7b.txt",
+    "sha256": "e2572a3a33c38e9e680f40a4ed4cc0e0086ebf5e66abae0ada97ac1ad372a4dc",
+    "rule": "generic-api-key",
+    "start": 21,
+    "end": 21,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "4e308f55afcae1313d39235c5c05dcd772b181de",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "8b61c77b1a36c2a06b4e152db6b88ebb6da57140-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "8b61c77b1a36c2a06b4e152db6b88ebb6da57140-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "8b61c77b1a36c2a06b4e152db6b88ebb6da57140-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "8b61c77b1a36c2a06b4e152db6b88ebb6da57140-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "8ed62b0929f12d78561351c1fc8bf9d93b39162e.txt",
+    "sha256": "0270fd1b3743cf1849679817909a6f753123441767f5c5ee3287bb2ae5925a4f",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "90b0e08dc2095172f9c9d85c18b98f621ebe9542-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "90b0e08dc2095172f9c9d85c18b98f621ebe9542-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "90b0e08dc2095172f9c9d85c18b98f621ebe9542-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "90b0e08dc2095172f9c9d85c18b98f621ebe9542-25.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "95b5c2b4ceba0226f3ed57789fa46030a94c5b30.txt",
+    "sha256": "67e62eef75abb69eb2a6459e450d52568e8296fff64852c88db4ce4c0e48d0f2",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "a501defcfd3e109aaca0f33d57171b0f1bf91674.txt",
+    "sha256": "05c7601444f3296360b48a013845f2e64ff08e31c2b96b8a8e131560c909cd63",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "a8d60803ee4b2ce60f51ca5a8e12a8e9bc38f785.txt",
+    "sha256": "f4eeb6e9dc8ef83d3c3380dcbe24d137cb80093f0d6e62c3bb02cce28c26d764",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "aa7deec204c264bd8fa71e4fba150302d940ca73.txt",
+    "sha256": "85faf6bfd49c71291cc31e2a4590e439272f9f5e35e02f8f239fd05cfb583a1c",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "a9a0cf5e24f02041ff8e0a7af92920495cb55481-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "a9a0cf5e24f02041ff8e0a7af92920495cb55481-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "a9a0cf5e24f02041ff8e0a7af92920495cb55481-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "a9a0cf5e24f02041ff8e0a7af92920495cb55481-68.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "bbe255f508f7c37d67d7f130a8bb51ad2637b8e9.txt",
+    "sha256": "db31884012a2623dabdd473a1a2e12bd4352829561e95dd2dda8bf855e6ff75c",
+    "rule": "generic-api-key",
+    "start": 11,
+    "end": 11,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "bbe255f508f7c37d67d7f130a8bb51ad2637b8e9.txt",
+    "sha256": "db31884012a2623dabdd473a1a2e12bd4352829561e95dd2dda8bf855e6ff75c",
+    "rule": "generic-api-key",
+    "start": 21,
+    "end": 21,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "b97028e412d10c6adc66dd0261cdddb9327c02e4-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "b97028e412d10c6adc66dd0261cdddb9327c02e4-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "b97028e412d10c6adc66dd0261cdddb9327c02e4-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "b97028e412d10c6adc66dd0261cdddb9327c02e4-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "bcd7b5e8ab4d125804721e05396aa7a082ee6fe5-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "bcd7b5e8ab4d125804721e05396aa7a082ee6fe5-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "bcd7b5e8ab4d125804721e05396aa7a082ee6fe5-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "bcd7b5e8ab4d125804721e05396aa7a082ee6fe5-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "c1234ab90e65e91e6acca1368ae3febd82fafea0-30.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "c1234ab90e65e91e6acca1368ae3febd82fafea0-30.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "c1234ab90e65e91e6acca1368ae3febd82fafea0-30.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "c1234ab90e65e91e6acca1368ae3febd82fafea0-30.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "d5d0f36bdf07ee7e3618eb62ff46cc73368ece63.txt",
+    "sha256": "951917cdacbc55f07443383d556bde4ade302cf2b6b3825cf03f9b216f85b095",
+    "rule": "generic-api-key",
+    "start": 14,
+    "end": 14,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "d5d0f36bdf07ee7e3618eb62ff46cc73368ece63.txt",
+    "sha256": "951917cdacbc55f07443383d556bde4ade302cf2b6b3825cf03f9b216f85b095",
+    "rule": "generic-api-key",
+    "start": 32,
+    "end": 32,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "c8b059ecd37e76fead1bb1326f1cec7f520fe9d4.txt",
+    "sha256": "71bad451b9f0ca4ca8bad93a160e1b246519d8b8d2686750a8b7045f08434262",
+    "rule": "generic-api-key",
+    "start": 14,
+    "end": 14,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "c8b059ecd37e76fead1bb1326f1cec7f520fe9d4.txt",
+    "sha256": "71bad451b9f0ca4ca8bad93a160e1b246519d8b8d2686750a8b7045f08434262",
+    "rule": "generic-api-key",
+    "start": 31,
+    "end": 31,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "c6f7b128f0dd7a0e31d23be7e86579c393dd43bc.txt",
+    "sha256": "4b4aae42ec2747837c2a751189640d0ec80b612c3db14884ce5a36c648b821b4",
+    "rule": "generic-api-key",
+    "start": 14,
+    "end": 14,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "c6f7b128f0dd7a0e31d23be7e86579c393dd43bc.txt",
+    "sha256": "4b4aae42ec2747837c2a751189640d0ec80b612c3db14884ce5a36c648b821b4",
+    "rule": "generic-api-key",
+    "start": 30,
+    "end": 30,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "dc5d2f4d291735f98ff9b0e94acf501313480652.txt",
+    "sha256": "408d19046dbfb4dd36c4b6554fa195d7fe80528ce6f8db0cc21a2bf32f9a55c4",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "ebd85b0dc9b28ef42f5ff59d7bd3f77ac3a708e2-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "ebd85b0dc9b28ef42f5ff59d7bd3f77ac3a708e2-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "ebd85b0dc9b28ef42f5ff59d7bd3f77ac3a708e2-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "ebd85b0dc9b28ef42f5ff59d7bd3f77ac3a708e2-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "f3ad17c50a13bb0b872929d9aa9da70f9e64622f.txt",
+    "sha256": "2c400c1de56cdec419b1126d5e22b362f0bd1ba8b1b599922990f64f132039aa",
+    "rule": "generic-api-key",
+    "start": 11,
+    "end": 11,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "f3ad17c50a13bb0b872929d9aa9da70f9e64622f.txt",
+    "sha256": "2c400c1de56cdec419b1126d5e22b362f0bd1ba8b1b599922990f64f132039aa",
+    "rule": "generic-api-key",
+    "start": 21,
+    "end": 21,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "4e308f55afcae1313d39235c5c05dcd772b181de",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "ee74aedc19b79b22de946e17c71834e3cd8df049-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "ee74aedc19b79b22de946e17c71834e3cd8df049-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "ee74aedc19b79b22de946e17c71834e3cd8df049-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "ee74aedc19b79b22de946e17c71834e3cd8df049-69.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "f2ac980ee2856a87b6a16b01842f47f1027627c0.txt",
+    "sha256": "805fe2009cde6a6ebbda3602c56e28d6f501bdcbf8f4f7462fddc2086d4c02dd",
+    "rule": "generic-api-key",
+    "start": 129,
+    "end": 129,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "f19a5f2327e98c5bac46c973303e131eeaaabaea-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 242,
+    "end": 242,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "f19a5f2327e98c5bac46c973303e131eeaaabaea-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 251,
+    "end": 251,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "f19a5f2327e98c5bac46c973303e131eeaaabaea-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 255,
+    "end": 255,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "f19a5f2327e98c5bac46c973303e131eeaaabaea-22.txt",
+    "sha256": "1145dd2392d2fa7d41d8ac260762418d74a3af4bc9b9c3f92989959ab15b259c",
+    "rule": "generic-api-key",
+    "start": 277,
+    "end": 277,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "f6a89bac50da7dead2950303cacd1b1a5d1750d4.txt",
+    "sha256": "2f83be8a1806687a73b71b0957e3f5c7be81fa528de6323974264940fa31827d",
+    "rule": "generic-api-key",
+    "start": 13,
+    "end": 13,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "92132737a49eb0b9cb52eb32e507cda7f989e485",
+    "source_path": "src/auth_service/keycloak_oidc.py"
+  },
+  {
+    "file": "f6a89bac50da7dead2950303cacd1b1a5d1750d4.txt",
+    "sha256": "2f83be8a1806687a73b71b0957e3f5c7be81fa528de6323974264940fa31827d",
+    "rule": "generic-api-key",
+    "start": 23,
+    "end": 23,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "73266f9f00f763507edc7ef3a961a2d51aded603",
+    "source_path": "src/auth_service/token_validation.py"
+  },
+  {
+    "file": "f6898eb09b5790f8c9168f34305efc3ef088b40b.txt",
+    "sha256": "80b2bc3800871018eb296e90df9eeaa3635e8ab57fac03718cb6c648f16598da",
+    "rule": "generic-api-key",
+    "start": 138,
+    "end": 138,
+    "classification": "Explicit documentation placeholder; not a credential"
+  },
+  {
+    "file": "f64c82708494bf8195ac27e322df0360e95b240a-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "f64c82708494bf8195ac27e322df0360e95b240a-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "f64c82708494bf8195ac27e322df0360e95b240a-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "f64c82708494bf8195ac27e322df0360e95b240a-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "f8e674e2c2ecec9c6b33d3a68a7de5dea3f88f41-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 241,
+    "end": 241,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0002_keycloak_sub_nullable_password.py"
+  },
+  {
+    "file": "f8e674e2c2ecec9c6b33d3a68a7de5dea3f88f41-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 250,
+    "end": 250,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20250330_0011_api_keys.py"
+  },
+  {
+    "file": "f8e674e2c2ecec9c6b33d3a68a7de5dea3f88f41-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 254,
+    "end": 254,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260907_0015_site_machine_tokens.py"
+  },
+  {
+    "file": "f8e674e2c2ecec9c6b33d3a68a7de5dea3f88f41-69.txt",
+    "sha256": "8c5144f807b3cc66e9cfaeda08befcc8a272c90092a961c26f911bffaa3158f4",
+    "rule": "generic-api-key",
+    "start": 276,
+    "end": 276,
+    "classification": "Verified package or migration source SHA256",
+    "source_object": "900196307b5d0bbd2a7c749aed8eb9f9e92d5fc7",
+    "source_path": "controlplane_db/alembic/versions/20260925_0037_api_key_last_used.py"
+  },
+  {
+    "file": "fc5cd14b706c042f671d96e523b23e709a9c3cd9.txt",
+    "sha256": "210f2d2183e993a7fcb01aaff168b7e6a46d52f622535364d291b12a09a3523f",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder; not a credential"
+  }
+]

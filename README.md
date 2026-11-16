@@ -359,3 +359,12 @@ This verifies the private dependency manifest and wheel digests, then resolves t
 application wheel with explicit audited artifact overrides. CI uses this installer
 for external-wheel contracts; bare wheel installation without the qualified graph
 is not the supported contract for independently advancing shared libraries.
+
+## Publication preparation
+
+Package and container qualification use fresh home/cache environments without
+inherited credentials and a job-owned project environment. Existing browser
+relay and native checks consume that same qualified environment. Build outputs
+stay within the job and are cleaned afterward; no Actions artifacts are uploaded.
+GHCR preparation follows separately. TEST remains moving and integration/e2e
+remains nightly.

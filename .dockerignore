@@ -8,3 +8,10 @@
 !src/**
 src/**/__pycache__
 src/**/*.pyc
+!NOTICE
+!.github/
+!.github/workflows/
+!.github/workflows/third-party-notices/
+!.github/workflows/third-party-notices/**
+!scripts/
+!scripts/prepare_notices.py

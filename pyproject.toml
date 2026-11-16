@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "auth-service"
 version = "0.2.0"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.13"
 dependencies = [
     "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@41bac4f366eeeedae47a0ada18d89f3dee1ca608",
@@ -37,7 +37,7 @@ packages = ["src/auth_service"]
 exclude = ["src/auth_service/migrations/**", "src/auth_service/migrate.py"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/Dockerfile", "/.dockerignore", "/LICENSE", "/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
+include = ["/.github/workflows/third-party-notices", "/Dockerfile", "/.dockerignore", "/LICENSE", "/NOTICE", "/tests_artifacts", "/tests_tools", "/src", "/tests", "/scripts", "/pyproject.toml", "/uv.lock", "/README.md"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
