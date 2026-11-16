@@ -1,0 +1,25 @@
+name: Reachable history review
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  history:
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan reachable objects without executing old code
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d "$RUNNER_TEMP/cli-history.XXXXXX")
+          trap 'rm -rf -- "$scratch"' EXIT
+          python3 scripts/review_history.py "$scratch/objects" "$scratch/report.json"
+          cat "$scratch/report.json"
+          bash scripts/scan-secrets.sh "$scratch/objects"
