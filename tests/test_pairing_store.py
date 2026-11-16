@@ -36,8 +36,8 @@ class Engine:
             self.state=staged
 
 
-def operation(cap=RECEIVER):return dict(action='create',session=SESSION,role='receiver',cap_hash=capability(cap),subject=None,
-    payload={'request':REQUEST,'joinHash':b64(b'j'*32)},join_hash=None)
+def operation(cap=RECEIVER):return dict(action='admit',session=SESSION,role='sender',cap_hash=capability(b64(b'w'*32)),subject='subject',
+    payload={'request':REQUEST,'joinHash':b64(b'j'*32),'receiverHash':b64(bytes.fromhex(capability(cap)))},join_hash=None)
 
 
 @pytest.mark.asyncio
@@ -59,7 +59,7 @@ async def test_shared_atomic_row_survives_adapter_restart_and_competing_create()
 async def test_refused_capability_attempts_are_committed_not_rolled_back():
     engine=Engine();store=PostgresPairingStore(engine)
     await store.execute(SCOPE,**operation())
-    op={**operation(b64(b'x'*32)),'action':'receive','payload':{}}
+    op={**operation(b64(b'x'*32)),'action':'receive','role':'receiver','cap_hash':capability(b64(b'x'*32)),'payload':{}}
     assert (await store.execute(SCOPE,**op))[0]==403
     assert engine.state['sessions'][SESSION]['attempts']==1
 

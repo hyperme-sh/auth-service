@@ -31,29 +31,43 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
         if state['window'] != window:
             state.update(window=window, operations=0, creates=0)
         row = state['sessions'].get(session)
+        if action == 'admit':
+            if role != 'sender' or not subject: raise PairingRefused(403)
+            fields(payload, 'request joinHash receiverHash'); r = request(payload['request'])
+            receiver_hash = binary(payload['receiverHash'], 32).hex()
+            join_digest = binary(payload['joinHash'], 32).hex()
+            if len({receiver_hash, join_digest, cap_hash}) != 3: raise PairingRefused(400)
+            if r['session'] != session or r['scope'] != scope: raise PairingRefused(403)
+            if row is not None:
+                if (row['receiver'] != receiver_hash or row['request'] != r or row['join'] != payload['joinHash']
+                        or row['sender'] != cap_hash or row['subject'] != subject): raise PairingRefused(409)
+                if row['status'] not in ('admitted','created') or r['expiresAt'] <= now: raise PairingRefused(409)
+                return 200, {'status':row['status']}
+            if not now < r['expiresAt'] <= now + 300000: raise PairingRefused(410)
+            if sum(r['subject'] == subject for r in state['sessions'].values()) >= 4: raise PairingRefused(429)
+            if len(state['sessions']) >= MAX_SESSIONS or state['creates'] >= 10: raise PairingRefused(429)
+            state['creates'] += 1
+            state['sessions'][session] = dict(request=copy.deepcopy(r), receiver=receiver_hash, join=payload['joinHash'],
+                sender=cap_hash, subject=subject, offer=None, transcript=None, status='admitted', envelope=None,
+                uploadHash=None, completion=None, attempts=0, operations=0)
+            return 200, {'status':'admitted'}
         if action == 'create':
             if role != 'receiver': raise PairingRefused(403)
             fields(payload, 'request joinHash'); r = request(payload['request'])
-            if binary(payload['joinHash'], 32).hex() == cap_hash: raise PairingRefused(400)
-            if r['session'] != session or r['scope'] != scope: raise PairingRefused(403)
-            if row is not None:
-                if (not hmac.compare_digest(row['receiver'], cap_hash) or row['request'] != r
-                        or row['join'] != payload['joinHash']): raise PairingRefused(409)
-                if row['status'] != 'created' or r['expiresAt'] <= now: raise PairingRefused(409)
-                return 200, {'status': 'created'}
-            if not now < r['expiresAt'] <= now + 300000: raise PairingRefused(410)
-            if len(state['sessions']) >= MAX_SESSIONS or state['creates'] >= 10: raise PairingRefused(429)
-            state['creates'] += 1
-            state['sessions'][session] = dict(request=copy.deepcopy(r), receiver=cap_hash, join=payload['joinHash'],
-                sender=None, subject=None, offer=None, transcript=None, status='created', envelope=None,
-                uploadHash=None, completion=None, attempts=0, operations=0)
-            return 200, {'status': 'created'}
+            binary(payload['joinHash'], 32)
+            if row is None: raise PairingRefused(404)
+            if (not hmac.compare_digest(row['receiver'], cap_hash) or row['request'] != r
+                    or row['join'] != payload['joinHash']): raise PairingRefused(409)
+            if row['status'] not in ('admitted','created') or r['expiresAt'] <= now: raise PairingRefused(409)
+            row['status'] = 'created'
+            return 200, {'status':'created'}
         if row is None: raise PairingRefused(404)
         if row['request']['scope'] != scope: raise PairingRefused(403)
         if row['attempts'] >= 8: raise PairingRefused(403)
         expected = row['receiver'] if role == 'receiver' else row['sender']
         if action == 'join':
-            valid = role == 'sender' and subject and join_hash and hmac.compare_digest(row['join'], join_hash)
+            valid = (role == 'sender' and subject == row['subject'] and hmac.compare_digest(row['sender'], cap_hash)
+                and join_hash and hmac.compare_digest(row['join'], join_hash))
         else:
             valid = expected and hmac.compare_digest(expected, cap_hash) and (role == 'receiver' or row['subject'] == subject)
         if not valid:
@@ -61,7 +75,7 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
             if row['attempts'] >= 8:
                 row.update(status='cancelled', envelope=None)
             raise PairingRefused(403)
-        # Only admitted capabilities spend the shared delivery budget. Creates
+        # Only admitted capabilities spend the shared delivery budget. Authorized admissions
         # have a separate budget; misses cannot starve established sessions.
         if state['operations'] >= 600 or row['operations'] >= MAX_OPERATIONS: raise PairingRefused(429)
         state['operations'] += 1
@@ -89,6 +103,7 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
         if row['status'] in ('cancelled','expired') or row['request']['expiresAt'] <= now: raise PairingRefused(410)
         if action == 'join':
             if cap_hash in (row['receiver'], binary(row['join'], 32).hex()): raise PairingRefused(403)
+            if row['status'] == 'admitted': raise PairingRefused(409)
             o = offer(payload)
             if o['request'] != row['request']: raise PairingRefused(409)
             if row['offer'] is not None:

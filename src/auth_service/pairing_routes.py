@@ -45,9 +45,9 @@ def response(status, result): return JSONResponse({'v':1,'result':result}, statu
     'requestBody': {'required':True,'content':{'application/json':{'schema':{
         'type':'object','additionalProperties':False,'required':['scope','payload'],
         'properties':{'scope':{'type':'object','description':'Exact configured SDK Scope'},
-            'payload':{'type':'object','description':'create: {request,joinHash}; join: SDK Offer; send: SDK Envelope; complete: SDK Completion; reads/cancel: {}'}}}}}},
+            'payload':{'type':'object','description':'admit: {request,joinHash,receiverHash}; create: {request,joinHash}; join: SDK Offer; send: SDK Envelope; complete: SDK Completion; reads/cancel: {}'}}}}}},
     'description':'Receiver bootstrap uses X-Pairing-Capability only. Sender operations also require an authorized tenant bearer. Join additionally requires X-Pairing-Join. All calls require exact Origin and X-Pairing-Role. No key bytes, tokens or capabilities in URLs.'})
-async def pairing(session: str, action: Literal['create','join','offer','send','receive','complete','completed','cancel'], request: Request):
+async def pairing(session: str, action: Literal['admit','create','join','offer','send','receive','complete','completed','cancel'], request: Request):
     slots = request.app.state.pairing_slots
     if slots.locked(): return response(429, {'error':'pairing-busy'})
     async with slots:

@@ -18,9 +18,14 @@ OpenAPI exposes this versioned surface and operation enum.
 Generate three independent random 32-byte capabilities: receiver, join and sender.
 Use canonical unpadded base64url. The receiver keeps its capability; the join
 capability is shared deliberately with the source along with the SDK request.
-The source generates and keeps its own sender capability. Capabilities must never
+The source generates and keeps its own sender capability. Before shared storage
+is allocated, the authenticated source calls `admit` for the exact request,
+receiver capability hash and join hash. The receiver then calls `create` with its
+private capability. A request generated locally by the SDK needs no server state;
+`create` returns 404 until its source admission exists. Admission binds the source
+subject and sender capability, so another source cannot join that reservation. Capabilities must never
 appear in URLs, ordinary clipboard history, analytics or request logs. The UI may
-encode the public SDK request plus the narrow join capability in its QR or
+encode the public SDK request, receiver capability hash and narrow join capability in its QR or
 camera-free pairing document. Display/compare the SDK's entire comparison value
 through the independent confirmation path before sending secrets. A join
 capability alone does not read ciphertext, finish a transfer or authenticate a
@@ -37,6 +42,7 @@ receiver capability is its narrowly bounded relay authority.
 
 | Action | Role | Payload | Result |
 | --- | --- | --- | --- |
+| admit | sender | `{request,receiverHash,joinHash}` | `{status:'admitted'}` |
 | create | receiver | `{request,joinHash}` | `{status:'created'}` |
 | join | sender | SDK Offer | `{transcript}` |
 | offer | receiver | `{}` | Offer or null |
@@ -46,7 +52,7 @@ receiver capability is its narrowly bounded relay authority.
 | completed | either | `{}` | Completion or null |
 | cancel | either | `{}` | `{status:'cancelled'}` |
 
-`joinHash` is base64url SHA-256 of the decoded join capability. Stored receiver
+`joinHash` and `receiverHash` are base64url SHA-256 of their decoded capabilities. Stored receiver
 and sender capabilities are SHA-256 digests, never raw secrets. The server computes
 the SDK transcript from the exact offer and binds envelope/completion to it.
 The SDK independently verifies encryption and the completion MAC; the relay
@@ -64,14 +70,15 @@ responses can be retried with the same input and capabilities. The regular logge
 table survives worker restart/database recovery; restore/rollback of the owner
 database is an operator security event, not a supported way to revive sessions.
 
-A scope permits 128 retained sessions, 10 creates/minute, 600 operations/minute,
-4 active sessions per sender, 256 operations/session and 8 failed capability
+A scope permits 128 retained sessions, 10 authorized admissions/minute, 600 operations/minute,
+4 retained sessions per authenticated sender, 256 operations/session and 8 failed capability
 attempts/session. Ciphertext totals at most 8 MiB/scope; each payload is bounded
 by the SDK's 512 KiB plaintext envelope limit. JSON requests are capped at 710000
 bytes, with 12-second work deadlines and eight concurrent requests per worker.
 Scope operation charges occur only after session/capability admission; missing
 sessions and invalid capabilities cannot consume other sessions' delivery budget.
-Anonymous creates use their separate creation budget. Every request, including
+Only authenticated source admissions consume creation capacity; anonymous create
+requests can activate an exact existing reservation but cannot allocate one. Every request, including
 claimed sender traffic, is limited before body parsing and token validation to 120/minute per ASGI client address per worker, with at most
 1024 client buckets/minute. The limiter does not read forwarding headers; configure
 the ASGI server to trust only the actual gateway for client-address forwarding.
@@ -114,7 +121,11 @@ to a destination device. Cleanup also sweeps retained rows for removed scopes. K
 enabled until their bounded retention has elapsed before disabling the relay entirely.
 
 `browser/sea-relay` independently packages `auth-sea-relay`. `createRelay` returns
-the SDK Transport plus create/join/offer/cancel/close helpers. `newCapability`
+the SDK Transport plus admit/create/join/offer/cancel/close helpers.
+Use `capabilityHash(receiverCapability)` to share only the receiver hash with the
+source, then `senderRelay.admit(request, receiverHash, joinCapability)` before
+`receiverRelay.create(request, joinCapability)`. The source must stay authenticated
+for admission, join and subsequent sender operations. `newCapability`
 uses WebCrypto randomness. Inject a trusted `RelayRequester` that calls only the
 configured HTTPS relay, refuses redirects and bounds response JSON. It supplies
 local source authorization only for sender calls; the browser supplies Origin.

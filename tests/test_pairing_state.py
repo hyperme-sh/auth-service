@@ -20,8 +20,13 @@ def call(state,action,payload=None,role='receiver',cap=None,now=100000,**kw):
         payload=payload or {},join_hash=b64(hashlib.sha256(b'j'*32).digest()),now=now,**kw)
 
 
+def admission():
+    return {'request':REQUEST,'joinHash':b64(hashlib.sha256(b'j'*32).digest()),'receiverHash':b64(bytes.fromhex(capability(RECEIVER)))}
+
+
 def created():
-    state=empty();assert call(state,'create',{'request':REQUEST,'joinHash':b64(hashlib.sha256(b'j'*32).digest())})[0]==200
+    state=empty();assert call(state,'admit',admission(),'sender')[0]==200
+    assert call(state,'create',{'request':REQUEST,'joinHash':b64(hashlib.sha256(b'j'*32).digest())})[0]==200
     return state
 
 
@@ -47,7 +52,7 @@ def test_atomic_immutable_upload_and_terminal_retries():
 
 def test_competing_join_cancel_and_wrong_capability():
     state=created();assert call(state,'join',OFFER,'sender')[0]==200
-    assert call(state,'join',OFFER,'sender',cap=b64(b'q'*32))[0]==409
+    assert call(state,'join',OFFER,'sender',cap=b64(b'q'*32))[0]==403
     assert call(state,'send',PACKET)[0]==403
     for _ in range(8):assert call(state,'receive',cap=b64(b'q'*32))[0]==403
     assert state['sessions'][SESSION]['attempts']==8
@@ -77,18 +82,21 @@ def test_scope_substitution_and_operation_quota():
     assert call(state,'offer')[0]==429
 
 
-def test_create_quota_and_oversized_expiry():
+def test_admission_quota_and_oversized_expiry():
     state=empty();state.update(window=1,creates=10)
-    assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'h'*32)})[0]==429
+    assert call(state,'admit',admission(),'sender')[0]==429
     state=empty()
-    assert call(state,'create',{'request':{**REQUEST,'expiresAt':400001},'joinHash':b64(b'h'*32)})[0]==410
-    assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'h'*32),'keyring':'not-allowed'})[0]==400
+    assert call(state,'admit',{**admission(),'request':{**REQUEST,'expiresAt':400001}},'sender')[0]==410
+    assert call(state,'admit',{**admission(),'keyring':'not-allowed'},'sender')[0]==400
 
 
 def test_unadmitted_traffic_cannot_spend_delivery_quota():
     state=empty()
     for _ in range(601): assert call(state,'receive')[0]==404
     assert state['operations']==0
+    for _ in range(601): assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'j'*32)})[0]==404
+    assert state['creates']==0 and not state['sessions']
+    assert call(state,'admit',{**admission(),'joinHash':b64(b'j'*32)},'sender')[0]==200
     assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'j'*32)})[0]==200
     for _ in range(601): assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'j'*32)},cap=b64(b'x'*32))[0]==409
     assert state['operations']==0
@@ -103,3 +111,16 @@ def test_anonymous_create_budget_is_separate_from_existing_delivery():
     state=uploaded();state['creates']=10
     assert call(state,'receive')[1]==PACKET
     assert call(state,'complete',COMPLETE)[1]==COMPLETE
+
+
+def test_only_authorized_source_can_reserve_bounded_capacity():
+    state=empty()
+    assert call(state,'admit',admission())[0]==403
+    assert state['creates']==0 and not state['sessions']
+    for i in range(5):
+        session=b64(bytes([i])*32)
+        status,_=apply(state,action='admit',session=session,scope=SCOPE,role='sender',
+            cap_hash=capability(SENDER),subject='subject',payload={**admission(),'request':{**REQUEST,'session':session}},
+            join_hash=None,now=100000)
+        assert status==(200 if i<4 else 429)
+    assert state['creates']==4 and len(state['sessions'])==4

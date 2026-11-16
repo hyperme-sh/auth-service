@@ -8,7 +8,8 @@ from auth_service.pairing_routes import router
 from auth_service.pairing_state import apply, empty
 from auth_service.pairing_store import PairingUnavailable
 from auth_service.pairing_wire import b64
-from test_pairing_state import SCOPE, SESSION, REQUEST, RECEIVER
+from test_pairing_state import SCOPE, SESSION, REQUEST, RECEIVER, SENDER, admission
+from auth_service.pairing_wire import capability
 
 
 class Store:
@@ -27,7 +28,9 @@ def make_app():
 @pytest.mark.asyncio
 async def test_unauthenticated_receiver_bootstrap_and_refusals(monkeypatch):
     app=make_app();headers={'Origin':SCOPE['destinationOrigin'],'X-Pairing-Role':'receiver','X-Pairing-Capability':RECEIVER}
-    body={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':b64(b'j'*32)}}
+    reserved=admission()
+    await app.state.pairing_store.execute(SCOPE,action='admit',session=SESSION,role='sender',cap_hash=capability(SENDER),subject='subject',payload=reserved,join_hash=None)
+    body={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':reserved['joinHash']}}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
         path=f'/auth/sea-device-link/v1/sessions/{SESSION}/create'
         r=await c.post(path,json=body,headers=headers)
@@ -70,7 +73,8 @@ async def test_anonymous_requests_are_throttled_before_storage(monkeypatch):
         assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers={**headers,'X-Forwarded-For':'other'})).status_code==429
         assert app.state.pairing_store.state['operations']==0
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app,client=('192.0.2.2',123)),base_url='http://unit') as c:
-        assert (await c.post(path.replace('/receive','/create'),json={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':b64(b'j'*32)}},headers=headers)).status_code==200
+        assert (await c.post(path.replace('/receive','/create'),json={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':b64(b'j'*32)}},headers=headers)).status_code==404
+        assert not app.state.pairing_store.state['sessions']
 
 
 def test_anonymous_limiter_is_bounded_and_resets(monkeypatch):
@@ -106,3 +110,19 @@ async def test_forged_sender_headers_cannot_bypass_pre_auth_allowance(monkeypatc
         # Refuse before body parsing as well as authentication.
         assert (await c.post(path,content=b'x'*710001,headers=headers)).status_code==429
     assert app.state.pairing_store.state['operations']==0
+
+
+@pytest.mark.asyncio
+async def test_admission_requires_source_auth_then_receiver_needs_no_bearer(monkeypatch):
+    app=make_app()
+    headers={'Origin':SCOPE['sourceOrigin'],'X-Pairing-Role':'sender','X-Pairing-Capability':SENDER}
+    path=f'/auth/sea-device-link/v1/sessions/{SESSION}'
+    async def auth(_):
+        return {'sub':'person','iss':'https://issuer.example','tenant_id':SCOPE['tenant'],'scope':'auth:device:transfer'}
+    monkeypatch.setattr('auth_service.pairing_routes.get_access_token_claims',auth)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
+        assert (await c.post(path+'/admit',json={'scope':SCOPE,'payload':admission()},headers=headers)).status_code==401
+        assert not app.state.pairing_store.state['sessions']
+        assert (await c.post(path+'/admit',json={'scope':SCOPE,'payload':admission()},headers={**headers,'Authorization':'Bearer synthetic'})).status_code==200
+        rx={'Origin':SCOPE['destinationOrigin'],'X-Pairing-Role':'receiver','X-Pairing-Capability':RECEIVER}
+        assert (await c.post(path+'/create',json={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':admission()['joinHash']}},headers=rx)).status_code==200

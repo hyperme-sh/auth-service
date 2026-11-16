@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {Sender,Receiver,reconcile} from 'sea-device-link';
-import {createRelay,newCapability} from 'auth-sea-relay';
+import {createRelay,newCapability,capabilityHash} from 'auth-sea-relay';
 const child=spawn(process.env.CONTRACT_PYTHON,[process.env.AUTH_SOURCE+'/tests/pairing_contract_driver.py'],{stdio:['pipe','pipe','inherit']});
 const lines=createInterface({input:child.stdout})[Symbol.asyncIterator]();
 const request=async call=>{
@@ -18,10 +18,13 @@ try{
  const authority={async validateKeyring(b){assert.deepEqual(b,bytes);},async current(b){return {revision:'synthetic-current',validUntil:b.expiresAt};}};
  const receiver=await Receiver.create(scope,{now});
  const join=newCapability();
- const rx=createRelay({scope,session:receiver.request.session,role:'receiver',capability:newCapability(),request});
- await rx.create(receiver.request,join);await rx.create(receiver.request,join);
+ const receiverCapability=newCapability();
+ const rx=createRelay({scope,session:receiver.request.session,role:'receiver',capability:receiverCapability,request});
+ await assert.rejects(rx.create(receiver.request,join));
  const sender=await Sender.create({request:receiver.request,expectedScope:scope,identity,keyring:bytes,authority},{now});
  const tx=createRelay({scope,session:receiver.request.session,role:'sender',capability:newCapability(),request});
+ await tx.admit(receiver.request,await capabilityHash(receiverCapability),join);
+ await rx.create(receiver.request,join);await rx.create(receiver.request,join);
  await tx.join(sender.offer,join);await tx.join(sender.offer,join);
  await receiver.bind(await rx.offer());sender.confirm(receiver.comparison);receiver.confirm(sender.comparison);
  let stored;

@@ -6,10 +6,11 @@ function secret(value){
  const raw=Uint8Array.from(atob(value.replaceAll('-','+').replaceAll('_','/')+'='),c=>c.charCodeAt(0));
  if(raw.length!==32||b64(raw)!==value)fail();return raw;
 }
+export async function capabilityHash(value){const raw=secret(value);try{return b64(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)));}finally{raw.fill(0);}}
 export const newCapability=()=>b64(crypto.getRandomValues(new Uint8Array(32)));
 function publicRequest(r){keys(r,'v session receiverKey expiresAt scope');keys(r.scope,'sourceOrigin destinationOrigin application tenant audience');if(r.v!==1||!Number.isSafeInteger(r.expiresAt)||typeof r.session!=='string'||typeof r.receiverKey!=='string'||!Object.values(r.scope).every(v=>typeof v==='string'))fail();}
 function publicPayload(action,p){
- if(action==='create'){keys(p,'request joinHash');publicRequest(p.request);}
+ if(action==='create'||action==='admit'){keys(p,action==='admit'?'request joinHash receiverHash':'request joinHash');publicRequest(p.request);}
  else if(action==='join'){keys(p,'request senderKey identity payloadHash');publicRequest(p.request);keys(p.identity,'principal pub epub rotationSeq');}
  else if(action==='send')keys(p,'transcript iv ciphertext');
  else if(action==='complete')keys(p,'transcript mac');
@@ -32,6 +33,7 @@ export function createRelay({scope,session,role,capability,request}){
  }
  const sameSession=s=>{if(s!==session)fail();};
  return {
+  async admit(r,receiverHash,join){if(role!=='sender')fail();secret(receiverHash);await call('admit',{request:r,receiverHash,joinHash:await capabilityHash(join)});},
   async create(r,join){if(role!=='receiver')fail();const raw=secret(join);const joinHash=b64(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)));raw.fill(0);await call('create',{request:r,joinHash});},
   async join(o,join){if(role!=='sender')fail();await call('join',o,join);},
   async offer(){return call('offer',{});},
