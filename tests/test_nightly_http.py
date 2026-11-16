@@ -104,7 +104,7 @@ async def test_closed_native_context_is_never_reused(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_native_tenant_token_preserves_original_admission(monkeypatch):
+async def test_native_tenant_token_preserves_original_admission(monkeypatch, app):
     import uuid
     from jwt import InvalidTokenError
     from controlplane_identity.nightly import admitted_run
