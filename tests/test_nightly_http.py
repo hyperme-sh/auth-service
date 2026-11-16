@@ -128,3 +128,20 @@ async def test_native_tenant_token_preserves_original_admission(monkeypatch, app
     assert try_decode_tenant_session_jwt(token) is None
     binding=dict(version=1,run='124-1-portal-device-transfer',generation=REGISTER['generation'],scope=SCOPE,operation=str(uuid.uuid4()))
     with admitted_run(binding):assert try_decode_tenant_session_jwt(token) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('path',['/auth/callback','/auth/refresh'])
+async def test_confidential_exchange_refuses_original_run_output_before_outbox(monkeypatch,http_client,path):
+    import jwt
+    from unittest.mock import AsyncMock
+    from auth_service import routes
+    _,config,_=setup();monkeypatch.setattr('auth_service.nightly_runtime.configuration',lambda:config)
+    claims={'sub':SCOPE['subject'],'nightly_run':{k:REGISTER[k] for k in ('run','generation')}}
+    access=jwt.encode(claims,'isolated-provider-exchange-substitution',algorithm='HS256')
+    monkeypatch.setattr(routes,'exchange_authorization_code',AsyncMock(return_value={'access_token':access}))
+    monkeypatch.setattr(routes,'refresh_tokens',AsyncMock(return_value={'access_token':access}))
+    published=AsyncMock();monkeypatch.setattr(routes.outbox,'publish_auth_event',published)
+    response=await http_client.get(path,params={'code':'isolated-code'}) if path.endswith('callback') else await http_client.post(path,json={'refresh_token':'isolated-refresh'})
+    assert response.status_code==403
+    published.assert_not_awaited()

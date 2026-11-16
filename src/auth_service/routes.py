@@ -157,6 +157,11 @@ async def auth_callback(code: str, state: str | None = None) -> TokenBundleRespo
         )
 
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
     idp = identity_provider_from_claims(payload)
@@ -210,6 +215,11 @@ async def auth_refresh(body: RefreshTokenRequest) -> TokenBundleResponse:
             detail="Token response missing access_token",
         )
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or "unknown"
     tid = tenant_uuid_from_claims(payload)
     await outbox.publish_auth_event(
@@ -312,6 +322,11 @@ async def auth_switch_tenant(
         ),
     )
     payload = _unsafe_payload(access)
+    # The bundle came from the native issuer exchange. This additional check
+    # only refuses original-run output; it never supplies authentication.
+    from auth_service.nightly_runtime import verify_claims
+    try: await verify_claims(payload)
+    except Exception: raise HTTPException(403, 'Original run required') from None
     sub = unsafe_subject_from_token(access) or user.sub or "unknown"
     await outbox.publish_auth_event(
         token=access,
