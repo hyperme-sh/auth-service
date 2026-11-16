@@ -420,7 +420,7 @@ or database setup is implied by this implementation.
 
 `auth_service.first_oidc_link` verifies a fresh provider ID token and a native
 current-genesis SEA signature before preparing `sociacl-oidc-attest-v1` output.
-It has no installed route or configuration loader. Its binding is protected owner
+The default-off protected route uses a binding supplied by protected owner
 input: exact principal, issuer, tenant, subject, clientId, optional tenantClaim,
 sequence zero and expiry. Sequence is never added to the native record. The tenant
 comes from that mapping; a tenantClaim requires a deployed provider mapper.
@@ -431,10 +431,22 @@ least issuedAt; no clock skew or freshness extension is allowed on retry. Provid
 and attestation JWKS need explicit authorization windows. Missing, rotated or
 expired keys refuse. ACL independently performs final native/current-head admission.
 
-`issue` returns a candidate for an atomic first-link transaction, not an HTTP
-response. The caller must preserve an existing credential-to-principal binding,
-commit the exact fingerprint/attestation/original deadline, and return byte-identical
-saved output on identical retry. Changed proof/request/trust or expiry refuses.
-`replay` implements that exact saved-output decision. Durable orchestration,
-protected configuration and HTTP installation remain tracked in #71. This primitive
-cannot create genesis attestations, select a replacement principal or sign in.
+`POST /auth/first-oidc-link/v1/issue` accepts `{record,idToken}` and returns
+`{version:1,attestation}` only after the owner PostgreSQL transaction commits.
+Credential identity is locked across clients/configuration changes. A first binding
+is permanent; expiry never frees it for another principal. Identical retries verify
+current trust and return the saved bytes without re-signing. Changed proof, request,
+trust or expiry refuses. A lost response is reconciled by repeating the exact body.
+`POST /auth/first-oidc-link/v1/cancel` accepts `{record}`; it returns `cancelled`
+before issuance or `already-issued` after issuance, never claims revocation.
+
+`AUTH_FIRST_OIDC_LINK_CONFIG_FILE` is an absolute, owner-only, single-link regular
+JSON file with exact fields `version:1`, `serviceToken`, `bindings`, `providerJwks`,
+`signer:{kid,notBefore,notAfter}`, and `signingKeyPem` (P-256 PEM). Each binding has
+exact fields `principal,issuer,tenant,subject,clientId,tenantClaim,sequence,expiresAt`.
+The private Bearer token is required for both routes. Provider JWKS must include
+explicit `notBefore/notAfter`; the matching public attestation key and its windows
+must already be trusted by ACL. Configuration is rechecked before transaction commit.
+Absent configuration returns503 without database/provider IO. No configuration or
+key is created by source installation, and terminal grants remain unregistered.
+These routes cannot create genesis attestations or issue login sessions.

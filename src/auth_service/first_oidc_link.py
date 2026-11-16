@@ -107,12 +107,8 @@ def provider_claims(token, record, binding, jwks, now):
     return claims
 
 
-def issue(record, token, binding, provider_jwks, signer, signer_key, now):
-    """Return candidate output for one atomic first-link commit, not a response.
-
-    The storage caller must persist fingerprint, principal, original deadline and
-    exact attestation. A retry must read it back, never call this signer again.
-    """
+def validate(record, token, binding, provider_jwks, signer, signer_key, now):
+    """Verify a request and derive its immutable transaction identity without signing."""
     try:
         record = prepare(record, binding, now)
         claims = provider_claims(token, record, binding, provider_jwks, now)
@@ -123,15 +119,21 @@ def issue(record, token, binding, provider_jwks, signer, signer_key, now):
         require(isinstance(signer_key, ec.EllipticCurvePrivateKey) and isinstance(signer_key.curve, ec.SECP256R1))
         deadline = min(record['issuedAt'] + 120, claims['exp'], binding['expiresAt'], signer['notAfter'])
         require(now < deadline)
-        payload = dict(typ='sociacl-oidc-attest-v1', **record['cred'], principal=record['principal'],
-                       iat=record['issuedAt'], exp=deadline, nonce=record['nonce'])
-        attestation = jwt.encode(payload, signer_key, algorithm='ES256', headers={'kid':signer['kid']})
-        return dict(fingerprint=fingerprint(dict(record=record, proof=hashlib.sha256(token.encode()).hexdigest(),
+        digest = fingerprint(dict(record=record, proof=hashlib.sha256(token.encode()).hexdigest(),
                     binding=binding, provider=provider_jwks, signer=signer,
-                    signerPublic=json.loads(jwt.algorithms.ECAlgorithm.to_jwk(signer_key.public_key())))), principal=record['principal'],
-                    expiresAt=deadline, attestation=attestation)
+                    signerPublic=json.loads(jwt.algorithms.ECAlgorithm.to_jwk(signer_key.public_key()))))
+        return record, deadline, digest
     except Exception:
         raise FirstLinkRefused() from None
+
+
+def issue(record, token, binding, provider_jwks, signer, signer_key, now):
+    """Candidate output for an atomic first-link commit, never an HTTP response."""
+    record, deadline, digest = validate(record, token, binding, provider_jwks, signer, signer_key, now)
+    payload = dict(typ='sociacl-oidc-attest-v1', **record['cred'], principal=record['principal'],
+                   iat=record['issuedAt'], exp=deadline, nonce=record['nonce'])
+    attestation = jwt.encode(payload, signer_key, algorithm='ES256', headers={'kid':signer['kid']})
+    return dict(fingerprint=digest, principal=record['principal'], expiresAt=deadline, attestation=attestation)
 
 
 def replay(saved, expected_fingerprint, principal, now):
