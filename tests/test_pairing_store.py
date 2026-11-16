@@ -47,10 +47,12 @@ async def test_shared_atomic_row_survives_adapter_restart_and_competing_create()
     assert sorted(r[0] for r in results)==[200,409]
     assert (await PostgresPairingStore(engine).execute(SCOPE,**operation()))[0]==200
     assert any('FOR UPDATE' in q for q in engine.queries)
-    assert engine.state['operations']==3
+    assert engine.state['operations']==0
+    assert engine.state['creates']==1
     engine.fail=True
     with pytest.raises(PairingUnavailable):await a.execute(SCOPE,**operation())
-    assert engine.state['operations']==3
+    assert engine.state['operations']==0
+    assert engine.state['creates']==1
 
 
 @pytest.mark.asyncio

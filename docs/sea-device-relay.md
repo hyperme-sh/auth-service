@@ -69,7 +69,14 @@ A scope permits 128 retained sessions, 10 creates/minute, 600 operations/minute,
 attempts/session. Ciphertext totals at most 8 MiB/scope; each payload is bounded
 by the SDK's 512 KiB plaintext envelope limit. JSON requests are capped at 710000
 bytes, with 12-second work deadlines and eight concurrent requests per worker.
-The concurrency bound is resource protection, not replay authority. Limits also
+Scope operation charges occur only after session/capability admission; missing
+sessions and invalid capabilities cannot consume other sessions' delivery budget.
+Anonymous creates use their separate creation budget. Anonymous requests are
+additionally limited to 120/minute per ASGI client address per worker, with at most
+1024 client buckets/minute. The limiter does not read forwarding headers; configure
+the ASGI server to trust only the actual gateway for client-address forwarding.
+Clients behind one address share this allowance. These worker-local bounds protect
+resources, not replay authority. Limits also
 apply to retries; clients poll with backoff, never busy-loop. At most eight scopes
 can be configured. The row-level design deliberately trades parallel throughput
 for simple bounded atomicity; it is not a high-volume bulk transfer service.

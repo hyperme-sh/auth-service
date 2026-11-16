@@ -30,8 +30,6 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
         window = now // 60000
         if state['window'] != window:
             state.update(window=window, operations=0, creates=0)
-        if state['operations'] >= 600: raise PairingRefused(429)
-        state['operations'] += 1
         row = state['sessions'].get(session)
         if action == 'create':
             if role != 'receiver': raise PairingRefused(403)
@@ -52,8 +50,6 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
             return 200, {'status': 'created'}
         if row is None: raise PairingRefused(404)
         if row['request']['scope'] != scope: raise PairingRefused(403)
-        if row['operations'] >= MAX_OPERATIONS: raise PairingRefused(429)
-        row['operations'] += 1
         if row['attempts'] >= 8: raise PairingRefused(403)
         expected = row['receiver'] if role == 'receiver' else row['sender']
         if action == 'join':
@@ -65,6 +61,11 @@ def apply(state, *, action, session, scope, role, cap_hash, subject, payload, jo
             if row['attempts'] >= 8:
                 row.update(status='cancelled', envelope=None)
             raise PairingRefused(403)
+        # Only admitted capabilities spend the shared delivery budget. Creates
+        # have a separate budget; misses cannot starve established sessions.
+        if state['operations'] >= 600 or row['operations'] >= MAX_OPERATIONS: raise PairingRefused(429)
+        state['operations'] += 1
+        row['operations'] += 1
         if action == 'completed':
             fields(payload, '')
             return 200, row['completion']

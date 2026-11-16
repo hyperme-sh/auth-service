@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+from time import monotonic
 from typing import Literal
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -12,6 +13,20 @@ from auth_service.pairing_store import PairingUnavailable
 
 PRIVATE = {'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}
 router = APIRouter(prefix='/auth/sea-device-link/v1', tags=['SEA pairing v1'])
+
+
+class AnonymousLimiter:
+    """Bound untrusted request work separately from durable session quotas."""
+    def __init__(self): self.window = None; self.clients = {}
+
+    def allow(self, client):
+        window = int(monotonic()) // 60
+        if window != self.window: self.window = window; self.clients.clear()
+        if client not in self.clients and len(self.clients) >= 1024: return False
+        count = self.clients.get(client, 0)
+        if count >= 120: return False
+        self.clients[client] = count + 1
+        return True
 
 
 def unique(pairs):
@@ -44,6 +59,13 @@ async def pairing(session: str, action: Literal['create','join','offer','send','
 async def execute_pairing(session, action, request):
     store = request.app.state.pairing_store
     if store is None: return response(503, {'error':'pairing-unavailable'})
+    if request.headers.get('x-pairing-role') != 'sender' or not request.headers.get('authorization'):
+        limiter = getattr(request.app.state, 'pairing_anonymous_limiter', None)
+        if limiter is None:
+            limiter = request.app.state.pairing_anonymous_limiter = AnonymousLimiter()
+        # ASGI client identity only: never read untrusted forwarding headers.
+        client = request.client.host if request.client else 'unknown'
+        if not limiter.allow(client): return response(429, {'error':'pairing-busy'})
     try:
         binary(session, 32)
         role = request.headers.get('x-pairing-role')

@@ -56,3 +56,30 @@ async def test_source_context_requires_tenant_permission_and_person(monkeypatch)
             original=copy.deepcopy(claims);claims.update(patch)
             assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==401
             claims.clear();claims.update(original)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_requests_are_throttled_before_storage(monkeypatch):
+    monkeypatch.setattr('auth_service.pairing_routes.monotonic',lambda: 100)
+    app=make_app()
+    headers={'Origin':SCOPE['destinationOrigin'],'X-Pairing-Role':'receiver','X-Pairing-Capability':RECEIVER}
+    path=f'/auth/sea-device-link/v1/sessions/{SESSION}/receive'
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://unit') as c:
+        for _ in range(120):
+            assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers=headers)).status_code==404
+        assert (await c.post(path,json={'scope':SCOPE,'payload':{}},headers={**headers,'X-Forwarded-For':'other'})).status_code==429
+        assert app.state.pairing_store.state['operations']==0
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app,client=('192.0.2.2',123)),base_url='http://unit') as c:
+        assert (await c.post(path.replace('/receive','/create'),json={'scope':SCOPE,'payload':{'request':REQUEST,'joinHash':b64(b'j'*32)}},headers=headers)).status_code==200
+
+
+def test_anonymous_limiter_is_bounded_and_resets(monkeypatch):
+    from auth_service.pairing_routes import AnonymousLimiter
+    monkeypatch.setattr('auth_service.pairing_routes.monotonic',lambda: 100)
+    limiter=AnonymousLimiter()
+    for i in range(1024): assert limiter.allow(str(i))
+    assert not limiter.allow('new')
+    assert limiter.allow('0')
+    monkeypatch.setattr('auth_service.pairing_routes.monotonic',lambda: 160)
+    assert limiter.allow('new')
+    assert len(limiter.clients)==1

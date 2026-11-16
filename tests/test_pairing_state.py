@@ -83,3 +83,23 @@ def test_create_quota_and_oversized_expiry():
     state=empty()
     assert call(state,'create',{'request':{**REQUEST,'expiresAt':400001},'joinHash':b64(b'h'*32)})[0]==410
     assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'h'*32),'keyring':'not-allowed'})[0]==400
+
+
+def test_unadmitted_traffic_cannot_spend_delivery_quota():
+    state=empty()
+    for _ in range(601): assert call(state,'receive')[0]==404
+    assert state['operations']==0
+    assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'j'*32)})[0]==200
+    for _ in range(601): assert call(state,'create',{'request':REQUEST,'joinHash':b64(b'j'*32)},cap=b64(b'x'*32))[0]==409
+    assert state['operations']==0
+    assert call(state,'offer')[0]==200
+    assert state['operations']==1
+    for _ in range(8): assert call(state,'receive',cap=b64(b'x'*32))[0]==403
+    assert state['operations']==1
+    assert state['sessions'][SESSION]['operations']==1
+
+
+def test_anonymous_create_budget_is_separate_from_existing_delivery():
+    state=uploaded();state['creates']=10
+    assert call(state,'receive')[1]==PACKET
+    assert call(state,'complete',COMPLETE)[1]==COMPLETE
