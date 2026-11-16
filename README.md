@@ -368,3 +368,50 @@ relay and native checks consume that same qualified environment. Build outputs
 stay within the job and are cleaned afterward; no Actions artifacts are uploaded.
 GHCR preparation follows separately. TEST remains moving and integration/e2e
 remains nightly.
+
+## Existing-link OIDC proof broker (default off)
+
+Auth #69 supplies `/auth/linked-oidc/v1/{start,exchange,result,cancel}` for the
+trusted s3r.ch backend only. It never selects a SEA identity or issues a SEA
+session. Configuration is absent by default; no readers or provider configuration
+are installed by the source change. `AUTH_LINKED_OIDC_CONFIG_FILE` selects an
+absolute, owner-only private file containing `version: 1`, a random `serviceToken`
+(43–128 base64url characters), a Fernet `sealingKey`, and `provider`. The provider
+contains exact `origin`, `issuer`, `tenant`, `tenantClaim`, `clientId`,
+`clientSecret`, `authorizationEndpoint`, `tokenEndpoint`, `redirectUri`, `jwks`.
+Use the original trusted issuer endpoints and public verification keys. The redirect
+URI belongs to the configured canonical HTTPS s3r.ch origin.
+
+All four commands require the private service bearer and uncompressed JSON. Send
+`challenge` with the original issuer-validated `token`, `id`, `issuedAt`,
+`expiresAt`, `origin`, and exact OIDC `credential` (`kind`, `iss`, `tenant`, `sub`).
+The backend must verify the original s3r.ch challenge before forwarding these
+fields; browser assertions are insufficient. `start` returns the same
+`authorizationUrl` for an unchanged pending attempt. State, PKCE verifier and nonce
+are server-owned; the callback uses `form_post`, so provider tokens and code are
+not put into return URLs. The s3r.ch backend must also bind that callback to its
+original browser attempt and must never forward the service bearer to JavaScript.
+
+`exchange` additionally takes the exact `state` and authorization `code`. Auth
+atomically claims the attempt in its owner PostgreSQL database before exchanging
+the code once. It verifies provider signature, issuer/client, subject/tenant,
+nonce and fresh authentication time. Successful proof is sealed at rest and
+returned as `idToken` only to the authenticated backend. `result` returns exactly
+that saved proof after a lost response; it performs no new exchange. A crash
+between claiming and saving proof refuses further exchanges for that challenge.
+The client must surface that terminal failure instead of silently starting a new
+challenge. `cancel` discards proof and verifier and prevents an in-flight exchange
+from completing. All attempts expire with the original challenge, at most five
+minutes; expired rows are removed on subsequent broker operations. Configuration
+changes during an operation refuse its response. Durable rows are bounded to 128
+attempts per configured provider.
+
+The s3r.ch consumer must recheck the broker attempt and ACL #189's complete signed
+link/current-key/revocation source at final issuance, through its existing single
+SEA issuer and one-time challenge consumption. A saved proof alone is not a
+session or an authorization to restore keys. Cancellation must also retire the
+consumer's original attempt. Auth preserves the original nightly run/generation
+when configured and verifies provider claims through that same terminal barrier;
+no reader scenario is registered. Source units, synthetic provider/HTTP contracts,
+and PostgreSQL concurrent consumption/rollback tests are in CI. No live provider
+or database setup is implied by this implementation.
