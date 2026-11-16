@@ -66,7 +66,7 @@ async def test_verified_fixture_token_requires_original_run_and_admission(monkey
     token=admission.set(bound)
     try:
         assert await verify_claims(claims)==claims
-        for changed in [claims|{'nightly_run':{'run':'124-1-portal-device-transfer','generation':REGISTER['generation']}}, {'sub':SCOPE['subject']}]:
+        for changed in [claims|{'nightly_run':{'run':'124-1-portal-device-transfer','generation':REGISTER['generation']}}, {'sub':SCOPE['subject']}, {'sub':'unrelated-person'}, claims|{'sub':'unrelated-person'}]:
             with pytest.raises(state.Refused):await verify_claims(changed)
     finally:admission.reset(token)
     assert await verify_claims({'sub':'unrelated-person'})=={'sub':'unrelated-person'}
@@ -79,3 +79,25 @@ def test_owner_signature_cannot_authorize_foreign_owner_or_scope():
     raw=json.dumps(REGISTER|{'scope':SCOPE|{'subject':'55555555-5555-4555-8555-555555555555'}}).encode()
     signature=hmac.new(bytes.fromhex(config['ownerKeys']['auth']),raw,hashlib.sha256).hexdigest()
     with pytest.raises(state.Refused):authenticate(config,raw,signature)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('path',['/auth/connect-session-context','/auth/verification-context'])
+async def test_specialized_native_session_verifier_refuses_bound_credential_without_admission(monkeypatch,http_client,path):
+    app,config,_=setup();monkeypatch.setattr('auth_service.nightly_runtime.configuration',lambda:config)
+    claims={'sub':SCOPE['subject'],'tenant_id':SCOPE['tenant'],'nightly_run':{'run':REGISTER['run'],'generation':REGISTER['generation']}}
+    monkeypatch.setattr('auth_service.connect_session.try_decode_tenant_session_jwt',lambda token:claims)
+    def unexpected():raise AssertionError('no provider or membership call after bound credential refusal')
+    monkeypatch.setattr('auth_service.connect_session.get_keycloak_jwt_validator',unexpected)
+    response=await http_client.get(path,headers={'Authorization':'Bearer substituted-valid-token','X-Tenant-ID':SCOPE['tenant'],'X-Auth-Session-Token':'substituted-original'})
+    assert response.status_code==403
+
+
+@pytest.mark.asyncio
+async def test_closed_native_context_is_never_reused(monkeypatch):
+    _,config,_=setup();monkeypatch.setattr('auth_service.nightly_runtime.configuration',lambda:config)
+    bound=dict(run=REGISTER['run'],generation=REGISTER['generation'],scope=SCOPE,_closed=True)
+    token=admission.set(bound)
+    try:
+        with pytest.raises(state.Refused):await verify_claims({'sub':SCOPE['subject'],'nightly_run':{'run':REGISTER['run'],'generation':REGISTER['generation']}})
+    finally:admission.reset(token)
