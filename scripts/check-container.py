@@ -93,6 +93,7 @@ def main():
         built = client.images.get(image)
         built_here = not args.image
         assert built.attrs['Config']['User'] == '65532:65532'
+        print(f"Qualified Auth runtime {built.attrs['Os']}/{built.attrs['Architecture']} ({built.attrs['Size']} bytes)")
         subprocess.run(['bash', 'scripts/audit-container.sh', image], cwd=ROOT, check=True)
         network = client.networks.create('auth-qualification-' + identity)
 
@@ -229,7 +230,14 @@ engine.dispose()
 assert os.geteuid()!=0
 assert not pathlib.Path('/app/src').exists() and not pathlib.Path('/app/tests').exists()
 assert shutil.which('git') is None
-assert not {'testcontainers','docker','uv'} & {d.metadata['Name'] for d in m.distributions()}
+assert not {'testcontainers','docker','uv','streamlit','pyarrow','pandas','numpy','pydeck'} & {
+    d.metadata['Name'].lower() for d in m.distributions()
+}
+assert pathlib.Path('/etc/alpine-release').is_file()
+import ssl
+from psycopg import pq
+assert ssl.create_default_context().get_ca_certs()
+assert pq.__impl__ == 'binary'
 import auth_service.app
 print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
 '''
@@ -242,7 +250,7 @@ print(json.dumps({'uid':os.geteuid(),'auth_version':m.version('auth-service')}))
                 wait(lambda: http.get(url + '/api/v1/health/').status_code == 200)
                 probe = auth.exec_run(['python', '-c', runtime_probe])
                 assert probe.exit_code == 0, probe.output.decode()
-                checks.append(mode + ': non-root installed runtime without checkout, fixture or build tools')
+                checks.append(mode + ': non-root Alpine runtime, native PostgreSQL driver and CA store; no build or analytics packages')
                 version = http.get(url + '/version');assert version.status_code == 200
                 expected_revision = built.attrs['Config']['Labels']['org.opencontainers.image.revision']
                 assert version.json()['git_sha'] == expected_revision

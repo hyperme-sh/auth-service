@@ -1,7 +1,6 @@
-FROM python:3.13-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72 AS build
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir uv==0.11.26
+FROM python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e AS build
+COPY --from=ghcr.io/astral-sh/uv:0.11.26@sha256:3d868e555f8f1dbc324afa005066cd11e1053fc4743b9808ca8025283e65efa5 /uv /usr/local/bin/uv
+RUN apk add --no-cache git ca-certificates
 WORKDIR /app
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 COPY pyproject.toml uv.lock LICENSE NOTICE README.md ./
@@ -13,7 +12,7 @@ COPY .github/workflows/third-party-notices/ /opt/legal-supplements/
 COPY scripts/prepare_notices.py /opt/prepare_notices.py
 RUN /app/.venv/bin/python -I /opt/prepare_notices.py /opt/notices /opt/legal-supplements
 
-FROM python:3.13-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+FROM python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /opt/notices /usr/share/doc/auth-service/third-party

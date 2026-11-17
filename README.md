@@ -170,8 +170,9 @@ Release channels and container version tags are in [docs/releasing.md](docs/rele
 ## Standalone container
 
 Build from this repository root with `docker build --build-arg GIT_SHA=$(git rev-parse HEAD) -t auth-local .`.
-The digest-pinned Python image installs the frozen public dependency graph in a
-build stage, then copies the installed environment into a non-root runtime.
+The pinned Alpine Python builder installs the frozen dependency graph, then
+copies the installed environment into a non-root Alpine runtime. The slim Core
+pin drops Streamlit, PyArrow, Pandas, NumPy, and PyDeck.
 Git, uv, the source checkout and fixture tooling stay out of the runtime. The
 current pinned core still declares pytest as a runtime dependency; this build
 keeps declared dependencies rather than removing them after resolution.

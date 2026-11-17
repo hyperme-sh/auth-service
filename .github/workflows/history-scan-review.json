@@ -1302,5 +1302,35 @@
     "start": 133,
     "end": 133,
     "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential"
+  },
+  {
+    "file": "3a27b291c936385f922db75e5201bf78a6263b3e-158.txt",
+    "sha256": "6bd224153db433cfb411412d8cfcfde34ec8911e7822bd0268942434b662fc9b",
+    "rule": "generic-api-key",
+    "start": 22,
+    "end": 22,
+    "classification": "Ed25519PrivateKey type annotation with no assigned value",
+    "source_object": "3a27b291c936385f922db75e5201bf78a6263b3e",
+    "source_path": "api/infrastructure/security/group_allocation_settings.py"
+  },
+  {
+    "file": "3a27b291c936385f922db75e5201bf78a6263b3e-162.txt",
+    "sha256": "af6f82a5a034507240e1cb251654bb76cb9cb878a3363af6c9733c677bc2cf41",
+    "rule": "generic-api-key",
+    "start": 22,
+    "end": 22,
+    "classification": "Ed25519PrivateKey type annotation with no assigned value",
+    "source_object": "3a27b291c936385f922db75e5201bf78a6263b3e",
+    "source_path": "api/infrastructure/security/media_allocation_settings.py"
+  },
+  {
+    "file": "6408da2e18cef367f4b95699179a4c0ccf01d267.txt",
+    "sha256": "0914c401ba676c11cfa8d7a3cbd3a9516aefee01dbf74b9286ace1d35f37220f",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "README placeholder for an operator-supplied token",
+    "source_object": "6408da2e18cef367f4b95699179a4c0ccf01d267",
+    "source_path": "README.md"
   }
 ]
