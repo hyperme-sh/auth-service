@@ -12,6 +12,7 @@ from auth_service import deps, transfer_permission as permission
 from auth_service.schemas import AuthMeResponse
 from auth_service.scoped_session import ScopeGrant
 from controlplane_api.config import settings
+from controlplane_api.exceptions import UnauthorizedException
 from test_scoped_session import scoped_owner
 
 
@@ -63,7 +64,7 @@ async def test_actual_issued_token_reaches_current_user_and_revocation_refuses(
     assert await deps.get_current_tenant(claims) == uuid.UUID(row['tenant'])
     assert claims['permissions'] == []
     save([])
-    with pytest.raises(Exception):
+    with pytest.raises(UnauthorizedException):
         await deps.get_access_token_claims(token)
 
 
@@ -112,7 +113,7 @@ async def test_token_use_rechecks_membership_and_generation(
         body = None if change == 'revoked' else {**scoped_owner,
             ('network_id' if change == 'network' else 'generation'): 'changed'}
         peer.mock(return_value=httpx.Response(200, json=body))
-    with pytest.raises(Exception):
+    with pytest.raises(UnauthorizedException):
         await deps.get_access_token_claims(response.json()['access_token'])
 
 
@@ -154,5 +155,39 @@ async def test_signed_source_tenant_or_changed_marker_is_refused(
     claims[key] = (str(uuid.uuid4()) if change in ('tenant','organization') else
                    {} if change == 'marker' else row['expiresAt']+1 if change == 'expiry' else 'foreign')
     token = jwt.encode(claims,settings.usable_api_key_exchange_secret(),algorithm='HS256')
-    with pytest.raises(Exception):
+    with pytest.raises(UnauthorizedException):
         await deps.get_access_token_claims(token)
+
+@pytest.mark.parametrize('raw', [
+    '{"version":1,"version":1,"grants":[]}',
+    '{"version":true,"grants":[]}',
+    '{"version":1,"grants":NaN}',
+    '{"version":1,"grants":{}}',
+    'x'*65537,
+])
+def test_malformed_file_refuses(transfer_grant,raw):
+    _,_,path=transfer_grant
+    path.write_text(raw)
+    with pytest.raises(ValueError):
+        permission.configuration()
+
+
+async def test_unrelated_claims_keep_existing_shape():
+    claims={'sub':'ordinary','permissions':['read']}
+    assert await permission.validate(claims) is claims
+
+
+@respx.mock
+async def test_changed_grant_hash_and_shorter_expiry_refuse_existing_token(
+        app,http_client,scoped_owner,transfer_grant):
+    row,save,_=transfer_grant
+    respx.post('https://scope.local/api/v1/internal/organization-authority/check').mock(
+        return_value=httpx.Response(200,json=scoped_owner))
+    save([{**row,'expiresAt':int(time.time())+100}])
+    response=await issue(app,http_client,scoped_owner,row)
+    assert response.status_code==200
+    claims=await deps.get_access_token_claims(response.json()['access_token'])
+    assert claims['exp']<=int(time.time())+100
+    save([row])
+    with pytest.raises(UnauthorizedException):
+        await deps.get_access_token_claims(response.json()['access_token'])
