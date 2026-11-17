@@ -23,7 +23,8 @@ from auth_service.keycloak_oidc import introspect_access_token
 async def validate_access_token(access_token: str) -> dict[str, Any]:
     from auth_service.nightly_runtime import verify_claims
     try:
-        return await verify_claims(await _validate_access_token(access_token))
+        from auth_service.transfer_permission import validate
+        return await validate(await verify_claims(await _validate_access_token(access_token)))
     except Exception as exc:
         raise UnauthorizedException('Invalid or expired access token') from exc
 

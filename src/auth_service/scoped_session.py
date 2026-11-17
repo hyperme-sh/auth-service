@@ -21,6 +21,7 @@ class ScopedRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     tenant_id: uuid.UUID
     organization_id: uuid.UUID
+    identity_transfer: StrictBool = False
 
 
 class ScopeGrant(BaseModel):
@@ -94,10 +95,17 @@ async def scoped_session(body: ScopedRequest,request: Request,user: CurrentAuthU
     try:grant=await current_scope(user.sub,body.tenant_id,body.organization_id)
     except ScopeUnavailable as exc:raise HTTPException(503,'Scope authority unavailable',headers=headers) from exc
     if grant is None:raise HTTPException(403,'Current organization membership required',headers=headers)
-    base=mint_tenant_session_jwt(claims={**claims,'azp':client_id,'permissions':[],'realm_access':{'roles':[]},'groups':[]},tenant_id=body.tenant_id,extra_roles=['org:'+grant.role])
+    from auth_service import transfer_permission
+    try:
+        transfer = transfer_permission.select(claims, grant) if body.identity_transfer else None
+    except (ValueError, OSError):
+        raise HTTPException(403, 'Transfer permission unavailable', headers=headers) from None
+    base=mint_tenant_session_jwt(claims={**transfer_permission.without_transfer(claims),'azp':client_id,'permissions':[],'realm_access':{'roles':[]},'groups':[]},tenant_id=body.tenant_id,extra_roles=['org:'+grant.role])
     payload=jwt.decode(base,settings.usable_api_key_exchange_secret(),algorithms=['HS256'],issuer='https://spanopticon.internal/tenant-session')
     payload.update(scope_version=1,scope_kind='organization',organization_id=str(grant.organization_id),network_id=grant.network_id,
         scope_generation=grant.generation,scope_manifest_sha256=grant.manifest_sha256)
+    if transfer is not None:
+        transfer_permission.attach(payload, transfer)
     access=jwt.encode(payload,settings.usable_api_key_exchange_secret(),algorithm='HS256')
     from auth_service import outbox
     from controlplane_api.event_types import AUTH_TOKEN_ISSUED_V1
