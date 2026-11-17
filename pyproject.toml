@@ -12,11 +12,11 @@ dependencies = [
     "controlplane-events @ git+https://github.com/hyperme-sh/controlplane-events.git@41bac4f366eeeedae47a0ada18d89f3dee1ca608",
     "controlplane-tenancy @ git+https://github.com/hyperme-sh/controlplane-tenancy.git@c1f37025a93c8b4e38699a42665ce380a66a54fd",
     "controlplane-db @ git+https://github.com/hyperme-sh/controlplane-db.git@907b9390b3d68aa67903ffec849e9f1d64c17f1f",
-    "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@0813448d067d59a0cc8fa2d144d85ddfde465af4",
+    "controlplane-api @ git+https://github.com/hyperme-sh/controlplane-api.git@e7b798a045ca899147a8b1eafb6b9f83565e030f",
     "controlplane-identity @ git+https://github.com/hyperme-sh/controlplane-identity.git@14355f230e15a5acf3b1283e87d5f65aceff35ba",
     "httpx>=0.28.1",
     "bcrypt>=4.2.0",
-    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@d5e658e1a139b58718a1dc1a5a532efd63d4f01c",
+    "controlplane-core @ git+https://github.com/hyperme-sh/controlplane-core.git@a58b0fd26dd8802735859cb6b26d1ff66223c11f",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
 ]
