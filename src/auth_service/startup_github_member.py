@@ -27,7 +27,7 @@ def configuration():
     supplied = os.environ.get('STARTUP_TEST_GITHUB_MEMBER_CONFIG')
     if settings.keycloak_issuer != ISSUER or bool(path) == (supplied is not None):
         raise InvalidBinding()
-    raw = read_private(Path(path)) if path else supplied.encode('utf-8')
+    raw = read_private(Path(path)) if path else supplied.rstrip('\n').encode('utf-8') + b'\n'
     if not 1 <= len(raw) <= 16384:
         raise InvalidBinding()
     mapping = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)

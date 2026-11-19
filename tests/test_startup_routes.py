@@ -106,7 +106,7 @@ async def test_github_member_resolves_only_existing_membership(http_client, star
         'sea_public_key': startup_config['binding']['sea_public_key'],
     }
     config = tmp_path / 'github-member.json'
-    config.write_text(json.dumps(mapping))
+    config.write_text(json.dumps(mapping) + '\n')
     config.chmod(0o600)
     monkeypatch.setattr(github, 'settings', SimpleNamespace(keycloak_issuer=github.ISSUER))
     monkeypatch.setattr(github, 'require_open_account', lambda claims: None)
@@ -138,5 +138,10 @@ async def test_github_member_resolves_only_existing_membership(http_client, star
     assert response.json()['github'] == {'subject': subject}
     assert 'entra' not in response.json()
     member.assert_awaited_once_with(subject, UUID(tenant))
+    monkeypatch.delenv('STARTUP_TEST_GITHUB_MEMBER_CONFIG_FILE')
+    monkeypatch.setenv('STARTUP_TEST_GITHUB_MEMBER_CONFIG', config.read_text().rstrip('\n'))
+    env_response = await request({})
+    assert env_response.status_code == 200
+    assert env_response.json()['mapping_sha256'] == response.json()['mapping_sha256']
     member.return_value = None
     assert (await request({})).status_code == 403
