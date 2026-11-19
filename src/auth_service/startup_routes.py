@@ -1,13 +1,15 @@
 """Default-disabled startup commands and read-only verified login resolution."""
 import hmac
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 import httpx
-from jwt import InvalidTokenError
+from jwt import InvalidTokenError, PyJWKClientError
 from auth_service import startup_identity as identity
 from auth_service._startup_contract import fingerprint
-from auth_service.deps import get_access_token_claims
+from auth_service.deps import bearer_access_token, get_access_token_claims
+from auth_service import startup_github_member
+from auth_service.session_membership import MemberAuthorityUnavailable
 
 router = APIRouter(prefix='/startup')
 
@@ -36,6 +38,16 @@ async def resolve(claims: dict = Depends(get_access_token_claims)):
         return await identity.resolve(identity.configuration(),claims)
     except (ValueError,OSError,httpx.HTTPError,InvalidTokenError):
         raise HTTPException(403,'Configured startup identity is not available for this login') from None
+
+
+@router.get('/identity/github-member')
+async def resolve_github_member(response: Response, token: str = Depends(bearer_access_token)):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        return await startup_github_member.resolve(token)
+    except (ValueError, OSError, InvalidTokenError, PyJWKClientError, MemberAuthorityUnavailable):
+        raise HTTPException(403, 'Configured startup identity is not available for this login',
+                            headers={'Cache-Control': 'no-store'}) from None
 
 
 @router.post('/status')
