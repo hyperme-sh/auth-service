@@ -451,3 +451,21 @@ must already be trusted by ACL. Configuration is rechecked before transaction co
 Absent configuration returns503 without database/provider IO. No configuration or
 key is created by source installation, and terminal grants remain unregistered.
 These routes cannot create genesis attestations or issue login sessions.
+
+## Retained-session canary
+
+`auth_service.canary` is an inactive HTTP contract for a declared synthetic
+subject, member, and two distinct tenant scopes. An authorized caller must
+explicitly enable its binding. It checks the same original browser and tenant
+credentials after a revision change, compares the original session reference
+and second-factor timestamp, and requires wrong-tenant refusal. Membership
+revocation, issuer logout and owner outage have separate exact expectations;
+an outage cannot satisfy a logout assertion. Saved session facts are validated
+before I/O. Requests have bounded time and response size and never follow
+redirects or environment proxies.
+
+The caller owns login, refresh, issuer logout, private token custody and cleanup.
+The contract does not provision identities, create sessions or activate billing.
+Infra owns the scheduled fixture under `config/fixtures/auth-canary` and its
+adapter under `scripts/nightly/auth_canary.py`. Its first-parent comparison is a
+source compatibility check, not a claim about an installed production revision.

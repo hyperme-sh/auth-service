@@ -251,6 +251,11 @@ async def session_context(request: Request, *, verification=False):
                 # Malformed HTTP-200 JSON is an outage, not an identity denial.
                 raise SessionUnavailable() from None
         introspection_shape(active)
+        if active['active'] is False:
+            return JSONResponse(
+                {'detail': 'Verified browser session required', 'code': 'issuer_token_inactive'},
+                status_code=403, headers=headers,
+            )
         facts = verified_facts(tenant, origin, active)
         if tenant.get('scope_version')==1:
             from auth_service.scoped_session import current_scope, ScopeUnavailable
