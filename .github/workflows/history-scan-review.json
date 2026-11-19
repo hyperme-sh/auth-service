@@ -1332,5 +1332,15 @@
     "classification": "README placeholder for an operator-supplied token",
     "source_object": "6408da2e18cef367f4b95699179a4c0ccf01d267",
     "source_path": "README.md"
+  },
+  {
+    "file": "aea6ff6223b615c87482de3b1c7e57945d7478de.txt",
+    "sha256": "50e26a7640eb67d87d7748376dc1e69e7204906fe84fcde0b5569cfc6264ca8c",
+    "rule": "generic-api-key",
+    "start": 133,
+    "end": 133,
+    "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential",
+    "source_object": "aea6ff6223b615c87482de3b1c7e57945d7478de",
+    "source_path": "README.md"
   }
 ]
