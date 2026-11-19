@@ -85,3 +85,58 @@ async def test_startup_scope_preserves_existing_owner_generation(startup_config,
     assert result.generation==generation
     peer.mock(return_value=httpx.Response(200,json={**grant,'manifest_sha256':'0'*64}))
     with pytest.raises(ScopeUnavailable):await current_scope('selected',uuid.UUID(org['tenant_id']),uuid.UUID(org['organization_id']))
+
+
+@respx.mock
+async def test_github_member_resolves_only_existing_membership(http_client, startup_config, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from time import time
+    from jwt import encode
+    from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
+    from auth_service import startup_github_member as github
+    from auth_service.session_membership import MemberGrant
+    from uuid import UUID
+
+    subject = '00000000-0000-4000-8000-000000000121'
+    person = '00000000-0000-4000-8000-000000000122'
+    tenant = startup_config['owner']['tenant_id']
+    mapping = {
+        'version': 1, 'environment': 'test', 'tenant_id': tenant, 'network_id': 'hyperme.sh',
+        'broker': {'issuer': github.ISSUER, 'audience': github.AUDIENCE, 'subject': subject, 'provider': 'github'},
+        'sea_public_key': startup_config['binding']['sea_public_key'],
+    }
+    config = tmp_path / 'github-member.json'
+    config.write_text(json.dumps(mapping))
+    config.chmod(0o600)
+    monkeypatch.setattr(github, 'settings', SimpleNamespace(keycloak_issuer=github.ISSUER))
+    monkeypatch.setattr(github, 'require_open_account', lambda claims: None)
+    member = AsyncMock(return_value=MemberGrant(user_id=UUID(person)))
+    monkeypatch.setattr(github, 'authorize_session_member', member)
+    key = generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(github.JWKS, 'get_signing_key_from_jwt', lambda token: SimpleNamespace(key=key.public_key()))
+    now = int(time())
+    claims = {'iss': github.ISSUER, 'aud': github.AUDIENCE, 'azp': github.AUDIENCE,
+              'sub': subject, 'login_provider': 'github', 'typ': 'Bearer', 'amr': ['mfa'],
+              'iat': now, 'exp': now + 60}
+    url = '/auth/startup/identity/github-member'
+
+    async def request(overrides):
+        token = encode(claims | overrides, key, algorithm='RS256')
+        return await http_client.get(url, headers={'Authorization': 'Bearer ' + token})
+
+    assert (await request({})).status_code == 403
+    monkeypatch.setenv('STARTUP_TEST_GITHUB_MEMBER_CONFIG_FILE', str(config))
+    for wrong in ({'sub': person}, {'azp': 'controlplane-frontend'}, {'aud': 'account'},
+                  {'login_provider': 'microsoft'}, {'typ': 'ID'}, {'exp': now - 5}):
+        assert (await request(wrong)).status_code == 403
+    member.assert_not_awaited()
+    response = await request({})
+    assert response.status_code == 200, response.text
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert response.json()['person_id'] == person
+    assert response.json()['permissions'] == response.json()['organizations'] == []
+    assert response.json()['github'] == {'subject': subject}
+    assert 'entra' not in response.json()
+    member.assert_awaited_once_with(subject, UUID(tenant))
+    member.return_value = None
+    assert (await request({})).status_code == 403
