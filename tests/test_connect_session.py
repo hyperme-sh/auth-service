@@ -381,3 +381,23 @@ async def test_end_context_authenticates_original_session_without_any_tenant_or_
         )
         assert not {"tenant_id", "member_id", "second_factor_at"}.intersection(body)
         assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_inactive_issuer_has_distinct_code(http_client):
+    import time
+    tenant, origin, _ = claims()
+    stamp = int(time.time())
+    origin.update(exp=stamp + 300, iat=stamp, auth_time=stamp - 30)
+    validator = type('Validator', (), {'validate': AsyncMock(return_value=origin)})()
+    with (
+        patch('auth_service.connect_session.try_decode_tenant_session_jwt', return_value=tenant),
+        patch('auth_service.connect_session.get_keycloak_jwt_validator', return_value=validator),
+        patch('auth_service.connect_session.introspect_access_token', AsyncMock(return_value={'active': False})),
+        patch('auth_service.connect_session.current_member', AsyncMock()) as member,
+    ):
+        response = await http_client.get('/auth/connect-session-context', headers={
+            'Authorization': 'Bearer tenant', 'X-Auth-Session-Token': 'original', 'X-Tenant-ID': TENANT})
+    assert response.status_code == 403
+    assert response.json() == {'detail': 'Verified browser session required', 'code': 'issuer_token_inactive'}
+    member.assert_not_awaited()

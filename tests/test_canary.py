@@ -54,7 +54,7 @@ async def test_invalid_saved_session_before_io(previous):
 
 @pytest.mark.parametrize('expected,status,body', [
     ('revoked', 403, {'detail': 'Verified active tenant member required', 'code': 'membership_revoked'}),
-    ('ended', 403, {'detail': 'Verified browser session required'}),
+    ('ended', 403, {'detail': 'Verified browser session required', 'code': 'issuer_token_inactive'}),
     ('unavailable', 503, {'detail': 'Session verification unavailable'}),
 ])
 async def test_exact_refusals(expected, status, body):
@@ -92,3 +92,9 @@ async def test_unsafe_endpoint_before_io(url):
         pytest.fail('Unsafe endpoint used')
     with pytest.raises(ValueError):
         await invoke(handler, url=url)
+
+
+async def test_expired_credential_does_not_prove_issuer_logout():
+    with pytest.raises(Unavailable):
+        await invoke(lambda _: reply({'detail': 'Verified browser session required'}, 403),
+                     previous=FACTS, expected='ended')

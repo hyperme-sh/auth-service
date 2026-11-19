@@ -113,6 +113,8 @@ async def probe(binding, *, url, tenant_token, original_token, previous=None,
                 required = {'detail': detail}
                 if expected == 'revoked':
                     required['code'] = 'membership_revoked'
+                elif expected == 'ended':
+                    required['code'] = 'issuer_token_inactive'
                 if status != code or facts != required:
                     raise Unavailable('Expected Auth refusal absent')
                 return previous
