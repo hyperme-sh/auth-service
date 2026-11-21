@@ -1,0 +1,104 @@
+name: Publish stable OCI runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact approved stable version tag
+        required: true
+        type: string
+      qualification_run:
+        description: Successful main runtime publication run
+        required: true
+        type: string
+      admission_run:
+        description: Successful release admission run for the version tag
+        required: true
+        type: string
+
+permissions: {}
+concurrency:
+  group: stable-runtime-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - name: Promote the qualified owner image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          QUALIFICATION_RUN: ${{ inputs.qualification_run }}
+          ADMISSION_RUN: ${{ inputs.admission_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$QUALIFICATION_RUN" =~ ^[1-9][0-9]*$ && "$ADMISSION_RUN" =~ ^[1-9][0-9]*$ ]]
+          component=${GITHUB_REPOSITORY#*/}
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERSION" --jq .sha)
+          [[ "$tag_sha" =~ ^[a-f0-9]{40}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/contents/releases/candidate/release.json?ref=$tag_sha" --jq .content |
+            base64 -d |
+            jq -e --arg component "$component" --arg version "${VERSION#v}" \
+              '.components[$component].version == $version' >/dev/null
+
+          verify_run() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$1" |
+              jq -e --arg sha "$tag_sha" --arg event "$2" --arg branch "$3" --arg path "$4" '
+                select(.head_sha == $sha and .event == $event and .head_branch == $branch and
+                .path == $path and .head_repository.full_name == .repository.full_name and
+                .conclusion == "success")
+              '
+          }
+          admission=$(verify_run "$ADMISSION_RUN" push "$VERSION" .github/workflows/release-admission.yml)
+          admission_attempt=$(jq -er .run_attempt <<<"$admission")
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$ADMISSION_RUN/attempts/$admission_attempt/jobs?per_page=100" |
+            jq -es 'any(.[].jobs[]; .conclusion == "success" and
+              (.name | endswith(" / Initial release admission") or endswith(" / Release compatibility")))' >/dev/null
+          qualified=$(verify_run "$QUALIFICATION_RUN" push main .github/workflows/package.yml)
+          qualification_attempt=$(jq -er .run_attempt <<<"$qualified")
+          job=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN/attempts/$qualification_attempt/jobs?per_page=100" |
+            jq -es '[.[].jobs[] | select(.name == "package" and .conclusion == "success" and
+              any(.steps[]; .name == "Publish qualified current main to moving TEST" and .conclusion == "success")) | .id] | select(length == 1) | .[0]')
+          digest=$(gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" |
+            sed -nE 's/^[^[:space:]]+ test: digest: (sha256:[a-f0-9]{64}) size: [0-9]+\r?$/\1/p' |
+            sort -u)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d "$RUNNER_TEMP/owner-stable-registry.XXXXXX")
+          trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}/runtime"
+          digest_of() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -er .digest
+          }
+          source="$repository@$digest"
+          config=$(docker buildx imagetools inspect "$source" --format '{{json .Image}}')
+          jq -e --arg sha "$tag_sha" --arg repo "https://github.com/$GITHUB_REPOSITORY" '
+            .config.Labels["org.opencontainers.image.revision"] == $sha and
+            .config.Labels["org.opencontainers.image.source"] == $repo
+          ' <<<"$config" >/dev/null
+
+          target="$repository:$VERSION"
+          if docker manifest inspect "$target" >/dev/null 2>"$DOCKER_CONFIG/lookup.err"; then
+            test "$(digest_of "$target")" = "$digest"
+          elif [[ "$(cat "$DOCKER_CONFIG/lookup.err")" == "no such manifest: $target" ||
+                    "$(cat "$DOCKER_CONFIG/lookup.err")" == "manifest unknown" ]]; then
+            docker buildx imagetools create --prefer-index=false --tag "$target" "$source"
+          else
+            cat "$DOCKER_CONFIG/lookup.err" >&2
+            exit 1
+          fi
+          test "$(digest_of "$target")" = "$digest"
+          jq -cn --arg version "$VERSION" --arg revision "$tag_sha" --arg repository "$repository" \
+            --arg digest "$digest" '{schema_version:1,version:$version,revision:$revision,repository:$repository,digest:$digest}' |
+            tee -a "$GITHUB_STEP_SUMMARY"
