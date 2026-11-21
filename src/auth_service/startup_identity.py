@@ -45,6 +45,9 @@ def checked_person(config, person):
         if any(o['tenant_id'] != config['owner']['tenant_id'] for o in organizations): raise ValueError()
         subject = person.get('broker_subject')
         if subject is not None and (not isinstance(subject,str) or not subject.strip() or len(subject)>255): raise ValueError()
+        oidc = config['binding'].get('oidc')
+        if oidc is not None and (subject or person['person_id']) != oidc['broker_subject']:
+            raise ValueError()
     except (ValueError,KeyError,TypeError):
         raise ValueError('User identity or organization mapping conflicts') from None
     return person
@@ -77,9 +80,13 @@ async def resolve(config, claims):
     person = checked_person(config,await owner('status',config))
     if not person.get('broker_subject'): raise ValueError('Startup broker binding is incomplete')
     verify_claims(config,claims,expected_subject=person['broker_subject'])
-    return {**person, 'status':'resolved', 'permissions':[],
-            'sea_public_key':config['binding']['sea_public_key'], 'binding_sha256':config['binding_sha256'],
-            'entra':{k:config['binding']['entra'][k] for k in ('tenant_id','object_id')}}
+    binding = config['binding']
+    if 'oidc' in binding:
+        provider_identity = {'oidc': {'provider': binding['oidc']['broker'], 'subject': person['broker_subject']}}
+    else:
+        provider_identity = {'entra': {key: binding['entra'][key] for key in ('tenant_id', 'object_id')}}
+    return {**person, **provider_identity, 'status':'resolved', 'permissions':[],
+            'sea_public_key':binding['sea_public_key'], 'binding_sha256':config['binding_sha256']}
 
 
 async def status(config):
