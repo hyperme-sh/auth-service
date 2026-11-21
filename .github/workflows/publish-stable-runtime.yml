@@ -53,9 +53,9 @@ jobs:
           verify_run() {
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$1" |
               jq -e --arg sha "$tag_sha" --arg event "$2" --arg branch "$3" --arg path "$4" '
-                .head_sha == $sha and .event == $event and .head_branch == $branch and
+                select(.head_sha == $sha and .event == $event and .head_branch == $branch and
                 .path == $path and .head_repository.full_name == .repository.full_name and
-                .conclusion == "success"
+                .conclusion == "success")
               '
           }
           admission=$(verify_run "$ADMISSION_RUN" push "$VERSION" .github/workflows/release-admission.yml)
