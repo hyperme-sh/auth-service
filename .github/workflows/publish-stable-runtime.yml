@@ -24,7 +24,7 @@ concurrency:
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, x64, debrunner]
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
     timeout-minutes: 15
     permissions:
       actions: read
@@ -65,9 +65,13 @@ jobs:
               (.name | endswith(" / Initial release admission") or endswith(" / Release compatibility")))' >/dev/null
           qualified=$(verify_run "$QUALIFICATION_RUN" push main .github/workflows/package.yml)
           qualification_attempt=$(jq -er .run_attempt <<<"$qualified")
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN/attempts/$qualification_attempt/jobs?per_page=100" |
-            jq -es 'any(.[].jobs[]; .name == "package" and .conclusion == "success" and
-              any(.steps[]; .name == "Publish qualified current main to moving TEST" and .conclusion == "success"))' >/dev/null
+          job=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN/attempts/$qualification_attempt/jobs?per_page=100" |
+            jq -es '[.[].jobs[] | select(.name == "package" and .conclusion == "success" and
+              any(.steps[]; .name == "Publish qualified current main to moving TEST" and .conclusion == "success")) | .id] | select(length == 1) | .[0]')
+          digest=$(gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" |
+            sed -nE 's/^[^[:space:]]+ test: digest: (sha256:[a-f0-9]{64}) size: [0-9]+\r?$/\1/p' |
+            sort -u)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
 
           export DOCKER_CONFIG
           DOCKER_CONFIG=$(mktemp -d "$RUNNER_TEMP/owner-stable-registry.XXXXXX")
@@ -77,8 +81,6 @@ jobs:
           digest_of() {
             docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -er .digest
           }
-          digest=$(digest_of "$repository:test")
-          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           source="$repository@$digest"
           config=$(docker buildx imagetools inspect "$source" --format '{{json .Image}}')
           jq -e --arg sha "$tag_sha" --arg repo "https://github.com/$GITHUB_REPOSITORY" '
