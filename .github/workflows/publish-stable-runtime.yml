@@ -68,7 +68,11 @@ jobs:
           job=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN/attempts/$qualification_attempt/jobs?per_page=100" |
             jq -es '[.[].jobs[] | select(.name == "package" and .conclusion == "success" and
               any(.steps[]; .name == "Publish qualified current main to moving TEST" and .conclusion == "success")) | .id] | select(length == 1) | .[0]')
-          digest=$(gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" |
+          log_options=()
+          if gh api --help | grep -F -- --allow-escape-sequences >/dev/null; then
+            log_options+=(--allow-escape-sequences)
+          fi
+          digest=$(gh api "${log_options[@]}" "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" |
             sed -nE 's/^[^[:space:]]+ test: digest: (sha256:[a-f0-9]{64}) size: [0-9]+\r?$/\1/p' |
             sort -u)
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
