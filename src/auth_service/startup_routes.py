@@ -42,9 +42,18 @@ async def resolve(claims: dict = Depends(get_access_token_claims)):
 
 @router.get('/identity/github-member')
 async def resolve_github_member(response: Response, token: str = Depends(bearer_access_token)):
+    return await resolve_test_member(response, token, 'github')
+
+
+@router.get('/identity/nightly-member')
+async def resolve_nightly_member(response: Response, token: str = Depends(bearer_access_token)):
+    return await resolve_test_member(response, token, startup_github_member.NIGHTLY_PROVIDER)
+
+
+async def resolve_test_member(response: Response, token: str, provider: str):
     response.headers['Cache-Control'] = 'no-store'
     try:
-        return await startup_github_member.resolve(token)
+        return await startup_github_member.resolve(token, provider)
     except (ValueError, OSError, InvalidTokenError, PyJWKClientError, MemberAuthorityUnavailable):
         raise HTTPException(403, 'Configured startup identity is not available for this login',
                             headers={'Cache-Control': 'no-store'}) from None

@@ -145,3 +145,65 @@ async def test_github_member_resolves_only_existing_membership(http_client, star
     assert env_response.json()['mapping_sha256'] == response.json()['mapping_sha256']
     member.return_value = None
     assert (await request({})).status_code == 403
+
+
+async def test_nightly_member_requires_its_configured_broker_and_client(startup_config, monkeypatch):
+    from time import time
+    from types import SimpleNamespace
+    from uuid import UUID
+
+    from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
+    from fastapi import HTTPException, Response
+    from jwt import encode
+
+    from auth_service import claims as auth_claims, startup_github_member as member_auth
+    from auth_service.session_membership import MemberGrant
+    from auth_service.startup_routes import resolve_nightly_member
+
+    subject = '00000000-0000-4000-8000-000000000121'
+    person = '00000000-0000-4000-8000-000000000122'
+    tenant = startup_config['owner']['tenant_id']
+    audience = 's3rch-startup-nightly'
+    provider = 'startup-nightly'
+    mapping = {
+        'version': 1, 'environment': 'test', 'tenant_id': tenant, 'network_id': 'hyperme.sh',
+        'broker': {'issuer': member_auth.ISSUER, 'audience': audience, 'subject': subject, 'provider': provider},
+        'sea_public_key': startup_config['binding']['sea_public_key'],
+    }
+    settings = SimpleNamespace(keycloak_issuer=member_auth.ISSUER)
+    monkeypatch.setattr(member_auth, 'settings', settings)
+    monkeypatch.setattr(member_auth, 'require_open_account', lambda claims: None)
+    monkeypatch.setattr(auth_claims, 'settings', SimpleNamespace(oidc_require_mfa=True))
+    member = AsyncMock(return_value=MemberGrant(user_id=UUID(person)))
+    monkeypatch.setattr(member_auth, 'authorize_session_member', member)
+    key = generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(member_auth.JWKS, 'get_signing_key_from_jwt', lambda token: SimpleNamespace(key=key.public_key()))
+    now = int(time())
+    claims = {'iss': member_auth.ISSUER, 'aud': audience, 'azp': audience, 'sub': subject,
+              'login_provider': provider, 'typ': 'Bearer', 'amr': ['otp'], 'iat': now, 'exp': now + 60}
+
+    async def resolve(overrides, response=None):
+        return await resolve_nightly_member(response or Response(), encode(claims | overrides, key, algorithm='RS256'))
+
+    with pytest.raises(HTTPException) as unavailable:
+        await resolve({})
+    assert unavailable.value.status_code == 403
+    monkeypatch.setenv('STARTUP_TEST_NIGHTLY_MEMBER_CONFIG', json.dumps(mapping))
+    for wrong in ({'sub': person}, {'azp': 's3rch-web'}, {'aud': 's3rch-web'}, {'login_provider': 'github'},
+                  {'typ': 'ID'}, {'amr': ['pwd']}, {'email': 'same@example.invalid', 'sub': person}):
+        with pytest.raises(HTTPException) as denied:
+            await resolve(wrong)
+        assert denied.value.status_code == 403
+    member.assert_not_awaited()
+    response = Response()
+    result = await resolve({}, response)
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert result['oidc'] == {'provider': provider, 'subject': subject}
+    assert result['person_id'] == person
+    assert result['permissions'] == result['organizations'] == []
+    assert 'github' not in result
+    member.assert_awaited_once_with(subject, UUID(tenant))
+    settings.keycloak_issuer = 'https://auth.hyperme.sh/realms/controlplane'
+    with pytest.raises(HTTPException) as production:
+        await resolve({})
+    assert production.value.status_code == 403
