@@ -12,6 +12,11 @@ import stat
 from urllib.parse import urlsplit
 from uuid import UUID
 
+TEST_BROKER = 'startup-nightly'
+TEST_UPSTREAM = 'https://auth.test.hyperme.sh/realms/startup-nightly'
+TEST_ISSUER = 'https://auth.test.hyperme.sh/realms/controlplane'
+TEST_OPERATOR_EMAIL = 'owner@startup-nightly.invalid'
+
 MAX_BYTES = 16384
 ORGANIZATIONS = frozenset(('fyberlabs', 'tennesseewindage', 'hyperme.sh'))
 
@@ -72,19 +77,29 @@ def canonical_binding(raw):
         if type(raw) is not bytes or not 1 <= len(raw) <= MAX_BYTES:
             raise InvalidBinding()
         doc = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)
-        fields(doc, ('version', 'entra', 'sea_public_key', 'organizations', 'platform_admin', 'keycloak_admin'))
-        if type(doc['version']) is not int or doc['version'] != 1:
+        version = doc.get('version') if type(doc) is dict else None
+        if type(version) is not int or version not in (1, 2):
             raise InvalidBinding()
+        provider = 'entra' if version == 1 else 'oidc'
+        fields(doc, ('version', provider, 'sea_public_key', 'organizations', 'platform_admin', 'keycloak_admin'))
         sea_key(doc['sea_public_key'])
-        entra = doc['entra']
-        fields(entra, ('tenant_id', 'object_id', 'issuer', 'audience', 'subject', 'broker'))
-        for name in ('tenant_id', 'object_id', 'audience'):
-            identifier(entra[name])
-        if entra['issuer'] != 'https://login.microsoftonline.com/' + entra['tenant_id'] + '/v2.0':
-            raise InvalidBinding()
-        if type(entra['subject']) is not str or not re.fullmatch(r'[\x21-\x7e]{1,256}', entra['subject']):
-            raise InvalidBinding()
-        label(entra['broker'])
+        if provider == 'entra':
+            entra = doc['entra']
+            fields(entra, ('tenant_id', 'object_id', 'issuer', 'audience', 'subject', 'broker'))
+            for name in ('tenant_id', 'object_id', 'audience'):
+                identifier(entra[name])
+            if entra['issuer'] != 'https://login.microsoftonline.com/' + entra['tenant_id'] + '/v2.0':
+                raise InvalidBinding()
+            if type(entra['subject']) is not str or not re.fullmatch(r'[\x21-\x7e]{1,256}', entra['subject']):
+                raise InvalidBinding()
+            label(entra['broker'])
+        else:
+            oidc = doc['oidc']
+            fields(oidc, ('issuer', 'subject', 'broker', 'broker_subject'))
+            identifier(oidc['subject'])
+            identifier(oidc['broker_subject'])
+            if oidc['issuer'] != TEST_UPSTREAM or oidc['broker'] != TEST_BROKER or oidc['subject'] == oidc['broker_subject']:
+                raise InvalidBinding()
         organizations = doc['organizations']
         fields(organizations, ORGANIZATIONS)
         ids = set()
@@ -107,6 +122,8 @@ def canonical_binding(raw):
         fields(doc['keycloak_admin'], ('realm', 'enabled'))
         label(doc['keycloak_admin']['realm'])
         if type(doc['keycloak_admin']['enabled']) is not bool:
+            raise InvalidBinding()
+        if version == 2 and doc['keycloak_admin'] != {'realm': 'controlplane', 'enabled': False}:
             raise InvalidBinding()
         return (json.dumps(doc, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode()
     except (ValueError, TypeError, KeyError, RecursionError, UnicodeError, OverflowError):
@@ -149,7 +166,7 @@ def binding_fingerprint(binding):
 
 
 def validate(value):
-    """Return a detached mapping with separate raw Entra and broker settings."""
+    """Return a detached mapping with separate upstream and broker settings."""
     try:
         # JSON round-trip snapshots caller input and bounds nested or unusual values.
         doc = json.loads(_encode(value), object_pairs_hook=unique_object)
@@ -177,6 +194,9 @@ def validate(value):
             raise InvalidBinding()
         _ = parsed.port
         if type(audience) is not str or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,254}', audience):
+            raise InvalidBinding()
+        if binding['version'] == 2 and (issuer != TEST_ISSUER or owner['network_id'] != 'hyperme.sh'
+                or owner['profile']['email'] != TEST_OPERATOR_EMAIL):
             raise InvalidBinding()
         doc['binding'] = binding
         return doc
@@ -207,7 +227,7 @@ def verify_claims(config, claims, *, expected_subject=None):
     The initial subject may be unbound; later requests must supply the stored one.
     """
     mapping = validate(config)
-    entra, broker = mapping['binding']['entra'], mapping['owner']['broker']
+    binding, broker = mapping['binding'], mapping['owner']['broker']
     if type(claims) is not dict:
         raise InvalidBinding()
     audiences = claims.get('aud')
@@ -217,8 +237,13 @@ def verify_claims(config, claims, *, expected_subject=None):
             any(type(item) is not str for item in audiences) or
             len(set(audiences)) != len(audiences) or broker['audience'] not in audiences):
         raise InvalidBinding()
-    expected = {'iss': broker['issuer'], 'login_provider': entra['broker'],
-                'entra_tenant_id': entra['tenant_id'], 'entra_object_id': entra['object_id']}
+    expected = {'iss': broker['issuer']}
+    if binding['version'] == 1:
+        entra = binding['entra']
+        expected.update(login_provider=entra['broker'], entra_tenant_id=entra['tenant_id'],
+                        entra_object_id=entra['object_id'])
+    else:
+        expected.update(login_provider=TEST_BROKER, sub=binding['oidc']['broker_subject'], azp=broker['audience'])
     if any(type(claims.get(key)) is not str or claims[key] != value for key, value in expected.items()):
         raise InvalidBinding()
     if claims.get('azp') not in (None, broker['audience']) or 'spanopticon_auth' in claims or 'purpose' in claims:

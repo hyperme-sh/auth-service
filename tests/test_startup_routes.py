@@ -48,6 +48,41 @@ async def test_startup_login_cannot_bind_and_wrong_subject_is_refused(app,http_c
     finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)
 
 
+async def test_synthetic_startup_resolves_only_the_configured_broker_subject(startup_config, monkeypatch):
+    from auth_service._startup_contract import binding_fingerprint
+
+    config = startup_config
+    subject = "794162c8-c946-59c5-8850-004b0dbe6e18"
+    config["binding"].pop("entra")
+    config["binding"].update(version=2, oidc={
+        "issuer": "https://auth.test.hyperme.sh/realms/startup-nightly", "broker": "startup-nightly",
+        "subject": "76259cb6-a67f-5d78-83ec-8f1cabc0eb44", "broker_subject": subject,
+    }, keycloak_admin={"realm": "controlplane", "enabled": False})
+    config["binding_sha256"] = binding_fingerprint(config["binding"])
+    config["owner"].update(network_id="hyperme.sh", profile={"email": "owner@startup-nightly.invalid"},
+                           broker={"issuer": "https://auth.test.hyperme.sh/realms/controlplane", "audience": "startup-client"})
+    person = {"schema_version": 1, "status": "reconciled", "mapping_sha256": fingerprint(config),
+              "person_id": subject, "broker_subject": subject, "tenant_id": config["owner"]["tenant_id"],
+              "network_id": "hyperme.sh", "organizations": [
+                  {"slug": slug, "id": row["organization_id"], "tenant_id": row["tenant_id"], "roles": row["roles"]}
+                  for slug, row in sorted(config["binding"]["organizations"].items())
+              ]}
+    lookup = AsyncMock(return_value=person)
+    monkeypatch.setattr(startup_identity, "owner", lookup)
+    claims = {"iss": config["owner"]["broker"]["issuer"], "aud": "startup-client", "azp": "startup-client",
+              "sub": subject, "login_provider": "startup-nightly", "email": "owner@startup-nightly.invalid"}
+    with pytest.raises(ValueError):
+        await startup_identity.resolve(config, claims | {"sub": "other-same-email-subject"})
+    lookup.assert_not_awaited()
+    result = await startup_identity.resolve(config, claims)
+    assert result["oidc"] == {"provider": "startup-nightly", "subject": subject}
+    assert result["permissions"] == []
+    assert "entra" not in result
+    person["broker_subject"] = "other-same-email-subject"
+    with pytest.raises(ValueError):
+        await startup_identity.resolve(config, claims)
+
+
 async def test_startup_disables_historical_tenant_promotion(app,http_client,startup_config,monkeypatch):
     async def claims():return {'sub':'configured','email':startup_config['owner']['profile']['email']}
     app.dependency_overrides[deps.get_access_token_claims]=claims
