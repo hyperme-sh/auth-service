@@ -12,7 +12,7 @@ on:
         required: true
         default: shared
         type: choice
-        options: [shared, isolated]
+        options: [shared]
 
 permissions: {}
 concurrency:
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
-    environment: ${{ inputs.registry == 'isolated' && 'auth-isolated-azure-release' || 'auth-azure-release' }}
+    environment: auth-isolated-azure-release
     runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
@@ -69,19 +69,11 @@ jobs:
       - name: Copy the qualified image without rebuilding and protect the tag
         env:
           DIGEST: ${{ steps.release.outputs.digest }}
-          REGISTRY_TARGET: ${{ inputs.registry }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
           registry=acrfybercg47
-          if [[ "$REGISTRY_TARGET" == isolated ]]; then
-            registry=acrfyberreleasecg47
-            registry_id=$(az acr show --name "$registry" --query id -o tsv)
-            lock_id="$registry_id/providers/Microsoft.Authorization/locks/protected-release-management"
-            az rest --method get --url "https://management.azure.com$lock_id?api-version=2016-09-01" |
-              jq -e --arg id "$lock_id" '(.id|ascii_downcase) == ($id|ascii_downcase) and .properties.level=="ReadOnly"' >/dev/null
-          fi
           server="$registry.azurecr.io"
           source="ghcr.io/hyperme-sh/auth-service/runtime"
           repository=auth-service
