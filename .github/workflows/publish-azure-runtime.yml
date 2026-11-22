@@ -84,19 +84,19 @@ jobs:
           trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           refresh=$(az account get-access-token --resource https://containerregistry.azure.net --query accessToken -o tsv |
-            tr -d '\r\n' | curl -fsS --max-time 30 "https://$server/oauth2/exchange" \
+            tr -d '\r\n' | curl --disable -fsS --max-time 30 "https://$server/oauth2/exchange" \
               --data 'grant_type=access_token' --data-urlencode "tenant=$ACR_TENANT" \
               --data-urlencode "service=$server" --data-urlencode 'access_token@-' | jq -er .refresh_token)
           printf '%s' "$refresh" |
             docker login "$server" --username 00000000-0000-0000-0000-000000000000 --password-stdin
-          metadata_token=$(printf '%s' "$refresh" | curl -fsS --max-time 30 "https://$server/oauth2/token" \
+          metadata_token=$(printf '%s' "$refresh" | curl --disable -fsS --max-time 30 "https://$server/oauth2/token" \
             --data 'grant_type=refresh_token' --data-urlencode "service=$server" \
             --data-urlencode "scope=repository:$repository:metadata_read,metadata_write" \
             --data-urlencode 'refresh_token@-' | jq -er .access_token)
           unset refresh
           metadata() {
             printf 'header = "Authorization: Bearer %s"\n' "$metadata_token" |
-              curl -fsS --max-time 30 --config - "$@"
+              curl --disable -fsS --max-time 30 --config - "$@"
           }
           manifest_digest() {
             docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -er .digest
