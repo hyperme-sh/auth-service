@@ -1342,5 +1342,21 @@
     "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential",
     "source_object": "aea6ff6223b615c87482de3b1c7e57945d7478de",
     "source_path": "README.md"
+  },
+  {
+    "file": "11bbf25fee9209620a0f3fb9015dfa28ac3a8ffc.txt",
+    "sha256": "07442439fc9fe18c9b69b84e40d242a32789cfc247901a7f9a8269e14718d266",
+    "rule": "generic-api-key",
+    "start": 23,
+    "end": 23,
+    "reason": "Public SHA-256 of a file in the approved patch distribution contract"
+  },
+  {
+    "file": "11bbf25fee9209620a0f3fb9015dfa28ac3a8ffc.txt",
+    "sha256": "07442439fc9fe18c9b69b84e40d242a32789cfc247901a7f9a8269e14718d266",
+    "rule": "generic-api-key",
+    "start": 56,
+    "end": 56,
+    "reason": "Public SHA-256 of a file in the approved patch distribution contract"
   }
 ]
