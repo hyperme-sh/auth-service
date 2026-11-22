@@ -130,6 +130,31 @@ async def test_setup_grant_cannot_self_enroll_in_foreign_tenant(http_client, ten
     grant.assert_not_awaited()
 
 
+async def test_private_forum_setup_only_acknowledges_existing_test_owner(http_client, oidc, monkeypatch):
+    _, issue = oidc
+    scope = str(routes.FORUM_TEST_HOST_TENANT)
+    endpoint = "/auth/host-setup/enrollment/grant"
+    body = {"tenant_id": scope, "held_roles": ["host"]}
+    headers = {"Authorization": "Bearer " + issue(), "X-Tenant-ID": scope}
+    owner = AsyncMock(return_value=SimpleNamespace(user_id=uuid.uuid4()))
+    writer = AsyncMock()
+    monkeypatch.setattr(routes, "authorize_host_setup", owner)
+    monkeypatch.setattr(routes, "grant_held_roles", writer)
+    assert (await http_client.post(endpoint, headers=headers, json=body)).status_code == 403
+    owner.assert_not_awaited()
+    monkeypatch.setattr(routes, "FORUM_TEST_ISSUER", "https://issuer.test")
+    assert (await http_client.post(endpoint, headers=headers | {"X-Tenant-ID": str(uuid.uuid4())}, json=body)).status_code == 403
+    owner.assert_not_awaited()
+    result = await http_client.post(endpoint, headers=headers, json=body)
+    assert result.status_code == 200, result.text
+    assert result.json()["granted"] == ["host"]
+    assert result.json()["device_enrolled"] is False
+    owner.assert_awaited_once_with("owner", routes.FORUM_TEST_HOST_TENANT)
+    owner.return_value = None
+    assert (await http_client.post(endpoint, headers=headers, json=body)).status_code == 403
+    writer.assert_not_awaited()
+
+
 @pytest.mark.parametrize("change", [{"purpose": "service"}, {"aud": "account"}, {"exp": 1}, {"iss": "other"}])
 def test_setup_session_rejects_wrong_purpose_audience_issuer_or_expiry(app, tenant_uuid, change):
     token = mint_host_setup_session(claims={"azp": CLIENT, "sub": "owner"}, tenant_id=tenant_uuid)

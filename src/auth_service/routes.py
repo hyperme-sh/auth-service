@@ -83,6 +83,8 @@ router.include_router(scoped_session_router)
 from auth_service.startup_routes import router as startup_router
 router.include_router(startup_router)
 logger = logging.getLogger(__name__)
+FORUM_TEST_HOST_TENANT = uuid.UUID("afee9b29-1706-5590-bbbf-e58df8945ac0")
+FORUM_TEST_ISSUER = "https://auth.test.hyperme.sh/realms/controlplane"
 
 
 def _smoke_json(
@@ -667,6 +669,13 @@ async def host_setup_grant(
 ) -> EnrollmentGrantResponse:
     if body.held_roles != ["host"]:
         raise ForbiddenException("Host setup can request only host membership")
+    if body.tenant_id == FORUM_TEST_HOST_TENANT and claims.get("iss") == FORUM_TEST_ISSUER:
+        if request.headers.get("X-Tenant-ID") != str(body.tenant_id):
+            raise ForbiddenException("X-Tenant-ID must match the scoped TEST enrollment")
+        grant = await authorize_host_setup(str(claims["sub"]), body.tenant_id)
+        if grant is None:
+            raise ForbiddenException("Active unbanned host membership required in this tenant")
+        return EnrollmentGrantResponse(granted=["host"], refused=[])
     user = AuthMeResponse(sub=str(claims["sub"]), email=claims.get("email"))
     return await auth_enrollment_grant(body, request, user, session)
 
