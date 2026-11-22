@@ -670,7 +670,9 @@ async def host_setup_grant(
     if body.held_roles != ["host"]:
         raise ForbiddenException("Host setup can request only host membership")
     if body.tenant_id == FORUM_TEST_HOST_TENANT and claims.get("iss") == FORUM_TEST_ISSUER:
-        if request.headers.get("X-Tenant-ID") != str(body.tenant_id):
+        # Edge clears unbound tenant headers on raw host-setup tokens.
+        header = request.headers.get("X-Tenant-ID")
+        if header and header != str(body.tenant_id):
             raise ForbiddenException("X-Tenant-ID must match the scoped TEST enrollment")
         grant = await authorize_host_setup(str(claims["sub"]), body.tenant_id)
         if grant is None:

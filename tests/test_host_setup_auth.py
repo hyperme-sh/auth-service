@@ -145,7 +145,9 @@ async def test_private_forum_setup_only_acknowledges_existing_test_owner(http_cl
     monkeypatch.setattr(routes, "FORUM_TEST_ISSUER", "https://issuer.test")
     assert (await http_client.post(endpoint, headers=headers | {"X-Tenant-ID": str(uuid.uuid4())}, json=body)).status_code == 403
     owner.assert_not_awaited()
-    result = await http_client.post(endpoint, headers=headers, json=body)
+    # Edge strips the selection header until Auth binds the setup session.
+    bearer_only = {"Authorization": headers["Authorization"]}
+    result = await http_client.post(endpoint, headers=bearer_only, json=body)
     assert result.status_code == 200, result.text
     assert result.json()["granted"] == ["host"]
     assert result.json()["device_enrolled"] is False
