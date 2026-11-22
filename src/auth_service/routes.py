@@ -267,8 +267,9 @@ async def auth_switch_tenant(
     binding = current_binding()
     if binding is not None:
         require(str(body.tenant_id) == binding['scope']['tenant'])
-    if (__import__("os").environ.get("AUTH_SCOPE_GENERATION") or
-        __import__("os").environ.get("STARTUP_IDENTITY_ENABLED") == "1"):
+    from auth_service.startup_identity import requires_scoped_session
+
+    if requires_scoped_session(body.tenant_id, claims):
         raise HTTPException(403,"Use the explicit scoped-session endpoint",headers={"Cache-Control":"no-store"})
     if is_smoke_session(claims):
         raise ForbiddenException("Smoke session cannot switch tenant")

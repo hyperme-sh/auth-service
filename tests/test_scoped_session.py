@@ -152,3 +152,42 @@ async def test_admitted_scoped_session_refuses_foreign_selection_before_owner(ap
             response=await http_client.post('/auth/scoped-session',headers={'Authorization':'Bearer local-browser'},json=body)
         assert response.status_code==403
     finally:app.dependency_overrides.pop(deps.get_access_token_claims,None)
+
+
+async def test_synthetic_organization_scope_does_not_require_global_scope_cutover(monkeypatch):
+    from auth_service import scoped_session as sessions, startup_identity
+
+    subject, tenant, organization, foreign = (uuid.uuid4() for _ in range(4))
+    stamp = 'a' * 64
+    config = {
+        'owner': {'tenant_id': str(tenant), 'network_id': 'hyperme.sh'},
+        'binding': {'version': 2, 'oidc': {'broker': 'startup-nightly', 'broker_subject': str(subject)},
+                    'organizations': {'nightly': {'organization_id': str(organization)}}},
+    }
+    body = {'subject': str(subject), 'user_id': str(subject), 'network_id': 'hyperme.sh',
+            'tenant_id': str(tenant), 'organization_id': str(organization), 'role': 'admin',
+            'can_purchase': False, 'generation': 'startup-v1', 'manifest_sha256': stamp}
+    monkeypatch.setenv('STARTUP_IDENTITY_ENABLED', '1')
+    monkeypatch.delenv('AUTH_SCOPE_GENERATION', raising=False)
+    monkeypatch.setattr(startup_identity, 'configuration', lambda: config)
+    monkeypatch.setattr(sessions, 'fingerprint', lambda mapping: stamp)
+    owner = AsyncMock(return_value=body)
+    monkeypatch.setattr(startup_identity, 'owner', owner)
+
+    assert not startup_identity.requires_scoped_session(foreign, {'sub': 'ordinary-user'})
+    assert startup_identity.requires_scoped_session(foreign, {'sub': str(subject)})
+    assert startup_identity.requires_scoped_session(foreign, {'login_provider': 'startup-nightly'})
+    assert startup_identity.requires_scoped_session(tenant, {'sub': 'ordinary-user'})
+    assert await current_scope(str(subject), foreign, organization) is None
+    assert await current_scope(str(subject), tenant, foreign) is None
+    assert await current_scope(str(foreign), tenant, organization) is None
+    owner.assert_not_awaited()
+
+    grant = await current_scope(str(subject), tenant, organization)
+    assert grant.organization_id == organization and grant.generation == 'startup-v1'
+    owner.assert_awaited_once_with('scope', config, subject=str(subject), tenant_id=str(tenant),
+                                  organization_id=str(organization))
+
+    owner.return_value = body | {'manifest_sha256': 'b' * 64}
+    with pytest.raises(ScopeUnavailable):
+        await current_scope(str(subject), tenant, organization)

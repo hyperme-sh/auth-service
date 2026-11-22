@@ -8,6 +8,8 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from auth_service.deps import CurrentAuthUser, get_access_token_claims
+from auth_service import startup_identity
+from auth_service._startup_contract import fingerprint
 from controlplane_api.config import settings
 from api.infrastructure.security.tenant_session_jwt import mint_tenant_session_jwt, is_smoke_session
 
@@ -43,9 +45,9 @@ def owner_configuration():
     generation=os.environ.get('AUTH_SCOPE_GENERATION','')
     manifest=os.environ.get('AUTH_SCOPE_MANIFEST_SHA256','')
     if os.environ.get('STARTUP_IDENTITY_ENABLED') == '1' and not generation and not manifest:
-        from auth_service.startup_identity import configuration
-        from auth_service._startup_contract import fingerprint
-        generation,manifest='startup-v1',fingerprint(configuration())
+        config = startup_identity.configuration()
+        if config['binding']['version'] == 1:
+            generation, manifest = 'startup-v1', fingerprint(config)
     if not all((url,token,generation,manifest)):raise ScopeUnavailable('Scope owner configuration required')
     try:
         parsed=urlsplit(url)
@@ -56,23 +58,45 @@ def owner_configuration():
     return url,token,generation,manifest
 
 
-async def current_scope(subject,tenant_id,organization_id):
-    url,token,generation,manifest=owner_configuration()
+async def current_scope(subject, tenant_id, organization_id):
     try:
-        async with httpx.AsyncClient(timeout=10,follow_redirects=False) as client:
-            r=await client.post(url+'/api/v1/internal/organization-authority/check',headers={'Authorization':'Bearer '+token},json={'subject':subject,'tenant_id':str(tenant_id),'organization_id':str(organization_id),'capability':'member'})
-            r.raise_for_status();body=r.json()
-        if body is None:return None
-        grant=ScopeGrant.model_validate(body)
-        if grant.generation=='startup-v1' and os.environ.get('STARTUP_IDENTITY_ENABLED')=='1':
-            from auth_service.startup_identity import configuration
-            from auth_service._startup_contract import fingerprint
-            generation,manifest='startup-v1',fingerprint(configuration())
-        if (grant.subject!=subject or grant.tenant_id!=tenant_id or grant.organization_id!=organization_id
-                or grant.generation!=generation or grant.manifest_sha256!=manifest):
+        config = None
+        if os.environ.get('STARTUP_IDENTITY_ENABLED') == '1':
+            config = startup_identity.configuration()
+        if config and config['binding']['version'] == 2 and (
+                str(tenant_id) == config['owner']['tenant_id']
+                or subject == config['binding']['oidc']['broker_subject']):
+            binding = config['binding']
+            if (str(tenant_id) != config['owner']['tenant_id'] or subject != binding['oidc']['broker_subject']
+                    or str(organization_id) not in {row['organization_id'] for row in binding['organizations'].values()}):
+                return None
+            body = await startup_identity.owner(
+                'scope', config, subject=subject, tenant_id=str(tenant_id), organization_id=str(organization_id))
+            generation, manifest = 'startup-v1', fingerprint(config)
+            if body is not None and (not isinstance(body, dict) or body.get('user_id') != subject
+                                     or body.get('network_id') != config['owner']['network_id']):
+                raise ValueError('Startup organization authority binding differs')
+        else:
+            url, token, generation, manifest = owner_configuration()
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+                response = await client.post(
+                    url + '/api/v1/internal/organization-authority/check',
+                    headers={'Authorization': 'Bearer ' + token},
+                    json={'subject': subject, 'tenant_id': str(tenant_id),
+                          'organization_id': str(organization_id), 'capability': 'member'},
+                )
+                response.raise_for_status()
+                body = response.json()
+            if config and config['binding']['version'] == 1 and isinstance(body, dict) and body.get('generation') == 'startup-v1':
+                generation, manifest = 'startup-v1', fingerprint(config)
+        if body is None:
+            return None
+        grant = ScopeGrant.model_validate(body)
+        if (grant.subject != subject or grant.tenant_id != tenant_id or grant.organization_id != organization_id
+                or grant.generation != generation or grant.manifest_sha256 != manifest):
             raise ValueError('Scope binding differs')
         return grant
-    except (httpx.HTTPError,ValueError) as exc:
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         raise ScopeUnavailable('Current scope authority unavailable') from exc
 
 
