@@ -12,9 +12,14 @@ on:
         required: true
         type: string
       admission_run:
-        description: Successful release admission run for the version tag
-        required: true
+        description: Successful release admission run for the version tag, required outside OCI patch admission
+        required: false
         type: string
+      patch_api_check:
+        description: Check an approved same-line patch against the immutable prior stable OCI API
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 concurrency:
@@ -31,17 +36,30 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: inputs.patch_api_check
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: 8f29b476305b23fd210026175d4bc1039c1ca9d0
+          path: owner-patch-policy
+          persist-credentials: false
       - name: Promote the qualified owner image
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           QUALIFICATION_RUN: ${{ inputs.qualification_run }}
           ADMISSION_RUN: ${{ inputs.admission_run }}
+          PATCH_API_CHECK: ${{ inputs.patch_api_check }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-          [[ "$QUALIFICATION_RUN" =~ ^[1-9][0-9]*$ && "$ADMISSION_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$QUALIFICATION_RUN" =~ ^[1-9][0-9]*$ ]]
+          if [[ "$PATCH_API_CHECK" == true ]]; then
+            [[ -z "$ADMISSION_RUN" ]]
+          else
+            [[ "$ADMISSION_RUN" =~ ^[1-9][0-9]*$ ]]
+          fi
           component=${GITHUB_REPOSITORY#*/}
           tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERSION" --jq .sha)
           [[ "$tag_sha" =~ ^[a-f0-9]{40}$ ]]
@@ -58,11 +76,13 @@ jobs:
                 .conclusion == "success")
               '
           }
-          admission=$(verify_run "$ADMISSION_RUN" push "$VERSION" .github/workflows/release-admission.yml)
-          admission_attempt=$(jq -er .run_attempt <<<"$admission")
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$ADMISSION_RUN/attempts/$admission_attempt/jobs?per_page=100" |
-            jq -es 'any(.[].jobs[]; .conclusion == "success" and
-              (.name | endswith(" / Initial release admission") or endswith(" / Release compatibility")))' >/dev/null
+          if [[ "$PATCH_API_CHECK" != true ]]; then
+            admission=$(verify_run "$ADMISSION_RUN" push "$VERSION" .github/workflows/release-admission.yml)
+            admission_attempt=$(jq -er .run_attempt <<<"$admission")
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$ADMISSION_RUN/attempts/$admission_attempt/jobs?per_page=100" |
+              jq -es 'any(.[].jobs[]; .conclusion == "success" and
+                (.name | endswith(" / Initial release admission") or endswith(" / Release compatibility")))' >/dev/null
+          fi
           qualified=$(verify_run "$QUALIFICATION_RUN" push main .github/workflows/package.yml)
           qualification_attempt=$(jq -er .run_attempt <<<"$qualified")
           job=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN/attempts/$qualification_attempt/jobs?per_page=100" |
@@ -92,6 +112,9 @@ jobs:
             .config.Labels["org.opencontainers.image.source"] == $repo
           ' <<<"$config" >/dev/null
 
+          if [[ "$PATCH_API_CHECK" == true ]]; then
+            python3 owner-patch-policy/scripts/owner_runtime_patch.py "$GITHUB_REPOSITORY" "$VERSION" "$tag_sha" "$digest"
+          fi
           target="$repository:$VERSION"
           if docker manifest inspect "$target" >/dev/null 2>"$DOCKER_CONFIG/lookup.err"; then
             test "$(digest_of "$target")" = "$digest"
