@@ -1,7 +1,7 @@
 {
   "repository": "hyperme-sh/controlplane-identity",
-  "revision": "8684a7df66e6f9124011b3340b5fb7410d12e946",
+  "revision": "158ef3d50092706c31fd92062588f122b3046b97",
   "path": "src/controlplane_identity/startup.py",
-  "sha256": "c15f1e6a9aafc7ad3689325ec887be832edd72a2bf8e6de9b4e9199c6eef05c8",
+  "sha256": "c977290cd52741c1358f0b1dab3b507029ef3d4528ae57f05d6ba4175fb93759",
   "normalization": "none"
 }

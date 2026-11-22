@@ -16,6 +16,8 @@ TEST_BROKER = 'startup-nightly'
 TEST_UPSTREAM = 'https://auth.test.hyperme.sh/realms/startup-nightly'
 TEST_ISSUER = 'https://auth.test.hyperme.sh/realms/controlplane'
 TEST_OPERATOR_EMAIL = 'owner@startup-nightly.invalid'
+PRODUCTION_PORTAL_ISSUER = 'https://auth.hyperme.sh/realms/controlplane'
+FYBERLABS_ONLY = frozenset(('fyberlabs',))
 
 MAX_BYTES = 16384
 ORGANIZATIONS = frozenset(('fyberlabs', 'tennesseewindage', 'hyperme.sh'))
@@ -101,7 +103,11 @@ def canonical_binding(raw):
             if oidc['issuer'] != TEST_UPSTREAM or oidc['broker'] != TEST_BROKER or oidc['subject'] == oidc['broker_subject']:
                 raise InvalidBinding()
         organizations = doc['organizations']
-        fields(organizations, ORGANIZATIONS)
+        if type(organizations) is not dict:
+            raise InvalidBinding()
+        scoped_owner = version == 1 and organizations.keys() == FYBERLABS_ONLY
+        if not scoped_owner:
+            fields(organizations, ORGANIZATIONS)
         ids = set()
         for organization in organizations.values():
             fields(organization, ('tenant_id', 'organization_id', 'roles'))
@@ -124,6 +130,12 @@ def canonical_binding(raw):
         if type(doc['keycloak_admin']['enabled']) is not bool:
             raise InvalidBinding()
         if version == 2 and doc['keycloak_admin'] != {'realm': 'controlplane', 'enabled': False}:
+            raise InvalidBinding()
+        if scoped_owner and (
+            organizations['fyberlabs']['roles'] != ['owner']
+            or any(doc['platform_admin'].values())
+            or doc['keycloak_admin'] != {'realm': 'controlplane', 'enabled': False}
+        ):
             raise InvalidBinding()
         return (json.dumps(doc, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode()
     except (ValueError, TypeError, KeyError, RecursionError, UnicodeError, OverflowError):
@@ -197,6 +209,13 @@ def validate(value):
             raise InvalidBinding()
         if binding['version'] == 2 and (issuer != TEST_ISSUER or owner['network_id'] != 'hyperme.sh'
                 or owner['profile']['email'] != TEST_OPERATOR_EMAIL):
+            raise InvalidBinding()
+        if binding['organizations'].keys() == FYBERLABS_ONLY and (
+            owner['network_id'] != 'hyperme.sh'
+            or issuer != PRODUCTION_PORTAL_ISSUER
+            or audience != 'controlplane-frontend'
+            or binding['organizations']['fyberlabs']['tenant_id'] != owner['tenant_id']
+        ):
             raise InvalidBinding()
         doc['binding'] = binding
         return doc
