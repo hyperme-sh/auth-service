@@ -277,8 +277,9 @@ async def session_context(request: Request, *, verification=False):
                 scope_kind=tenant.get('scope_kind','organization'),
                 scope_generation=scope.generation,scope_manifest_sha256=scope.manifest_sha256)
         else:
-            if (__import__('os').environ.get('AUTH_SCOPE_GENERATION') or
-                    __import__('os').environ.get('STARTUP_IDENTITY_ENABLED') == '1'):
+            from auth_service.startup_identity import requires_scoped_session
+
+            if requires_scoped_session(tid, origin):
                 raise SessionDenied()
             facts['member_id'] = await current_member(tid, facts['subject'])
         if verification:

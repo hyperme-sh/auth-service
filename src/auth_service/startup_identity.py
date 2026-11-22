@@ -13,6 +13,23 @@ def configuration():
     return load(Path(os.environ.get('STARTUP_IDENTITY_CONFIG_FILE','')))
 
 
+def requires_scoped_session(tenant, claims):
+    if os.environ.get('AUTH_SCOPE_GENERATION'):
+        return True
+    if os.environ.get('STARTUP_IDENTITY_ENABLED') != '1':
+        return False
+    try:
+        config = configuration()
+    except (OSError, ValueError):
+        return True
+    binding = config['binding']
+    if binding['version'] != 2:
+        return True
+    return (str(tenant) == config['owner']['tenant_id']
+            or claims.get('sub') == binding['oidc']['broker_subject']
+            or claims.get('login_provider') == binding['oidc']['broker'])
+
+
 async def owner(operation, config, **payload):
     url = os.environ.get('AUTH_IDENTITY_OWNER_URL','').rstrip('/')
     token_name = 'AUTH_IDENTITY_OWNER_TOKEN' if operation == 'bind' else 'USER_STARTUP_READ_TOKEN'
