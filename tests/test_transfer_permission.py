@@ -205,7 +205,8 @@ async def test_portal_media_requires_current_run_and_owner_grant(transfer_grant,
     save([row])
     org = SimpleNamespace(tenant_id=uuid.UUID(row['tenant']), organization_id=uuid.UUID(row['organization']),
                           generation=row['scopeGeneration'], manifest_sha256=row['scopeManifest'], network_id='hyperme.sh')
-    binding = dict(version=1, run='123-1-portal-device-transfer', generation='c'*64, scope=dict(
+    binding = dict(version=1, run='123-1-portal-device-transfer', generation='c'*64,
+        operation='33333333-3333-4333-8333-333333333333', scope=dict(
         suite='portal-device-transfer', realm='controlplane', issuer=row['issuer'], subject=row['subject'],
         tenant=row['tenant'], organization=row['organization'], clients=[row['client']],
         origins=['https://portal.test.hyperme.sh']))
