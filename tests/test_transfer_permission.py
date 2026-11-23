@@ -225,8 +225,10 @@ async def test_portal_media_requires_current_run_and_owner_grant(transfer_grant,
             return org
         monkeypatch.setattr(scoped_session, 'current_scope', current)
         assert set(permission.MEDIA) <= set((await permission.validate(payload))['scope'].split())
+        old = payload | {'scope': 'openid ' + permission.CAPABILITY}
+        assert await permission.validate(old) == old
         with pytest.raises(ValueError):
-            await permission.validate(payload | {'scope': 'openid ' + permission.CAPABILITY})
+            await permission.validate(old | {'scope': old['scope'] + ' ' + permission.MEDIA[0]})
         with pytest.raises(ValueError):
             permission.select(claims | {'nightly_run': {'run': 'expired', 'generation': 'd'*64}}, org)
         save([])

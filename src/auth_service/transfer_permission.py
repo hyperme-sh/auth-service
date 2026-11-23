@@ -87,7 +87,7 @@ def portal_media(grant):
 
 
 
-def select(claims, grant):
+def select(claims, grant, *, check_media_run=True):
     matches = [item for item in configuration()
                if item['issuer'] == claims.get('iss')
                and item['subject'] == claims.get('sub')
@@ -99,7 +99,7 @@ def select(claims, grant):
                and item['expiresAt'] > int(time.time())]
     require(len(matches) == 1)
     selected = matches[0]
-    if portal_media(selected):
+    if check_media_run and portal_media(selected):
         from controlplane_identity.nightly import current_binding, require_original_run
         binding = current_binding()
         require(binding is not None)
@@ -144,8 +144,9 @@ async def validate(claims):
             and grant.generation == claims.get('scope_generation')
             and grant.manifest_sha256 == claims.get('scope_manifest_sha256'))
     selected = select({'iss': marker['issuer'], 'sub': claims.get('sub'),
-                       'azp': claims.get('azp'), 'nightly_run': claims.get('nightly_run')}, grant)
-    require(media == (set(MEDIA) if portal_media(selected) else set()))
+                       'azp': claims.get('azp'), 'nightly_run': claims.get('nightly_run')}, grant, check_media_run=bool(media))
+    if media:
+        require(portal_media(selected) and media == set(MEDIA))
     require(marker['id'] == selected['id'] and marker['sha256'] == digest(selected))
     require(type(claims.get('exp')) is int and claims['exp'] <= selected['expiresAt'])
     return claims
