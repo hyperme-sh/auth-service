@@ -191,3 +191,55 @@ async def test_changed_grant_hash_and_shorter_expiry_refuse_existing_token(
     save([row])
     with pytest.raises(UnauthorizedException):
         await deps.get_access_token_claims(response.json()['access_token'])
+
+
+@pytest.mark.asyncio
+async def test_portal_media_requires_current_run_and_owner_grant(transfer_grant, monkeypatch):
+    from controlplane_identity.nightly import admitted_run
+    from types import SimpleNamespace
+    from auth_service import scoped_session
+
+    row, save, _ = transfer_grant
+    row.update(subject=permission.PORTAL_SUBJECT, tenant=permission.PORTAL_TENANT,
+               issuer=permission.PORTAL_ISSUER, portalMedia=True)
+    save([row])
+    org = SimpleNamespace(tenant_id=uuid.UUID(row['tenant']), organization_id=uuid.UUID(row['organization']),
+                          generation=row['scopeGeneration'], manifest_sha256=row['scopeManifest'], network_id='hyperme.sh')
+    binding = dict(version=1, run='123-1-portal-device-transfer', generation='c'*64, scope=dict(
+        suite='portal-device-transfer', realm='controlplane', issuer=row['issuer'], subject=row['subject'],
+        tenant=row['tenant'], organization=row['organization'], clients=[row['client']],
+        origins=['https://portal.test.hyperme.sh']))
+    claims = dict(sub=row['subject'], iss=row['issuer'], azp=row['client'],
+                  nightly_run={k: binding[k] for k in ('run', 'generation')})
+    with pytest.raises(ValueError):
+        permission.select(claims, org)
+    with admitted_run(binding):
+        selected = permission.select(claims, org)
+        payload = claims | dict(iss='https://spanopticon.internal/tenant-session', scope='openid',
+            spanopticon_auth='tenant_session', scope_kind='organization', scope_version=1,
+            tenant_id=row['tenant'], organization_id=row['organization'], network_id=org.network_id,
+            scope_generation=org.generation, scope_manifest_sha256=org.manifest_sha256, exp=row['expiresAt'])
+        permission.attach(payload, selected)
+        async def current(*_):
+            return org
+        monkeypatch.setattr(scoped_session, 'current_scope', current)
+        assert set(permission.MEDIA) <= set((await permission.validate(payload))['scope'].split())
+        with pytest.raises(ValueError):
+            await permission.validate(payload | {'scope': 'openid ' + permission.CAPABILITY})
+        with pytest.raises(ValueError):
+            permission.select(claims | {'nightly_run': {'run': 'expired', 'generation': 'd'*64}}, org)
+        save([])
+        with pytest.raises(ValueError):
+            await permission.validate(payload)
+    with admitted_run(binding | {'run': '123-1-s3rch-device-transfer', 'scope': binding['scope'] | {'suite': 's3rch-device-transfer'}}):
+        save([row])
+        with pytest.raises(ValueError):
+            permission.select(claims, org)
+
+
+@pytest.mark.asyncio
+async def test_only_explicit_media_authority_survives_provider_claims():
+    scopes = 'openid ' + ' '.join(permission.MEDIA)
+    assert (await permission.validate({'scope': scopes}))['scope'] == 'openid'
+    api_key = {'scope': scopes, 'spanopticon_auth': 'api_key'}
+    assert await permission.validate(api_key) == api_key
