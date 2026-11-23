@@ -50,14 +50,10 @@ def configuration():
     require(type(grants) is list and len(grants) <= 128)
     ids = set()
     for grant in grants:
-        fields = {'id', 'issuer', 'subject', 'client', 'tenant', 'organization',
-                  'scopeGeneration', 'scopeManifest', 'expiresAt', 'capability'}
-        require(type(grant) is dict and set(grant) in (fields, fields | {'portalMedia'}))
-        if 'portalMedia' in grant:
-            require(grant['portalMedia'] is True and
-                    (grant['subject'], grant['tenant'], grant['issuer'], grant['client']) ==
-                    (PORTAL_SUBJECT, PORTAL_TENANT, PORTAL_ISSUER, PORTAL_CLIENT))
-        for key in fields - {'expiresAt'}:
+        require(type(grant) is dict and set(grant) == {
+            'id', 'issuer', 'subject', 'client', 'tenant', 'organization',
+            'scopeGeneration', 'scopeManifest', 'expiresAt', 'capability'})
+        for key in set(grant) - {'expiresAt'}:
             require(type(grant[key]) is str and 0 < len(grant[key]) <= 512)
         require(grant['capability'] == CAPABILITY)
         require(grant['id'] not in ids)
@@ -83,6 +79,14 @@ def without_transfer(claims):
     return result
 
 
+def portal_media(grant):
+    # The existing signed transfer grant is the deployment opt-in. Keep its
+    # wire format and digest compatible with independently updated consumers.
+    return (grant['subject'], grant['tenant'], grant['issuer'], grant['client']) == (
+        PORTAL_SUBJECT, PORTAL_TENANT, PORTAL_ISSUER, PORTAL_CLIENT)
+
+
+
 def select(claims, grant):
     matches = [item for item in configuration()
                if item['issuer'] == claims.get('iss')
@@ -95,7 +99,7 @@ def select(claims, grant):
                and item['expiresAt'] > int(time.time())]
     require(len(matches) == 1)
     selected = matches[0]
-    if selected.get('portalMedia'):
+    if portal_media(selected):
         from controlplane_identity.nightly import current_binding, require_original_run
         binding = current_binding()
         require(binding is not None)
@@ -113,7 +117,7 @@ def select(claims, grant):
 
 def attach(payload, grant):
     payload['scope'] = ' '.join([*without_transfer(payload)['scope'].split(), CAPABILITY])
-    if grant.get('portalMedia'):
+    if portal_media(grant):
         payload['scope'] += ' ' + ' '.join(MEDIA)
     payload[CLAIM] = {'id': grant['id'], 'sha256': digest(grant), 'issuer': grant['issuer']}
     payload['exp'] = min(payload['exp'], grant['expiresAt'])
@@ -141,7 +145,7 @@ async def validate(claims):
             and grant.manifest_sha256 == claims.get('scope_manifest_sha256'))
     selected = select({'iss': marker['issuer'], 'sub': claims.get('sub'),
                        'azp': claims.get('azp'), 'nightly_run': claims.get('nightly_run')}, grant)
-    require(media == (set(MEDIA) if selected.get('portalMedia') else set()))
+    require(media == (set(MEDIA) if portal_media(selected) else set()))
     require(marker['id'] == selected['id'] and marker['sha256'] == digest(selected))
     require(type(claims.get('exp')) is int and claims['exp'] <= selected['expiresAt'])
     return claims

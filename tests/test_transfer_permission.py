@@ -201,7 +201,7 @@ async def test_portal_media_requires_current_run_and_owner_grant(transfer_grant,
 
     row, save, _ = transfer_grant
     row.update(subject=permission.PORTAL_SUBJECT, tenant=permission.PORTAL_TENANT,
-               issuer=permission.PORTAL_ISSUER, portalMedia=True)
+               issuer=permission.PORTAL_ISSUER)
     save([row])
     org = SimpleNamespace(tenant_id=uuid.UUID(row['tenant']), organization_id=uuid.UUID(row['organization']),
                           generation=row['scopeGeneration'], manifest_sha256=row['scopeManifest'], network_id='hyperme.sh')
