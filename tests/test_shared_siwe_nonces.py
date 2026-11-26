@@ -10,7 +10,7 @@ import pytest
 from auth_service import wallet_bind
 from auth_service.schemas import AuthMeResponse
 from auth_service.siwe import SiweError
-from auth_service.siwe_nonces import SiweStoreUnavailable, nonce_runtime
+from auth_service.siwe_nonces import SiweStoreUnavailable, nonce_database_url, nonce_runtime
 from eth_account import Account
 from fastapi import FastAPI
 from sqlalchemy import text
@@ -84,7 +84,8 @@ async def test_outage_never_creates_or_consumes_local_fallback():
 async def test_missing_storage_does_not_prevent_oidc_startup(monkeypatch, app):
     for name in ('AUTH_SIWE_DATABASE_URL','DATABASE_URL','DATABASE_URL_FILE'):
         monkeypatch.delenv(name, raising=False)
-    async with nonce_runtime() as store:
+    assert nonce_database_url() is None
+    async with nonce_runtime(None) as store:
         assert store is None
     from asgi_lifespan import LifespanManager
     from auth_service.deps import get_current_auth_user

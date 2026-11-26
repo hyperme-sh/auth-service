@@ -45,8 +45,7 @@ async def _delivery(store):
         await asyncio.sleep(10)
 
 
-@asynccontextmanager
-async def nonce_runtime():
+def nonce_database_url() -> str | None:
     for name in ('AUTH_SIWE_STORE', 'AUTH_SIWE_REDIS_URL', 'REDIS_URL'):
         if name in os.environ:
             logger.warning('%s is ignored; SIWE uses Auth PostgreSQL', name)
@@ -54,15 +53,20 @@ async def nonce_runtime():
     if not url and os.environ.get('DATABASE_URL_FILE'):
         url = Path(os.environ['DATABASE_URL_FILE']).read_text().strip()
     if not url:
-        yield None
-        return
+        return None
     parsed = urlsplit(url)
     if parsed.scheme not in {'postgresql', 'postgresql+asyncpg', 'postgresql+psycopg'} or not parsed.hostname:
         raise ValueError('SIWE requires a PostgreSQL service URL')
-    from sqlalchemy.ext.asyncio import create_async_engine
-    from controlplane_db.session import normalize_database_url
+    return url
+
+
+@asynccontextmanager
+async def nonce_runtime(engine):
+    if engine is None:
+        yield None
+        return
     from auth_service.siwe_postgres import PostgresChallengeStore
-    engine = create_async_engine(normalize_database_url(url), pool_pre_ping=True)
+
     tasks = []
     try:
         store = PostgresChallengeStore(engine)
@@ -74,4 +78,3 @@ async def nonce_runtime():
         for task in tasks:
             with suppress(asyncio.CancelledError):
                 await task
-        await engine.dispose()

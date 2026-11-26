@@ -2,7 +2,7 @@
   "schema": 1,
   "versions": {
     "core/auth-service/pyproject.toml": "0.2.1",
-    "pyproject.toml": "0.2.1"
+    "pyproject.toml": "0.2.2"
   },
   "restorations": [
     {
@@ -30,7 +30,7 @@
     "controlplane-edge": "0.2.0",
     "controlplane-db": "0.1.0",
     "controlplane-portal": "0.1.0",
-    "auth-service": "0.2.1",
+    "auth-service": "0.2.2",
     "hypermesh-vscode": "0.1.0",
     "turn-service": "0.1.0",
     "turn-artifact-checks": "0.0.0",
