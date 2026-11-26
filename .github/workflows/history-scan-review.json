@@ -1358,5 +1358,21 @@
     "start": 56,
     "end": 56,
     "reason": "Public SHA-256 of a file in the approved patch distribution contract"
+  },
+  {
+    "file": "ac4a787ba4261c738da84c2403c74a5fa49bea9a.txt",
+    "sha256": "a53d01acc16a080fdaa83ff5fea94ca291c34f9d84994e99e6f86b4911365dbd",
+    "rule": "generic-api-key",
+    "start": 24,
+    "end": 24,
+    "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.2 contract"
+  },
+  {
+    "file": "ac4a787ba4261c738da84c2403c74a5fa49bea9a.txt",
+    "sha256": "a53d01acc16a080fdaa83ff5fea94ca291c34f9d84994e99e6f86b4911365dbd",
+    "rule": "generic-api-key",
+    "start": 57,
+    "end": 57,
+    "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.2 contract"
   }
 ]
