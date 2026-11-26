@@ -1,6 +1,6 @@
 """Auth's runtime connection contract, including the two-replica budget in CI."""
 import asyncio
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
@@ -8,6 +8,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from asgi_lifespan import LifespanManager
+from controlplane_tenancy.marketplace import MARKETPLACE_TENANT_ID
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
@@ -48,6 +49,28 @@ async def test_one_slot_can_bridge_a_legacy_replica_without_overflow(monkeypatch
         with pytest.raises(ValueError):
             async with runtime_engines(owner, owner):
                 pytest.fail("The configured limit cannot exceed two")
+
+
+async def test_marketplace_private_hostname_does_not_open_a_database_session(monkeypatch):
+    session = Mock(connection=AsyncMock(), execute=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
+
+    @asynccontextmanager
+    async def session_maker():
+        yield session
+
+    monkeypatch.setattr(transaction, "is_tenancy_enabled", lambda: True)
+    monkeypatch.setattr(transaction.event, "listen", Mock())
+    app = create_app(enable_db_middleware=False)
+    app.add_middleware(transaction.AuthTransactionMiddleware)
+    app.state.session_maker = session_maker
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="https://auth-revision.internal.example.invalid") as client:
+        response = await client.get("/auth/enrollment/marketplace")
+    assert response.status_code == 200
+    assert response.json() == {"tenant_id": str(MARKETPLACE_TENANT_ID)}
+    session.connection.assert_not_awaited()
+    session.execute.assert_not_awaited()
+    session.commit.assert_awaited_once()
 
 
 @pytest.fixture
@@ -108,11 +131,13 @@ async def test_two_auth_replicas_share_their_four_connections(capped_auth_databa
             assert app.state.pairing_store.engine is app.state.async_engine
             assert app.state.async_engine.pool.size() == 2
             client = await stack.enter_async_context(httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=app), base_url="http://localhost"
+                transport=httpx.ASGITransport(app=app),
+                base_url=f"https://auth-budget-{index}.internal.example.invalid",
             ))
             for _ in range(3):
                 work.extend((
                     client.get("/api/v1/health/"),
+                    client.get("/auth/enrollment/marketplace"),
                     client.post("/auth/switch-tenant", json={"tenant_id": tenant}),
                     client.post("/auth/siwe/nonce", json={"address": "0x" + "12" * 20, "chain_id": 84532}),
                 ))
@@ -121,6 +146,8 @@ async def test_two_auth_replicas_share_their_four_connections(capped_auth_databa
             replies = await asyncio.gather(*work)
         assert all(reply.status_code == 200 for reply in replies), [(reply.url.path, reply.status_code) for reply in replies]
         assert all(reply.json().get("access_token") for reply in replies if reply.url.path == "/auth/switch-tenant")
+        assert all(reply.json() == {"tenant_id": str(MARKETPLACE_TENANT_ID)} for reply in replies
+                   if reply.url.path == "/auth/enrollment/marketplace")
         with admin.connect() as db:
             events = db.scalar(text(f'SELECT count(*) FROM "{url.username}".service_outbox WHERE tenant_id=:tenant'),
                                {"tenant": tenant})

@@ -1374,5 +1374,21 @@
     "start": 57,
     "end": 57,
     "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.2 contract"
+  },
+  {
+    "file": "29c268e9f5455f90c2b741aea90fc278c79b983f.txt",
+    "sha256": "844d3a6fd9bba9cbafa998224b17604fd97b465b85a2d9337e620ee923c9d611",
+    "rule": "generic-api-key",
+    "start": 24,
+    "end": 24,
+    "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.3 contract"
+  },
+  {
+    "file": "29c268e9f5455f90c2b741aea90fc278c79b983f.txt",
+    "sha256": "844d3a6fd9bba9cbafa998224b17604fd97b465b85a2d9337e620ee923c9d611",
+    "rule": "generic-api-key",
+    "start": 57,
+    "end": 57,
+    "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.3 contract"
   }
 ]
