@@ -145,5 +145,8 @@ def test_no_redis_import_or_configuration_value_reads():
 def test_owner_migration_fixture_matches_packaged_source():
     from pathlib import Path
     root=Path(__file__).parents[1]
-    for name in ('0002_siwe_challenges.sql','0004_siwe_nonce_attempts.sql'):
-        assert root.joinpath('src/auth_service/migrations',name).read_bytes()==root.joinpath('tests/fixtures/siwe',name).read_bytes()
+    migrations = root / "src/auth_service/migrations"
+    fixtures = root / "tests/fixtures"
+    for folder in ("siwe", "auth-budget"):
+        for fixture in (fixtures / folder).glob("*.sql"):
+            assert (migrations / fixture.name).read_bytes() == fixture.read_bytes()

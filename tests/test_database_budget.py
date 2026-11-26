@@ -1,7 +1,7 @@
 """Auth's runtime connection contract, including the two-replica budget in CI."""
 import asyncio
 from contextlib import AsyncExitStack
-from importlib.resources import files
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
@@ -63,10 +63,13 @@ def capped_auth_database(siwe_postgres_url):
             db.exec_driver_sql(f'ALTER ROLE "{role}" SET search_path TO "{role}"')
             db.exec_driver_sql(f'SET LOCAL ROLE "{role}"')
             db.exec_driver_sql(f'SET LOCAL search_path TO "{role}"')
-            migrations = files("auth_service").joinpath("migrations")
-            for name in ("0001.sql", "0002_siwe_challenges.sql", "0003_token_issuance.sql",
-                         "0004_siwe_nonce_attempts.sql", "0005_sea_pairing.sql"):
-                db.exec_driver_sql(migrations.joinpath(name).read_text())
+            fixtures = Path(__file__).with_name("fixtures")
+            for name in (
+                "auth-budget/0001.sql", "siwe/0002_siwe_challenges.sql",
+                "auth-budget/0003_token_issuance.sql", "siwe/0004_siwe_nonce_attempts.sql",
+                "auth-budget/0005_sea_pairing.sql",
+            ):
+                db.exec_driver_sql((fixtures / name).read_text())
         yield url.set(username=role, password=password), admin
     finally:
         with admin.begin() as db:
