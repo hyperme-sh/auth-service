@@ -55,7 +55,7 @@
     "auth_service/tenant_switch.py": "53dbe380365dd14557e673d30f8858a0cf5f265ffc2b1a52d53051aa6530ddbb",
     "auth_service/test_operator_seed.py": "9618d19f7c4957f4bd2f97f9d54c2024f5562c7645cb87b6b658d99c9add92bc",
     "auth_service/token_validation.py": "e9d7a8fbbbddac7fb235436ad36d7b01b76e94c14c3ec5acd6080745c0f256d3",
-    "auth_service/transaction.py": "cd81ac69a38279e303e9d92a5a9fb13d5cd74fdd61e2df1b362026df8c881d8a",
+    "auth_service/transaction.py": "a96ef363faa95efda2d2c23fe896198c86384571f134898938eb9c0b9890ded3",
     "auth_service/transfer_permission.py": "54600dc90ff29d11d7b0d673758098f0a8c9c4d76fad84f9711f361f39ad1d15",
     "auth_service/verification_evidence.py": "00ea629e6383c9eb9d7929d2feae664237ec7dc187341c01566f38b995611a2f",
     "auth_service/wallet_bind.py": "7033b11b9f03744f64cd05b0cb75d1ef9ccbe8705b093a59d20591bb7183e9d6",

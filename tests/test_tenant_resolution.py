@@ -20,14 +20,11 @@ def request(path, tenant=None):
 @pytest.mark.parametrize("path", ["/auth/scoped-session", "/auth/network-session"])
 async def test_explicit_tenant_routes_do_not_query_host_mapping(path, monkeypatch):
     monkeypatch.setattr(transaction, "is_tenancy_enabled", lambda: True)
-    legacy = AsyncMock(side_effect=AssertionError("Auth owner has no tenants table"))
     resolver = AsyncMock(side_effect=AssertionError("Explicit selection does not use tenant domains"))
-    monkeypatch.setattr(transaction, "get_tenant_service", legacy)
     monkeypatch.setattr(transaction, "resolve_owner_tenant", resolver)
     tenant = transaction.uuid.uuid4()
-    assert await transaction.resolve_tenant(request(path), AsyncMock()) is None
-    assert await transaction.resolve_tenant(request(path, tenant), AsyncMock()) == tenant
-    legacy.assert_not_called()
+    assert await transaction.resolve_tenant(request(path)) is None
+    assert await transaction.resolve_tenant(request(path, tenant)) == tenant
     resolver.assert_not_awaited()
 
 
@@ -45,22 +42,17 @@ async def test_configured_owner_is_authoritative_for_host_lookup(response_status
     monkeypatch.setenv("TENANT_OWNER_TOKEN", "test-fixture")
     monkeypatch.setattr(transaction, "is_tenancy_enabled", lambda: True)
     monkeypatch.setattr(transaction, "get_tenant_host", lambda _: "auth-service")
-    legacy = AsyncMock(side_effect=AssertionError("Auth owner has no tenants table"))
-    monkeypatch.setattr(transaction, "get_tenant_service", legacy)
     monkeypatch.setattr(transaction.httpx, "AsyncClient",
                         lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
-    session = AsyncMock()
     incoming = request("/auth/login")
     if response_status == 200:
-        assert await transaction.resolve_tenant(incoming, session) == tenant
+        assert await transaction.resolve_tenant(incoming) == tenant
         assert incoming.state.frontend_host == "auth-service"
     elif response_status == 404:
-        assert await transaction.resolve_tenant(incoming, session) is None
+        assert await transaction.resolve_tenant(incoming) is None
     else:
         with pytest.raises(transaction.TenantOwnerUnavailable):
-            await transaction.resolve_tenant(incoming, session)
-    session.rollback.assert_not_awaited()
-    legacy.assert_not_called()
+            await transaction.resolve_tenant(incoming)
 
 
 @pytest.mark.parametrize("path", ["/auth/scoped-session", "/auth/network-session"])
@@ -69,8 +61,6 @@ async def test_unauthenticated_scope_reaches_authentication_before_database(path
 
     monkeypatch.setattr(transaction, "is_tenancy_enabled", lambda: True)
     monkeypatch.setattr(transaction.event, "listen", lambda *args: None)
-    lookup = AsyncMock(side_effect=AssertionError("Unexpected tenant database lookup"))
-    monkeypatch.setattr(transaction, "get_tenant_service", lookup)
     session = AsyncMock()
     app = create_app()
     app.state.session_maker = lambda: session
@@ -83,7 +73,6 @@ async def test_unauthenticated_scope_reaches_authentication_before_database(path
                                  base_url="http://auth-service") as client:
         response = await client.post(path, json=body)
     assert response.status_code == 401
-    lookup.assert_not_called()
     session.execute.assert_not_awaited()
     session.rollback.assert_awaited_once()
     session.commit.assert_not_awaited()

@@ -4,18 +4,16 @@ import uuid
 
 import httpx
 
-from api.core.container import get_tenant_service
-from api.core.exceptions import TenantNotFoundException
 from api.infrastructure.persistence.db_session import reset_db_session, set_db_session
 from api.interfaces.middlewares.database_middleware import get_tenant_host
-from controlplane_api.utils import get_logger, is_subdomain, is_tenancy_enabled
+from controlplane_api.utils import get_logger, is_tenancy_enabled
 from sqlalchemy import event, text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 logger = get_logger(__name__)
 HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/"}
-EXPLICIT_TENANT_PATHS = {"/auth/scoped-session", "/auth/network-session"}
+EXPLICIT_TENANT_PATHS = {"/auth/scoped-session", "/auth/network-session", "/auth/enrollment/marketplace"}
 SET_TENANT = text("SELECT set_config('app.current_tenant_id', :tenant, true)")
 
 
@@ -41,7 +39,7 @@ async def resolve_owner_tenant(host, url, token):
         raise TenantOwnerUnavailable from error
 
 
-async def resolve_tenant(request, session):
+async def resolve_tenant(request):
     if not is_tenancy_enabled():
         return None
     host = None if request.url.path.rstrip("/") in EXPLICIT_TENANT_PATHS else get_tenant_host(request)
@@ -53,20 +51,6 @@ async def resolve_tenant(request, session):
             if tenant is not None:
                 request.state.frontend_host = host
                 return tenant
-        else:
-            tenants = get_tenant_service()
-            try:
-                if is_subdomain(host):
-                    tenant = await tenants.find_by_subdomain(host)
-                else:
-                    tenant = await tenants.find_by_custom_domain(host)
-                request.state.frontend_host = host
-                return tenant.id
-            except TenantNotFoundException as error:
-                logger.warning("Tenant resolve failed for host %r: %s", host, error)
-            finally:
-                # Release the legacy lookup's connection before handler work.
-                await session.rollback()
 
     tenant = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
     if tenant:
@@ -89,7 +73,7 @@ class AuthTransactionMiddleware(BaseHTTPMiddleware):
 
             event.listen(session.sync_session, "after_begin", scope_transaction)
             try:
-                tenant = await resolve_tenant(request, session)
+                tenant = await resolve_tenant(request)
                 request.state.tenant_id = tenant
                 if request.url.path in HEALTH_PATHS:
                     # Readiness still checks the owner database through this pool.
