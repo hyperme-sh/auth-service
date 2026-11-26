@@ -55,12 +55,12 @@ async def test_database_failures_are_redacted_and_do_not_fallback(operation):
 
 @pytest.mark.asyncio
 async def test_postgres_selection_closes_engine_and_ignores_redis(monkeypatch):
-    import sqlalchemy.ext.asyncio
+    from auth_service import database
     engine = Engine()
     monkeypatch.setenv('AUTH_SIWE_STORE', 'postgres')
     monkeypatch.setenv('AUTH_SIWE_DATABASE_URL', 'postgresql://user:secret@db/owner')
     monkeypatch.setenv('REDIS_URL', 'redis://must-not-be-used/0')
-    monkeypatch.setattr(sqlalchemy.ext.asyncio, 'create_async_engine', lambda *args, **kwargs: engine)
+    monkeypatch.setattr(database, 'create_async_engine', lambda *args, **kwargs: engine)
     with pytest.raises(RuntimeError):
         async with nonce_runtime() as store:
             assert isinstance(store, PostgresChallengeStore)
@@ -109,7 +109,7 @@ async def test_http_database_failure_returns_503_without_binding(path, monkeypat
 
 @pytest.mark.asyncio
 async def test_database_url_file_and_legacy_values_are_not_logged(monkeypatch, tmp_path, caplog):
-    import sqlalchemy.ext.asyncio
+    from auth_service import database
     for name in ('AUTH_SIWE_DATABASE_URL','DATABASE_URL'):
         monkeypatch.delenv(name, raising=False)
     secret = tmp_path/'database-url'
@@ -117,7 +117,7 @@ async def test_database_url_file_and_legacy_values_are_not_logged(monkeypatch, t
     monkeypatch.setenv('DATABASE_URL_FILE', str(secret))
     monkeypatch.setenv('AUTH_SIWE_REDIS_URL', 'redis://private-secret@old')
     engine = Engine()
-    monkeypatch.setattr(sqlalchemy.ext.asyncio, 'create_async_engine', lambda url, **kw: engine)
+    monkeypatch.setattr(database, 'create_async_engine', lambda url, **kw: engine)
     async with nonce_runtime() as store:
         assert isinstance(store, PostgresChallengeStore)
     assert 'AUTH_SIWE_REDIS_URL' in caplog.text
@@ -145,5 +145,8 @@ def test_no_redis_import_or_configuration_value_reads():
 def test_owner_migration_fixture_matches_packaged_source():
     from pathlib import Path
     root=Path(__file__).parents[1]
-    for name in ('0002_siwe_challenges.sql','0004_siwe_nonce_attempts.sql'):
-        assert root.joinpath('src/auth_service/migrations',name).read_bytes()==root.joinpath('tests/fixtures/siwe',name).read_bytes()
+    migrations = root / "src/auth_service/migrations"
+    fixtures = root / "tests/fixtures"
+    for folder in ("siwe", "auth-budget"):
+        for fixture in (fixtures / folder).glob("*.sql"):
+            assert (migrations / fixture.name).read_bytes() == fixture.read_bytes()

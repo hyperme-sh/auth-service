@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from controlplane_api.exceptions import ForbiddenException, UnauthorizedException
 from controlplane_api.logging import configure_logging
@@ -16,7 +16,7 @@ from controlplane_api.service_cors import add_optional_service_cors
 from controlplane_api.health import router as health_router
 from controlplane_api.version import router as version_router
 from auth_service.transaction import AuthTransactionMiddleware
-from controlplane_db.session import normalize_database_url
+from auth_service.database import runtime_engines
 
 from auth_service.routes import router as auth_router
 from auth_service.smoke_oidc import assert_smoke_oidc_plane
@@ -30,43 +30,37 @@ def create_app(
     enable_db_middleware: bool = True,
 ) -> FastAPI:
     @asynccontextmanager
-    async def service_lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI):
+        from auth_service.nightly_runtime import configuration
+        from auth_service.nightly_store import PostgresNightlyStore
+        from auth_service.pairing_runtime import pairing_runtime, read_scopes
+        from auth_service.siwe_nonces import nonce_database_url, nonce_runtime
+
         configure_logging()
         assert_smoke_oidc_plane()
-        engine = None
-        if enable_db_middleware:
-            engine = create_async_engine(normalize_database_url(settings.database_url))
-            maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
-            configure_session_maker(maker)
-            app.state.async_engine = engine
-            from auth_service.nightly_runtime import configuration
-            from auth_service.nightly_store import PostgresNightlyStore
-            app.state.nightly_config = configuration()
-            if app.state.nightly_config is not None:
-                from controlplane_identity.nightly import configure_subjects
-                configure_subjects([s['subject'] for s in app.state.nightly_config['scopes'].values()])
-                app.state.nightly_store = PostgresNightlyStore(engine, app.state.nightly_config['scopes'])
+        scopes = read_scopes()
+        owner_url = settings.database_url if enable_db_middleware or scopes else None
+        async with runtime_engines(owner_url, nonce_database_url()) as (engine, nonce_engine):
+            if enable_db_middleware:
+                maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+                configure_session_maker(maker)
+                app.state.session_maker = maker
+                app.state.async_engine = engine
+                app.state.nightly_config = configuration()
+                if app.state.nightly_config is not None:
+                    from controlplane_identity.nightly import configure_subjects
+                    configure_subjects([s["subject"] for s in app.state.nightly_config["scopes"].values()])
+                    app.state.nightly_store = PostgresNightlyStore(engine, app.state.nightly_config["scopes"])
 
-        try:
-            yield
-        finally:
-            if engine is not None:
-                await engine.dispose()
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        from auth_service.siwe_nonces import nonce_runtime
-        from auth_service.pairing_runtime import pairing_runtime
-
-        async with nonce_runtime() as store, pairing_runtime() as (pairing_store, pairing_scopes):
-            app.state.pairing_store = pairing_store
-            app.state.pairing_scopes = pairing_scopes
-            app.state.siwe_nonce_store = store
-            try:
-                async with service_lifespan(app):
+            async with nonce_runtime(nonce_engine) as nonce_store, pairing_runtime(engine, scopes) as pairing_store:
+                app.state.pairing_scopes = scopes
+                app.state.pairing_store = pairing_store
+                app.state.siwe_nonce_store = nonce_store
+                try:
                     yield
-            finally:
-                app.state.siwe_nonce_store = None
+                finally:
+                    app.state.siwe_nonce_store = None
+                    app.state.pairing_store = None
 
     app = FastAPI(
         lifespan=lifespan,

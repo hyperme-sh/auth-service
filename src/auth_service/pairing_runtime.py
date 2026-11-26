@@ -28,16 +28,12 @@ def read_scopes():
 
 
 @asynccontextmanager
-async def pairing_runtime():
-    scopes = read_scopes()
+async def pairing_runtime(engine, scopes):
     if not scopes:
-        yield None, (); return
-    from sqlalchemy.ext.asyncio import create_async_engine
-    from controlplane_api.config import settings
-    from controlplane_db.session import normalize_database_url
-    url = normalize_database_url(settings.database_url)
-    if not url.startswith('postgresql+asyncpg://'): raise ValueError('Pairing requires Auth PostgreSQL')
-    engine = create_async_engine(url, pool_pre_ping=True)
+        yield None
+        return
+    if engine.url.drivername != "postgresql+asyncpg":
+        raise ValueError("Pairing requires Auth PostgreSQL")
     store = PostgresPairingStore(engine)
     async def sweep():
         while True:
@@ -45,8 +41,7 @@ async def pairing_runtime():
             except PairingUnavailable: logger.warning('Pairing cleanup unavailable')
             await asyncio.sleep(30)
     task = asyncio.create_task(sweep())
-    try: yield store, scopes
+    try: yield store
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError): await task
-        await engine.dispose()
