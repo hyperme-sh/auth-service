@@ -2,7 +2,7 @@
 import ast
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 import uuid
 import pytest
 from auth_service import outbox
@@ -72,17 +72,22 @@ def test_all_eight_producers_use_transactional_owner_helper():
 @pytest.mark.asyncio
 @pytest.mark.parametrize('status',[200,400,503])
 async def test_request_commits_success_and_rolls_back_error_responses(monkeypatch,status):
-    from auth_service.transaction import AuthTransactionMiddleware
-    from api.interfaces.middlewares import database_middleware as shared
+    from auth_service import transaction
     from starlette.requests import Request
     from starlette.responses import Response
     session=AsyncMock()
     session.__aenter__.return_value=session
-    monkeypatch.setattr(shared,'get_session_maker',lambda:lambda:session)
-    monkeypatch.setattr(shared,'is_tenancy_enabled',lambda:False)
-    request=Request({'type':'http','headers':[]}); request.state.tenant_id=None
-    async def reply(request): return Response(status_code=status)
-    result=await AuthTransactionMiddleware(None).dispatch(request,reply)
+    monkeypatch.setattr(transaction, "is_tenancy_enabled", lambda: False)
+    listen = Mock()
+    monkeypatch.setattr(transaction.event, "listen", listen)
+    app = SimpleNamespace(state=SimpleNamespace(session_maker=lambda: session))
+    request = Request({"app": app, "type": "http", "headers": [], "path": "/auth/login"})
+    async def reply(request):
+        session.connection.assert_not_awaited()
+        assert request.state.tenant_id is None
+        return Response(status_code=status)
+    result = await transaction.AuthTransactionMiddleware(None).dispatch(request, reply)
+    listen.assert_called_once_with(session.sync_session, "after_begin", listen.call_args.args[2])
     assert result.status_code==status
     assert session.commit.await_count==(status<400)
     assert session.rollback.await_count==(status>=400)

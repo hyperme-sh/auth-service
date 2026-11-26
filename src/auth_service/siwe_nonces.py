@@ -4,13 +4,14 @@ import asyncio
 import logging
 import os
 from collections.abc import Mapping
-from contextlib import asynccontextmanager, suppress
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
 
 TTL_SECONDS = 600
 logger = logging.getLogger(__name__)
+_UNSET = object()
 
 
 class SiweStoreUnavailable(RuntimeError):
@@ -61,20 +62,23 @@ def nonce_database_url() -> str | None:
 
 
 @asynccontextmanager
-async def nonce_runtime(engine):
-    if engine is None:
-        yield None
-        return
+async def nonce_runtime(engine=_UNSET):
+    from auth_service.database import runtime_engines
     from auth_service.siwe_postgres import PostgresChallengeStore
 
-    tasks = []
-    try:
+    async with AsyncExitStack() as stack:
+        if engine is _UNSET:
+            _, engine = await stack.enter_async_context(runtime_engines(None, nonce_database_url()))
+        if engine is None:
+            yield None
+            return
         store = PostgresChallengeStore(engine)
         tasks = [asyncio.create_task(_cleanup(store)), asyncio.create_task(_delivery(store))]
-        yield store
-    finally:
-        for task in tasks:
-            task.cancel()
-        for task in tasks:
-            with suppress(asyncio.CancelledError):
-                await task
+        try:
+            yield store
+        finally:
+            for task in tasks:
+                task.cancel()
+            for task in tasks:
+                with suppress(asyncio.CancelledError):
+                    await task
