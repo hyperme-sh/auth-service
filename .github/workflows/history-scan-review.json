@@ -1400,5 +1400,25 @@
     "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential",
     "source_object": "44e674bdf18d122c2978b894c278ce18707a5e7c",
     "source_path": "README.md"
+  },
+  {
+    "file": "b5e9a7dcfb686510af1a62ef541cdd5e4e4a1fad.txt",
+    "sha256": "ffd9ec340a117747816a0efea7497efdcd09d660f268c16b9664f28a421db1b9",
+    "rule": "generic-api-key",
+    "start": 25,
+    "end": 25,
+    "classification": "Verified SHA-256 of auth_service/keycloak_oidc.py in the Auth wheel contract",
+    "source_object": "b5e9a7dcfb686510af1a62ef541cdd5e4e4a1fad",
+    "source_path": "releases/candidate/contract.json"
+  },
+  {
+    "file": "b5e9a7dcfb686510af1a62ef541cdd5e4e4a1fad.txt",
+    "sha256": "ffd9ec340a117747816a0efea7497efdcd09d660f268c16b9664f28a421db1b9",
+    "rule": "generic-api-key",
+    "start": 58,
+    "end": 58,
+    "classification": "Verified SHA-256 of auth_service/token_validation.py in the Auth wheel contract",
+    "source_object": "b5e9a7dcfb686510af1a62ef541cdd5e4e4a1fad",
+    "source_path": "releases/candidate/contract.json"
   }
 ]
