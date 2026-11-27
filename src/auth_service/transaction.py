@@ -65,7 +65,7 @@ async def resolve_tenant(request):
 
 class AuthTransactionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.method == "GET" and request.url.path in PROBE_PATHS:
+        if request.url.path in PROBE_PATHS and request.method == "GET":
             return await call_next(request)
         async with request.app.state.session_maker() as session:
             token = set_db_session(session)

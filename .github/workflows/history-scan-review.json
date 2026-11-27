@@ -1390,5 +1390,15 @@
     "start": 57,
     "end": 57,
     "reason": "Verified SHA-256 of packaged Python source in the Auth v0.2.3 contract"
+  },
+  {
+    "file": "44e674bdf18d122c2978b894c278ce18707a5e7c.txt",
+    "sha256": "cfb2b9861e0ebfb35b1547dbbcae438d20c8610f386a38ae58149f11de0da2ca",
+    "rule": "generic-api-key",
+    "start": 137,
+    "end": 137,
+    "classification": "Explicit documentation placeholder replace-with-32-plus-characters; not a credential",
+    "source_object": "44e674bdf18d122c2978b894c278ce18707a5e7c",
+    "source_path": "README.md"
   }
 ]
