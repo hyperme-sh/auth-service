@@ -10,7 +10,7 @@ from controlplane_events.envelope import ControlPlaneEventEnvelope
 from controlplane_events.publisher import refuse_forbidden_payload
 
 _ISSUE = text('''INSERT INTO auth_token_issuance(id,tenant_id,token_sha256)
-VALUES (:id,:tenant,:digest) ON CONFLICT (id) DO NOTHING RETURNING id''')
+VALUES (:id,:tenant,:digest) ON CONFLICT DO NOTHING RETURNING id''')
 _EVENT = text('''INSERT INTO service_outbox(id,tenant_id,envelope)
 VALUES (:id,:tenant,:envelope) ON CONFLICT (id) DO NOTHING RETURNING id''').bindparams(bindparam('envelope',type_=JSONB))
 
@@ -30,7 +30,14 @@ async def publish_auth_event(*, token, tenant_id, event_type, payload):
         raise ValueError('Auth event exceeds delivery limit')
     session = get_db_session()
     await session.execute(text("SELECT set_config('app.current_tenant_id',:tenant,true)"),{'tenant':str(tenant)})
-    await session.execute(_ISSUE,{'id':operation,'tenant':tenant,'digest':digest})
+    issuance = {'id': operation, 'tenant': tenant, 'digest': digest}
+    issued = await session.execute(_ISSUE, issuance)
+    if issued.scalar_one_or_none() is None:
+        existing = await session.execute(text(
+            'SELECT id FROM auth_token_issuance WHERE id=:id AND tenant_id=:tenant AND token_sha256=:digest'
+        ), issuance)
+        if existing.scalar_one_or_none() != operation:
+            raise ValueError('Auth operation conflicts with its existing issuance')
     encoded = envelope.model_dump(mode='json')
     inserted = await session.execute(_EVENT,{'id':event_id,'tenant':tenant,'envelope':encoded})
     if inserted.scalar_one_or_none() is None:

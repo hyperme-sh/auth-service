@@ -18,7 +18,12 @@ class Session:
         sql=str(statement); self.calls.append((sql,params))
         result=None
         if sql.startswith('INSERT INTO auth_token_issuance'):
-            self.issues[params['id']]=params
+            if params['id'] not in self.issues:
+                self.issues[params['id']] = dict(params)
+                result = params['id']
+        elif sql.startswith('SELECT id FROM auth_token_issuance'):
+            if self.issues.get(params['id']) == params:
+                result = params['id']
         elif sql.startswith('INSERT INTO service_outbox'):
             if self.fail: raise RuntimeError('insert refused')
             if params['id'] not in self.events:
@@ -35,6 +40,18 @@ async def test_retry_uses_same_session_and_operation_without_storing_token(monke
     assert len(session.issues)==len(session.events)==1
     assert 'secret-bearer' not in str(session.calls)
     assert len(next(iter(session.issues.values()))['digest'])==64
+
+
+@pytest.mark.asyncio
+async def test_conflicting_token_issuance_refuses_before_reusing_the_event(monkeypatch):
+    session = Session()
+    monkeypatch.setattr(outbox, 'get_db_session', lambda: session)
+    issuance = dict(token='unit-token', tenant_id=TENANT, event_type=AUTH_TOKEN_ISSUED_V1, payload=PAYLOAD)
+    await outbox.publish_auth_event(**issuance)
+    next(iter(session.issues.values()))['digest'] = 'x' * 64
+    with pytest.raises(ValueError, match='conflicts with its existing issuance'):
+        await outbox.publish_auth_event(**issuance)
+    assert len(session.events) == 1
 
 
 @pytest.mark.asyncio
