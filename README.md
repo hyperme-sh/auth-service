@@ -10,6 +10,10 @@ Renters and hosts sign in as people. Programs that call lease and catalog APIs p
 
 The process is a FastAPI application. Auth routes are mounted at `/auth`. Health is `GET /api/v1/health/`. Build identity is `GET /version` (from `GIT_SHA`, `SOURCE_SHA`, or `HYPERMESH_SOURCE_SHA`). Prometheus metrics listen on `METRICS_PORT` (default 9100), separate from the HTTP port. Interactive docs are `/docs`.
 
+Deployments can use `GET /api/v1/health/live` for process liveness and
+`GET /api/v1/health/ready` for a bounded check through Auth's own database pool.
+These probes skip tenant discovery and peer lookups.
+
 Keycloak is the identity provider. This repository does not ship or run Keycloak. Hypermesh uses realm `controlplane`. Local defaults point at `http://localhost:8081/realms/controlplane`. The production issuer this service treats as production for Entra operator binding is `https://auth.hyperme.sh/realms/controlplane`. Brokers (Google, GitHub, Microsoft Entra) are selected with Keycloak's `kc_idp_hint` on `POST /auth/login`. Password grant stays off in the authorization URL this service builds (`response_type=code`, scope `openid profile email`).
 
 `validate_access_token` accepts a bearer in this order:

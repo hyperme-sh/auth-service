@@ -17,6 +17,7 @@ from controlplane_api.health import router as health_router
 from controlplane_api.version import router as version_router
 from auth_service.transaction import AuthTransactionMiddleware
 from auth_service.database import runtime_engines
+from auth_service.health import router as local_health_router
 
 from auth_service.routes import router as auth_router
 from auth_service.smoke_oidc import assert_smoke_oidc_plane
@@ -116,6 +117,7 @@ def create_app(
     app.add_middleware(NightlyMiddleware)
     app.include_router(nightly_router)
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(local_health_router)
     app.include_router(version_router)
     app.include_router(auth_router, prefix="/auth")
     from auth_service.first_oidc_routes import router as first_oidc_router
