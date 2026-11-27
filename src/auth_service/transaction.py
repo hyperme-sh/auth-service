@@ -4,6 +4,8 @@ import uuid
 
 import httpx
 
+from auth_service.health import PROBE_PATHS
+
 from api.infrastructure.persistence.db_session import reset_db_session, set_db_session
 from api.interfaces.middlewares.database_middleware import get_tenant_host
 from controlplane_api.utils import get_logger, is_tenancy_enabled
@@ -63,6 +65,8 @@ async def resolve_tenant(request):
 
 class AuthTransactionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        if request.method == "GET" and request.url.path in PROBE_PATHS:
+            return await call_next(request)
         async with request.app.state.session_maker() as session:
             token = set_db_session(session)
             tenant = None
