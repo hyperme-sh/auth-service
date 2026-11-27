@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+import asyncpg
 import httpx
 import pytest
 from asgi_lifespan import LifespanManager
@@ -15,6 +16,7 @@ from sqlalchemy.engine import make_url
 from auth_service import deps, identity_owner, pairing_runtime, routes, transaction
 from auth_service.app import create_app
 from auth_service.database import runtime_engines
+from auth_service.health import LIVENESS_PATH, READINESS_PATH
 from auth_service.tenant_switch import TenantSwitchGrant
 from controlplane_api.config import settings
 
@@ -152,3 +154,69 @@ async def test_two_auth_replicas_share_their_four_connections(capped_auth_databa
             events = db.scalar(text(f'SELECT count(*) FROM "{url.username}".service_outbox WHERE tenant_id=:tenant'),
                                {"tenant": tenant})
         assert events >= 2
+
+
+
+@pytest.fixture
+def reserved_auth_logins(siwe_postgres_url):
+    url = make_url(siwe_postgres_url)
+    admin = create_engine(url.set(drivername="postgresql+psycopg"))
+    roles = {}
+    try:
+        with admin.begin() as connection:
+            for slot, limit in (("a", 2), ("b", 2), ("migration", 1)):
+                role = f"auth_slot_{slot}_{uuid4().hex}"
+                password = uuid4().hex
+                connection.exec_driver_sql(
+                    f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS CONNECTION LIMIT {limit}'
+                )
+                roles[slot] = url.set(username=role, password=password)
+        yield roles
+    finally:
+        with admin.begin() as connection:
+            for login in roles.values():
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{login.username}"')
+        admin.dispose()
+
+
+@pytest.mark.parametrize(("serving", "candidate"), [("a", "b"), ("b", "a")])
+async def test_reserved_slots_admit_a_candidate_and_migration_when_serving_is_full(
+    reserved_auth_logins, serving, candidate, monkeypatch,
+):
+    monkeypatch.setenv("AUTH_DB_POOL_LIMIT", "2")
+    peer = AsyncMock(side_effect=httpx.ConnectError("fixture peer unavailable"))
+    monkeypatch.setattr(transaction, "resolve_tenant", peer)
+    current = reserved_auth_logins[serving]
+    next_slot = reserved_auth_logins[candidate]
+    migration = reserved_auth_logins["migration"]
+
+    async with AsyncExitStack() as stack, asyncio.timeout(15):
+        current_engine, _ = await stack.enter_async_context(runtime_engines(
+            current.render_as_string(hide_password=False), None,
+        ))
+        for _ in range(2):
+            await stack.enter_async_context(current_engine.connect())
+
+        with pytest.raises(asyncpg.TooManyConnectionsError):
+            excess = await asyncpg.connect(current.set(drivername="postgresql").render_as_string(hide_password=False))
+            await excess.close()
+
+        migrator = await asyncpg.connect(migration.set(drivername="postgresql").render_as_string(hide_password=False))
+        stack.push_async_callback(migrator.close)
+        assert await migrator.fetchval("SELECT 1") == 1
+
+        candidate_engine, _ = await stack.enter_async_context(runtime_engines(
+            next_slot.render_as_string(hide_password=False), None,
+        ))
+        app = create_app(enable_db_middleware=False)
+        app.add_middleware(transaction.AuthTransactionMiddleware)
+        app.state.async_engine = candidate_engine
+        client = await stack.enter_async_context(httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://auth.example.invalid",
+        ))
+        assert (await client.get(LIVENESS_PATH)).status_code == 200
+        assert (await client.get(READINESS_PATH)).status_code == 200
+        for _ in range(2):
+            connection = await stack.enter_async_context(candidate_engine.connect())
+            assert await connection.scalar(text("SELECT current_user")) == next_slot.username
+    peer.assert_not_awaited()
